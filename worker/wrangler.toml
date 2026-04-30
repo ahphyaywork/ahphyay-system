@@ -1,0 +1,16 @@
+name = "ahphyay-worker"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Secrets (set via: wrangler secret put SECRET_NAME)
+# GOOGLE_SERVICE_ACCOUNT_EMAIL
+# GOOGLE_PRIVATE_KEY
+# SPREADSHEET_ID
+# JWT_SECRET
+
+[[routes]]
+pattern = "api.ahphyay.com/*"
+zone_name = "ahphyay.com"
