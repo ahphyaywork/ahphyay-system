@@ -3,12 +3,257 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AhPhyay — Staff Performance System</title>
+<title>AhPhyay — Coming Soon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --navy:   #1C3461;
+    --navy-d: #142849;
+    --navy-l: #243f78;
+    --white:  #F4F6FA;
+    --gold:   #C8A96E;
+    --muted:  rgba(244,246,250,0.45);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--navy-d);
+    color: var(--white);
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+  }
+
+  /* Noise grain overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.35;
+  }
+
+  /* Radial glow behind logo */
+  .glow {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -60%);
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(200,169,110,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    animation: pulse 6s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.5; transform: translate(-50%, -60%) scale(1); }
+    50%       { opacity: 1;   transform: translate(-50%, -60%) scale(1.08); }
+  }
+
+  /* Layout */
+  .page {
+    position: relative; z-index: 1;
+    height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+  }
+
+  /* Left — text column */
+  .left {
+    padding: 0 6vw 0 8vw;
+    display: flex; flex-direction: column;
+    justify-content: center;
+    opacity: 0;
+    animation: fadeUp .9s cubic-bezier(.22,1,.36,1) .3s forwards;
+  }
+
+  .eyebrow {
+    font-family: 'Outfit', sans-serif;
+    font-size: 10px; font-weight: 400;
+    letter-spacing: .25em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before {
+    content: ''; display: block;
+    width: 32px; height: 1px; background: var(--gold);
+  }
+
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300; font-size: clamp(52px, 6vw, 88px);
+    line-height: .95; letter-spacing: -.02em;
+    color: var(--white); margin-bottom: 10px;
+  }
+  h1 em {
+    font-style: italic; color: var(--gold);
+  }
+
+  .tagline {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic; font-weight: 300;
+    font-size: clamp(14px, 1.4vw, 18px);
+    color: var(--muted); margin-bottom: 44px;
+    line-height: 1.6;
+  }
+
+  /* Divider */
+  .divider {
+    width: 48px; height: 1px;
+    background: linear-gradient(90deg, var(--gold), transparent);
+    margin-bottom: 28px;
+  }
+
+  .desc {
+    font-size: 13px; font-weight: 300;
+    color: var(--muted); line-height: 1.8;
+    max-width: 340px; margin-bottom: 48px;
+  }
+
+  /* Status pills */
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 52px; }
+  .pill {
+    font-size: 10px; font-weight: 400; letter-spacing: .12em;
+    text-transform: uppercase; padding: 5px 14px; border-radius: 99px;
+    border: 1px solid rgba(244,246,250,0.15);
+    color: var(--muted);
+    background: rgba(255,255,255,0.03);
+  }
+  .pill.active {
+    border-color: rgba(200,169,110,0.4);
+    color: var(--gold);
+    background: rgba(200,169,110,0.06);
+  }
+
+  /* Footer line */
+  .footer-line {
+    font-size: 10px; font-weight: 300; letter-spacing: .12em;
+    color: rgba(244,246,250,0.2); text-transform: uppercase;
+  }
+
+  /* Right — logo column */
+  .right {
+    display: flex; align-items: center; justify-content: center;
+    height: 100vh; position: relative;
+    opacity: 0;
+    animation: fadeIn 1.2s ease .6s forwards;
+  }
+
+  /* Decorative ring */
+  .ring {
+    position: absolute;
+    width: 420px; height: 420px; border-radius: 50%;
+    border: 1px solid rgba(200,169,110,0.12);
+    animation: spin 30s linear infinite;
+  }
+  .ring::after {
+    content: '';
+    position: absolute; top: -3px; left: 50%;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--gold); opacity: 0.6;
+  }
+  .ring-2 {
+    width: 520px; height: 520px;
+    border-color: rgba(244,246,250,0.05);
+    animation: spin 50s linear infinite reverse;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .logo-img {
+    width: clamp(300px, 35vw, 480px);
+    height: auto;
+    position: relative; z-index: 2;
+    filter: drop-shadow(0 30px 60px rgba(0,0,0,0.5));
+    animation: float 7s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-12px); }
+  }
+
+  /* Corner accent */
+  .corner-tl, .corner-br {
+    position: fixed; z-index: 2;
+    font-size: 9px; letter-spacing: .2em;
+    text-transform: uppercase; color: rgba(244,246,250,0.15);
+    font-family: 'Outfit', sans-serif; font-weight: 300;
+  }
+  .corner-tl { top: 28px; left: 36px; }
+  .corner-br { bottom: 28px; right: 36px; }
+
+  /* Vertical rule */
+  .vline {
+    position: fixed; left: 50%; top: 0; bottom: 0;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(200,169,110,0.1) 30%, rgba(200,169,110,0.1) 70%, transparent);
+    z-index: 0;
+  }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* Mobile */
+  @media (max-width: 768px) {
+    html, body { overflow: auto; }
+    .page {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto;
+      height: auto; min-height: 100vh;
+      padding: 60px 0 40px;
+    }
+    .right { order: -1; height: 60vw; min-height: 260px; }
+    .logo-img { width: 56vw; }
+    .ring { width: 280px; height: 280px; }
+    .ring-2 { width: 360px; height: 360px; }
+    .left { padding: 0 8vw; align-items: center; text-align: center; }
+    .eyebrow::before { display: none; }
+    .desc { max-width: 100%; }
+    .vline { display: none; }
+  }
+</style>
 </head>
 <body>
-  <!-- Frontend will be built here -->
-  <!-- See GitHub Issues for build progress -->
-   
-  <h1>AhPhyay System — Coming Soon</h1>
+
+<div class="glow"></div>
+<div class="vline"></div>
+
+
+<main class="page">
+
+  <section class="left">
+    <div class="eyebrow">Coming soon</div>
+
+    <h1>Something<br>beautiful is<br><em>coming.</em></h1>
+
+    <p class="tagline">Empowering community women.</p>
+
+
+
+
+  </section>
+
+  <section class="right">
+    <div class="ring"></div>
+    <div class="ring ring-2"></div>
+    <img
+      class="logo-img"
+      src="ahphyaylogo.png"
+      alt="AhPhyay — Community women empowerment"
+    />
+  </section>
+
+</main>
+
 </body>
 </html>
