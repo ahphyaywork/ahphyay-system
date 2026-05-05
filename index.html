@@ -37,14 +37,12 @@ input,textarea,select{font-family:'DM Sans',sans-serif;}
 
 /* ── VIEWS ── */
 .view{display:none;}
-.view.active{display:block;}
 
 /* ══════════════════════════════════════
    LOGIN
 ══════════════════════════════════════ */
 #view-login {
   min-height:100vh;
-  display:none;
   grid-template-columns:1fr 1fr;
 }
 #view-login.active{display:grid;}
@@ -490,7 +488,7 @@ tbody tr:hover td{background:#fafcfb;}
     <div class="page-content">
 
       <!-- ── DASHBOARD PANEL ── -->
-      <div class="panel active" id="panel-dashboard">
+      <div class="panel" id="panel-dashboard" style="display:block">
         <div id="dashboard-content">
           <div class="loading"><div class="spinner"></div><br>Loading dashboard...</div>
         </div>
@@ -841,7 +839,7 @@ tbody tr:hover td{background:#fafcfb;}
 // ════════════════════════════════════════════════════════
 // CONFIG — change this to your worker URL
 // ════════════════════════════════════════════════════════
-const API = 'https://ahphyay-worker.ahphyay-work.workers.dev';
+const API = 'https://api.ahphyay.work';
 
 // ════════════════════════════════════════════════════════
 // STATE
@@ -916,8 +914,8 @@ function doLogout() {
   localStorage.removeItem('ahphyay_token');
   localStorage.removeItem('ahphyay_user');
   token = null; user = null; cache = { staff: null, projects: null, tasks: null };
-  document.getElementById('view-app').classList.remove('active');
-  document.getElementById('view-login').classList.add('active');
+  document.getElementById('view-app').style.display = 'none';
+  document.getElementById('view-login').style.display = 'grid';
   document.getElementById('login-username').value = '';
   document.getElementById('login-password').value = '';
 }
@@ -926,8 +924,10 @@ function doLogout() {
 // APP SETUP
 // ════════════════════════════════════════════════════════
 function showApp() {
-  document.getElementById('view-login').classList.remove('active');
-  document.getElementById('view-app').classList.add('active');
+  const loginView = document.getElementById('view-login');
+  const appView = document.getElementById('view-app');
+  loginView.style.display = 'none';
+  appView.style.display = 'flex';
 
   // User info in sidebar
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
@@ -975,29 +975,19 @@ function buildNav() {
 }
 
 function navigateTo(panelId, label) {
-  // Hide all panels
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  // Deactivate all nav items
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-
-  // Show the target panel
+  // hide every panel
+  document.querySelectorAll('.panel').forEach(p => { p.style.display = 'none'; });
+  // show the right one
   const panel = document.getElementById('panel-' + panelId);
-  if (panel) {
-    panel.classList.add('active');
-  } else {
-    console.warn('Panel not found:', 'panel-' + panelId);
-  }
-
-  // Mark active nav item
+  if (panel) panel.style.display = 'block';
+  // update nav highlight
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(b => {
-    if (b.dataset.panel === panelId && b.dataset.label === label) {
-      b.classList.add('active');
-    }
+    if (b.dataset.panel === panelId && b.dataset.label === label) b.classList.add('active');
   });
-
+  // update title
   document.getElementById('topbar-title').textContent = label || 'Dashboard';
-
-  // Load data for panel
+  // load data
   if (panelId === 'dashboard') loadDashboard();
   else if (panelId === 'staff') loadStaff();
   else if (panelId === 'projects') loadProjects();
@@ -1005,8 +995,6 @@ function navigateTo(panelId, label) {
   else if (panelId === 'worklog') loadWorklog();
   else if (panelId === 'kpi') loadKPI();
   else if (panelId === 'profile') loadProfile();
-
-  // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
 }
 
