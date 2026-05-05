@@ -1572,30 +1572,38 @@ function loadProfile() {
   document.getElementById('profile-role-display').textContent = user.role;
   document.getElementById('profile-email').value = user.email || '';
 
-  // Show profile picture if stored
-  const pic = localStorage.getItem('ahphyay_profile_pic_' + user.staffId);
-  if (pic) {
-    document.getElementById('profile-avatar-img').src = pic;
-    document.getElementById('profile-avatar-img').style.display = 'block';
-    document.getElementById('profile-avatar-initials').style.display = 'none';
+  // Load photo from server (Drive URL stored in Staff sheet)
+  loadProfilePhoto();
+}
+
+async function loadProfilePhoto() {
+  const data = await api('/staff');
+  if (!data) return;
+  const me = data.find(s => s.ID === user.staffId);
+  if (me?.PhotoURL) {
+    showProfilePic(me.PhotoURL);
   } else {
     document.getElementById('profile-avatar-img').style.display = 'none';
     document.getElementById('profile-avatar-initials').style.display = 'block';
   }
 }
 
+function showProfilePic(url) {
+  const img = document.getElementById('profile-avatar-img');
+  img.src = url;
+  img.style.display = 'block';
+  document.getElementById('profile-avatar-initials').style.display = 'none';
+}
+
 function previewProfilePic(input) {
   const file = input.files[0];
   if (!file) return;
-  if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2MB', 'error'); return; }
+  if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2MB', 'error'); input.value=''; return; }
   const reader = new FileReader();
   reader.onload = e => {
     document.getElementById('profile-pic-name').textContent = file.name;
     document.getElementById('profile-pic-preview-row').style.display = 'flex';
-    // Preview immediately
-    document.getElementById('profile-avatar-img').src = e.target.result;
-    document.getElementById('profile-avatar-img').style.display = 'block';
-    document.getElementById('profile-avatar-initials').style.display = 'none';
+    showProfilePic(e.target.result);
   };
   reader.readAsDataURL(file);
 }
@@ -1604,7 +1612,6 @@ function clearProfilePic() {
   document.getElementById('profile-pic-input').value = '';
   document.getElementById('profile-pic-preview-row').style.display = 'none';
   document.getElementById('profile-pic-name').textContent = '';
-  localStorage.removeItem('ahphyay_profile_pic_' + user.staffId);
   document.getElementById('profile-avatar-img').style.display = 'none';
   document.getElementById('profile-avatar-initials').style.display = 'block';
 }
@@ -1612,37 +1619,54 @@ function clearProfilePic() {
 async function saveProfile() {
   const email = document.getElementById('profile-email').value.trim();
   const picInput = document.getElementById('profile-pic-input');
+  const saveBtn = document.querySelector('[onclick="saveProfile()"]');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
 
-  // Save profile pic locally (base64 in localStorage)
-  if (picInput.files[0]) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      localStorage.setItem('ahphyay_profile_pic_' + user.staffId, e.target.result);
-    };
-    reader.readAsDataURL(picInput.files[0]);
-  }
-
-  // Update email via API
-  if (email !== user.email) {
-    const res = await api('/staff/' + user.staffId, {
-      method: 'PUT',
-      body: JSON.stringify({ email })
-    });
-    if (res?.success) {
-      user.email = email;
-      localStorage.setItem('ahphyay_user', JSON.stringify(user));
-      showToast('Profile updated', 'success');
-    } else {
-      showToast(res?.error || 'Error saving profile', 'error');
-      return;
+  try {
+    // Upload photo to Google Drive if selected
+    if (picInput.files[0]) {
+      const formData = new FormData();
+      formData.append('photo', picInput.files[0]);
+      const res = await fetch(`${API}/profile/photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!data.success) {
+        showToast(data.error || 'Photo upload failed', 'error');
+        saveBtn.disabled = false; saveBtn.textContent = 'Save changes';
+        return;
+      }
+      showProfilePic(data.photoUrl);
+      picInput.value = '';
+      document.getElementById('profile-pic-preview-row').style.display = 'none';
     }
-  } else {
+
+    // Update email if changed
+    if (email !== user.email) {
+      const res = await api('/staff/' + user.staffId, {
+        method: 'PUT',
+        body: JSON.stringify({ email })
+      });
+      if (res?.success) {
+        user.email = email;
+        localStorage.setItem('ahphyay_user', JSON.stringify(user));
+      } else {
+        showToast(res?.error || 'Error saving email', 'error');
+        saveBtn.disabled = false; saveBtn.textContent = 'Save changes';
+        return;
+      }
+    }
+
     showToast('Profile saved', 'success');
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
   }
 
-  // Clear file input
-  picInput.value = '';
-  document.getElementById('profile-pic-preview-row').style.display = 'none';
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save changes';
 }
 
 async function changePassword() {
