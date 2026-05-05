@@ -960,7 +960,10 @@ function buildNav() {
   items.forEach(item => {
     if (!item.roles.includes(role)) return;
     if (item.sep) {
-      nav.innerHTML += `<div class="nav-section-label">${item.sep}</div>`;
+      const sep = document.createElement('div');
+      sep.className = 'nav-section-label';
+      sep.textContent = item.sep;
+      nav.appendChild(sep);
       return;
     }
     const btn = document.createElement('button');
