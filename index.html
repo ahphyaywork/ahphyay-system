@@ -488,7 +488,7 @@ tbody tr:hover td{background:#fafcfb;}
     <div class="page-content">
 
       <!-- ── DASHBOARD PANEL ── -->
-      <div class="panel" id="panel-dashboard" style="display:block">
+      <div class="panel" id="panel-dashboard">
         <div id="dashboard-content">
           <div class="loading"><div class="spinner"></div><br>Loading dashboard...</div>
         </div>
@@ -914,8 +914,8 @@ function doLogout() {
   localStorage.removeItem('ahphyay_token');
   localStorage.removeItem('ahphyay_user');
   token = null; user = null; cache = { staff: null, projects: null, tasks: null };
-  document.getElementById('view-app').style.display = 'none';
-  document.getElementById('view-login').style.display = 'grid';
+  document.getElementById('view-app').classList.remove('active');
+  document.getElementById('view-login').classList.add('active');
   document.getElementById('login-username').value = '';
   document.getElementById('login-password').value = '';
 }
@@ -924,10 +924,8 @@ function doLogout() {
 // APP SETUP
 // ════════════════════════════════════════════════════════
 function showApp() {
-  const loginView = document.getElementById('view-login');
-  const appView = document.getElementById('view-app');
-  loginView.style.display = 'none';
-  appView.style.display = 'flex';
+  document.getElementById('view-login').classList.remove('active');
+  document.getElementById('view-app').classList.add('active');
 
   // User info in sidebar
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
@@ -975,17 +973,16 @@ function buildNav() {
 }
 
 function navigateTo(panelId, label) {
-  // hide every panel
-  document.querySelectorAll('.panel').forEach(p => { p.style.display = 'none'; });
-  // show the right one
-  const panel = document.getElementById('panel-' + panelId);
-  if (panel) panel.style.display = 'block';
-  // update nav highlight
+  // hide all panels
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  // show target panel
+  var panel = document.getElementById('panel-' + panelId);
+  if (panel) panel.classList.add('active');
+  // update nav
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(b => {
     if (b.dataset.panel === panelId && b.dataset.label === label) b.classList.add('active');
   });
-  // update title
   document.getElementById('topbar-title').textContent = label || 'Dashboard';
   // load data
   if (panelId === 'dashboard') loadDashboard();
