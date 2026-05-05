@@ -934,6 +934,7 @@ function showApp() {
   document.getElementById('user-role').textContent = user.role;
 
   buildNav();
+  console.log('[APP] nav built, panels:', document.querySelectorAll('.panel').length);
   navigateTo('dashboard');
 }
 
@@ -967,23 +968,39 @@ function buildNav() {
     btn.dataset.panel = item.panel;
     btn.dataset.label = item.label;
     btn.innerHTML = `<span class="nav-icon">${item.icon}</span><span class="nav-label">${item.label}</span>`;
-    btn.onclick = () => navigateTo(item.panel, item.label);
+    btn.onclick = () => { console.log('[BTN] clicked:', item.panel, item.label); navigateTo(item.panel, item.label); };
     nav.appendChild(btn);
   });
 }
 
 function navigateTo(panelId, label) {
+  console.log('[NAV] navigateTo called:', panelId, label);
+
   // hide all panels
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  var allPanels = document.querySelectorAll('.panel');
+  console.log('[NAV] total panels found:', allPanels.length);
+  allPanels.forEach(p => {
+    p.classList.remove('active');
+    console.log('[NAV] hiding panel:', p.id);
+  });
+
   // show target panel
   var panel = document.getElementById('panel-' + panelId);
-  if (panel) panel.classList.add('active');
+  if (panel) {
+    panel.classList.add('active');
+    console.log('[NAV] showing panel:', panel.id, '| display:', getComputedStyle(panel).display);
+  } else {
+    console.error('[NAV] panel NOT FOUND: panel-' + panelId);
+  }
+
   // update nav
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(b => {
     if (b.dataset.panel === panelId && b.dataset.label === label) b.classList.add('active');
   });
+
   document.getElementById('topbar-title').textContent = label || 'Dashboard';
+
   // load data
   if (panelId === 'dashboard') loadDashboard();
   else if (panelId === 'staff') loadStaff();
@@ -992,6 +1009,7 @@ function navigateTo(panelId, label) {
   else if (panelId === 'worklog') loadWorklog();
   else if (panelId === 'kpi') loadKPI();
   else if (panelId === 'profile') loadProfile();
+
   document.getElementById('sidebar').classList.remove('open');
 }
 
