@@ -841,7 +841,7 @@ tbody tr:hover td{background:#fafcfb;}
 // ════════════════════════════════════════════════════════
 // CONFIG — change this to your worker URL
 // ════════════════════════════════════════════════════════
-const API = 'https://ahphyay-worker.ahphyay-work.workers.dev';
+const API = 'https://api.ahphyay.work';
 
 // ════════════════════════════════════════════════════════
 // STATE
@@ -948,7 +948,7 @@ function buildNav() {
     { sep:'Management', roles:['admin','management'] },
     { panel:'worklog',   icon:'✎', label:'Work Log',   roles:['admin','management'] },
     { panel:'kpi',       icon:'◎', label:'KPI Overview', roles:['admin','management'] },
-    { sep:'Organisation', roles:['admin'] },
+    { sep:'Organisation', roles:['admin','management'] },
     { panel:'staff',     icon:'⚇', label:'Staff',      roles:['admin'] },
     { panel:'projects',  icon:'◈', label:'Projects',   roles:['admin','management'] },
     { panel:'tasks',     icon:'☑', label:'Tasks',      roles:['admin','management'] },
@@ -975,22 +975,36 @@ function buildNav() {
 }
 
 function navigateTo(panelId, label) {
+  // Hide all panels
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  // Deactivate all nav items
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+
+  // Show the target panel
+  const panel = document.getElementById('panel-' + panelId);
+  if (panel) {
+    panel.classList.add('active');
+  } else {
+    console.warn('Panel not found:', 'panel-' + panelId);
+  }
+
+  // Mark active nav item
   document.querySelectorAll('.nav-item').forEach(b => {
-    b.classList.toggle('active', b.dataset.panel === panelId && b.dataset.label === label);
+    if (b.dataset.panel === panelId && b.dataset.label === label) {
+      b.classList.add('active');
+    }
   });
-  const panel = document.getElementById(`panel-${panelId}`);
-  if (panel) panel.classList.add('active');
+
   document.getElementById('topbar-title').textContent = label || 'Dashboard';
 
-  // Load data
+  // Load data for panel
   if (panelId === 'dashboard') loadDashboard();
-  if (panelId === 'staff') loadStaff();
-  if (panelId === 'projects') loadProjects();
-  if (panelId === 'tasks') loadTasks();
-  if (panelId === 'worklog') loadWorklog();
-  if (panelId === 'kpi') loadKPI();
-  if (panelId === 'profile') loadProfile();
+  else if (panelId === 'staff') loadStaff();
+  else if (panelId === 'projects') loadProjects();
+  else if (panelId === 'tasks') loadTasks();
+  else if (panelId === 'worklog') loadWorklog();
+  else if (panelId === 'kpi') loadKPI();
+  else if (panelId === 'profile') loadProfile();
 
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
