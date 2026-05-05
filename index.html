@@ -3,257 +3,1567 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AhPhyay — Coming Soon</title>
+<title>AhPhyay — Staff System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --navy:     #1C3461;
+  --navy-d:   #142849;
+  --navy-l:   #243f78;
+  --teal:     #1D9E75;
+  --teal-lt:  #E1F5EE;
+  --teal-mid: #5DCAA5;
+  --amber:    #EF9F27;
+  --amber-lt: #FAEEDA;
+  --red:      #E24B4A;
+  --red-lt:   #FCEBEB;
+  --purple:   #534AB7;
+  --purple-lt:#EEEDFE;
+  --white:    #FFFFFF;
+  --off:      #F6FAF8;
+  --text:     #1A2E25;
+  --muted:    #6B8C7D;
+  --border:   rgba(29,158,117,0.12);
+  --border2:  #E2EDE8;
+  --sidebar:  220px;
+  --header:   58px;
+}
 
-  :root {
-    --navy:   #1C3461;
-    --navy-d: #142849;
-    --navy-l: #243f78;
-    --white:  #F4F6FA;
-    --gold:   #C8A96E;
-    --muted:  rgba(244,246,250,0.45);
-  }
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'DM Sans',sans-serif;background:var(--off);color:var(--text);min-height:100vh;}
+button{cursor:pointer;font-family:'DM Sans',sans-serif;}
+input,textarea,select{font-family:'DM Sans',sans-serif;}
 
-  html, body {
-    height: 100%;
-    background: var(--navy-d);
-    color: var(--white);
-    font-family: 'Outfit', sans-serif;
-    overflow: hidden;
-  }
+/* ── VIEWS ── */
+.view{display:none;}
+.view.active{display:block;}
 
-  /* Noise grain overlay */
-  body::before {
-    content: '';
-    position: fixed; inset: 0; z-index: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-    pointer-events: none;
-    opacity: 0.35;
-  }
+/* ══════════════════════════════════════
+   LOGIN
+══════════════════════════════════════ */
+#view-login {
+  min-height:100vh;
+  display:none;
+  grid-template-columns:1fr 1fr;
+}
+#view-login.active{display:grid;}
 
-  /* Radial glow behind logo */
-  .glow {
-    position: fixed;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -60%);
-    width: 600px; height: 600px;
-    background: radial-gradient(circle, rgba(200,169,110,0.08) 0%, transparent 70%);
-    pointer-events: none;
-    animation: pulse 6s ease-in-out infinite;
-  }
+.login-left {
+  background:var(--navy-d);
+  display:flex;flex-direction:column;
+  justify-content:space-between;
+  padding:48px;
+  position:relative;overflow:hidden;
+}
+.login-left::before {
+  content:'';position:absolute;
+  top:-80px;right:-80px;
+  width:320px;height:320px;border-radius:50%;
+  background:radial-gradient(circle,rgba(29,158,117,0.15),transparent 70%);
+}
+.login-left::after {
+  content:'';position:absolute;
+  bottom:-60px;left:-60px;
+  width:240px;height:240px;border-radius:50%;
+  background:radial-gradient(circle,rgba(93,202,165,0.08),transparent 70%);
+}
+.login-brand {
+  position:relative;z-index:1;
+}
+.login-logo {
+  width:72px;height:72px;border-radius:16px;
+  overflow:hidden;margin-bottom:24px;
+}
+.login-logo img{width:100%;height:100%;object-fit:cover;}
+.login-brand h1 {
+  font-family:'Syne',sans-serif;font-size:32px;font-weight:800;
+  color:var(--white);margin-bottom:6px;
+}
+.login-brand p {
+  font-size:13px;color:rgba(255,255,255,0.45);line-height:1.6;
+  max-width:280px;
+}
+.login-features {
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;gap:14px;
+}
+.login-feat {
+  display:flex;align-items:center;gap:12px;
+}
+.feat-dot {
+  width:8px;height:8px;border-radius:50%;background:var(--teal);flex-shrink:0;
+}
+.feat-text{font-size:12px;color:rgba(255,255,255,0.55);}
 
-  @keyframes pulse {
-    0%, 100% { opacity: 0.5; transform: translate(-50%, -60%) scale(1); }
-    50%       { opacity: 1;   transform: translate(-50%, -60%) scale(1.08); }
-  }
+.login-right {
+  display:flex;align-items:center;justify-content:center;
+  padding:48px;background:var(--white);
+}
+.login-form-wrap{width:100%;max-width:380px;}
+.login-form-wrap h2 {
+  font-family:'Syne',sans-serif;font-size:26px;font-weight:700;
+  color:var(--navy);margin-bottom:4px;
+}
+.login-form-wrap p{font-size:13px;color:var(--muted);margin-bottom:32px;}
 
-  /* Layout */
-  .page {
-    position: relative; z-index: 1;
-    height: 100vh;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    align-items: center;
-  }
+.form-group{margin-bottom:16px;}
+.form-label{font-size:12px;font-weight:500;color:var(--navy);margin-bottom:6px;display:block;letter-spacing:.02em;}
+.form-input {
+  width:100%;padding:11px 14px;
+  border:1.5px solid var(--border2);border-radius:10px;
+  font-size:14px;color:var(--text);background:var(--off);
+  outline:none;transition:border .15s;
+}
+.form-input:focus{border-color:var(--teal);background:var(--white);}
+.form-input::placeholder{color:var(--muted);}
 
-  /* Left — text column */
-  .left {
-    padding: 0 6vw 0 8vw;
-    display: flex; flex-direction: column;
-    justify-content: center;
-    opacity: 0;
-    animation: fadeUp .9s cubic-bezier(.22,1,.36,1) .3s forwards;
-  }
+.login-btn {
+  width:100%;padding:13px;border-radius:10px;
+  background:var(--navy);border:none;
+  color:var(--white);font-family:'Syne',sans-serif;
+  font-size:15px;font-weight:600;
+  transition:all .2s;margin-top:8px;
+}
+.login-btn:hover{background:var(--teal);}
+.login-btn:disabled{opacity:.6;cursor:not-allowed;}
 
-  .eyebrow {
-    font-family: 'Outfit', sans-serif;
-    font-size: 10px; font-weight: 400;
-    letter-spacing: .25em; text-transform: uppercase;
-    color: var(--gold); margin-bottom: 20px;
-    display: flex; align-items: center; gap: 10px;
-  }
-  .eyebrow::before {
-    content: ''; display: block;
-    width: 32px; height: 1px; background: var(--gold);
-  }
+.login-error {
+  background:var(--red-lt);border:1px solid var(--red);
+  border-radius:8px;padding:10px 14px;
+  font-size:13px;color:var(--red);margin-bottom:14px;
+  display:none;
+}
+.login-error.show{display:block;}
 
-  h1 {
-    font-family: 'Cormorant Garamond', serif;
-    font-weight: 300; font-size: clamp(52px, 6vw, 88px);
-    line-height: .95; letter-spacing: -.02em;
-    color: var(--white); margin-bottom: 10px;
-  }
-  h1 em {
-    font-style: italic; color: var(--gold);
-  }
+@media(max-width:768px){
+  #view-login.active{grid-template-columns:1fr;}
+  .login-left{display:none;}
+  .login-right{min-height:100vh;}
+}
 
-  .tagline {
-    font-family: 'Cormorant Garamond', serif;
-    font-style: italic; font-weight: 300;
-    font-size: clamp(14px, 1.4vw, 18px);
-    color: var(--muted); margin-bottom: 44px;
-    line-height: 1.6;
-  }
+/* ══════════════════════════════════════
+   APP SHELL
+══════════════════════════════════════ */
+#view-app{display:none;}
+#view-app.active{display:flex;min-height:100vh;}
 
-  /* Divider */
-  .divider {
-    width: 48px; height: 1px;
-    background: linear-gradient(90deg, var(--gold), transparent);
-    margin-bottom: 28px;
-  }
+/* Sidebar */
+.sidebar {
+  width:var(--sidebar);flex-shrink:0;
+  background:var(--navy-d);
+  display:flex;flex-direction:column;
+  position:fixed;top:0;left:0;bottom:0;z-index:50;
+  transition:transform .25s;
+}
+.sidebar-brand {
+  padding:20px 18px 16px;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+}
+.sidebar-logo-row{display:flex;align-items:center;gap:10px;margin-bottom:2px;}
+.sidebar-logo {
+  width:36px;height:36px;border-radius:10px;
+  overflow:hidden;flex-shrink:0;
+}
+.sidebar-logo img{width:100%;height:100%;object-fit:cover;}
+.sidebar-name {
+  font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:var(--white);
+}
+.sidebar-tagline{font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:.05em;text-transform:uppercase;}
 
-  .desc {
-    font-size: 13px; font-weight: 300;
-    color: var(--muted); line-height: 1.8;
-    max-width: 340px; margin-bottom: 48px;
-  }
+.sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto;}
+.nav-section-label {
+  font-size:9px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;
+  color:rgba(255,255,255,0.25);padding:10px 8px 4px;margin-top:4px;
+}
+.nav-item {
+  display:flex;align-items:center;gap:10px;
+  padding:9px 10px;border-radius:8px;
+  font-size:13px;color:rgba(255,255,255,0.55);
+  cursor:pointer;transition:all .15s;margin-bottom:1px;
+  border:none;background:none;width:100%;text-align:left;
+}
+.nav-item:hover{background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.85);}
+.nav-item.active{background:rgba(29,158,117,0.15);color:var(--teal-mid);}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0;}
+.nav-item .nav-label{font-size:13px;}
+.nav-badge {
+  margin-left:auto;font-size:10px;padding:1px 6px;
+  border-radius:99px;background:var(--teal);color:var(--white);
+  font-weight:500;
+}
 
-  /* Status pills */
-  .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 52px; }
-  .pill {
-    font-size: 10px; font-weight: 400; letter-spacing: .12em;
-    text-transform: uppercase; padding: 5px 14px; border-radius: 99px;
-    border: 1px solid rgba(244,246,250,0.15);
-    color: var(--muted);
-    background: rgba(255,255,255,0.03);
-  }
-  .pill.active {
-    border-color: rgba(200,169,110,0.4);
-    color: var(--gold);
-    background: rgba(200,169,110,0.06);
-  }
+.sidebar-user {
+  padding:14px 14px;border-top:1px solid rgba(255,255,255,0.06);
+}
+.user-card{display:flex;align-items:center;gap:10px;}
+.user-avatar {
+  width:34px;height:34px;border-radius:50%;
+  background:var(--teal-lt);display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--navy);
+  flex-shrink:0;
+}
+.user-name{font-size:13px;font-weight:500;color:var(--white);}
+.user-role{font-size:10px;color:rgba(255,255,255,0.35);text-transform:capitalize;}
+.logout-btn {
+  margin-left:auto;background:none;border:none;
+  color:rgba(255,255,255,0.3);font-size:16px;padding:4px;
+  transition:color .15s;
+}
+.logout-btn:hover{color:var(--red);}
 
-  /* Footer line */
-  .footer-line {
-    font-size: 10px; font-weight: 300; letter-spacing: .12em;
-    color: rgba(244,246,250,0.2); text-transform: uppercase;
-  }
+/* Main area */
+.main {
+  margin-left:var(--sidebar);flex:1;
+  display:flex;flex-direction:column;min-height:100vh;
+}
+.topbar {
+  height:var(--header);background:var(--white);
+  border-bottom:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;position:sticky;top:0;z-index:40;
+}
+.topbar-title {
+  font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:var(--navy);
+}
+.topbar-right{display:flex;align-items:center;gap:12px;}
+.topbar-date{font-size:12px;color:var(--muted);}
 
-  /* Right — logo column */
-  .right {
-    display: flex; align-items: center; justify-content: center;
-    height: 100vh; position: relative;
-    opacity: 0;
-    animation: fadeIn 1.2s ease .6s forwards;
-  }
+.page-content{padding:24px;flex:1;}
 
-  /* Decorative ring */
-  .ring {
-    position: absolute;
-    width: 420px; height: 420px; border-radius: 50%;
-    border: 1px solid rgba(200,169,110,0.12);
-    animation: spin 30s linear infinite;
-  }
-  .ring::after {
-    content: '';
-    position: absolute; top: -3px; left: 50%;
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--gold); opacity: 0.6;
-  }
-  .ring-2 {
-    width: 520px; height: 520px;
-    border-color: rgba(244,246,250,0.05);
-    animation: spin 50s linear infinite reverse;
-  }
+/* ══════════════════════════════════════
+   PANELS (sections inside the app)
+══════════════════════════════════════ */
+.panel{display:none;}
+.panel.active{display:block;}
 
-  @keyframes spin { to { transform: rotate(360deg); } }
+/* ── Stats grid ── */
+.stats-grid {
+  display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;
+}
+@media(max-width:900px){.stats-grid{grid-template-columns:repeat(2,1fr);}}
+.stat-card {
+  background:var(--white);border:1px solid var(--border2);
+  border-radius:14px;padding:18px 20px;
+}
+.stat-label{font-size:11px;color:var(--muted);letter-spacing:.03em;margin-bottom:6px;}
+.stat-val {
+  font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:var(--navy);
+}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:3px;}
+.stat-accent{display:inline-block;width:3px;height:28px;border-radius:99px;vertical-align:middle;margin-right:8px;}
 
-  .logo-img {
-    width: clamp(300px, 35vw, 480px);
-    height: auto;
-    position: relative; z-index: 2;
-    filter: drop-shadow(0 30px 60px rgba(0,0,0,0.5));
-    animation: float 7s ease-in-out infinite;
-  }
+/* ── Section header ── */
+.section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.section-title {
+  font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--navy);
+}
+.section-label-sm{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
 
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50%       { transform: translateY(-12px); }
-  }
+/* ── Table ── */
+.table-wrap{background:var(--white);border:1px solid var(--border2);border-radius:14px;overflow:hidden;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th {
+  font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);padding:10px 16px;text-align:left;
+  background:var(--off);border-bottom:1px solid var(--border2);
+}
+tbody td{padding:12px 16px;border-bottom:1px solid var(--border2);vertical-align:middle;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:#fafcfb;}
 
-  /* Corner accent */
-  .corner-tl, .corner-br {
-    position: fixed; z-index: 2;
-    font-size: 9px; letter-spacing: .2em;
-    text-transform: uppercase; color: rgba(244,246,250,0.15);
-    font-family: 'Outfit', sans-serif; font-weight: 300;
-  }
-  .corner-tl { top: 28px; left: 36px; }
-  .corner-br { bottom: 28px; right: 36px; }
+/* ── Status badges ── */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:500;padding:3px 9px;border-radius:99px;}
+.badge-dot{width:5px;height:5px;border-radius:50%;}
+.badge-done{background:var(--teal-lt);color:#085041;}
+.badge-done .badge-dot{background:var(--teal);}
+.badge-prog{background:var(--amber-lt);color:#633806;}
+.badge-prog .badge-dot{background:var(--amber);}
+.badge-late{background:var(--red-lt);color:#791F1F;}
+.badge-late .badge-dot{background:var(--red);}
+.badge-track{background:var(--teal-lt);color:#085041;}
+.badge-risk{background:var(--amber-lt);color:#633806;}
+.badge-behind{background:var(--red-lt);color:#791F1F;}
+.badge-admin{background:var(--navy);color:var(--white);}
+.badge-management{background:var(--purple-lt);color:var(--purple);}
+.badge-staff{background:var(--teal-lt);color:#085041;}
+.badge-external{background:var(--off);color:var(--muted);border:1px solid var(--border2);}
 
-  /* Vertical rule */
-  .vline {
-    position: fixed; left: 50%; top: 0; bottom: 0;
-    width: 1px;
-    background: linear-gradient(to bottom, transparent, rgba(200,169,110,0.1) 30%, rgba(200,169,110,0.1) 70%, transparent);
-    z-index: 0;
-  }
+/* ── Progress bar ── */
+.prog-wrap{display:flex;align-items:center;gap:8px;}
+.prog-bar{flex:1;height:5px;background:var(--border2);border-radius:99px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:99px;transition:width .5s ease;}
+.prog-green{background:var(--teal);}
+.prog-amber{background:var(--amber);}
+.prog-red{background:var(--red);}
+.prog-pct{font-size:11px;color:var(--muted);width:32px;text-align:right;flex-shrink:0;}
 
-  /* Animations */
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(24px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
+/* ── Staff cards (dashboard) ── */
+.staff-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px;}
+@media(max-width:700px){.staff-cards{grid-template-columns:1fr;}}
+.staff-card {
+  background:var(--white);border:1px solid var(--border2);border-radius:14px;padding:16px;
+}
+.staff-card-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.s-avatar {
+  width:38px;height:38px;border-radius:50%;
+  background:var(--teal-lt);display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--navy);flex-shrink:0;
+}
+.s-name{font-weight:500;font-size:14px;color:var(--navy);}
+.s-role{font-size:11px;color:var(--muted);}
+.s-prog-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.s-prog-label{font-size:11px;color:var(--muted);width:80px;flex-shrink:0;}
 
-  /* Mobile */
-  @media (max-width: 768px) {
-    html, body { overflow: auto; }
-    .page {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto auto;
-      height: auto; min-height: 100vh;
-      padding: 60px 0 40px;
-    }
-    .right { order: -1; height: 60vw; min-height: 260px; }
-    .logo-img { width: 56vw; }
-    .ring { width: 280px; height: 280px; }
-    .ring-2 { width: 360px; height: 360px; }
-    .left { padding: 0 8vw; align-items: center; text-align: center; }
-    .eyebrow::before { display: none; }
-    .desc { max-width: 100%; }
-    .vline { display: none; }
-  }
+/* ── Btn ── */
+.btn {
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;
+  border:none;transition:all .15s;
+}
+.btn-primary{background:var(--navy);color:var(--white);}
+.btn-primary:hover{background:var(--teal);}
+.btn-outline{background:transparent;color:var(--navy);border:1.5px solid var(--border2);}
+.btn-outline:hover{border-color:var(--teal);color:var(--teal);}
+.btn-danger{background:var(--red-lt);color:var(--red);border:1px solid var(--red);}
+.btn-danger:hover{background:var(--red);color:var(--white);}
+.btn-sm{padding:5px 12px;font-size:12px;}
+.btn-icon{width:32px;height:32px;padding:0;justify-content:center;border-radius:8px;}
+
+/* ── Modal ── */
+.modal-overlay {
+  display:none;position:fixed;inset:0;z-index:200;
+  background:rgba(20,40,73,0.55);backdrop-filter:blur(4px);
+  align-items:center;justify-content:center;
+}
+.modal-overlay.open{display:flex;}
+.modal {
+  background:var(--white);border-radius:18px;
+  width:min(480px,92vw);max-height:90vh;overflow-y:auto;
+  box-shadow:0 24px 60px rgba(0,0,0,0.18);
+  animation:modalIn .2s cubic-bezier(.22,1,.36,1);
+}
+@keyframes modalIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+.modal-header {
+  padding:20px 24px 16px;border-bottom:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.modal-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:var(--navy);}
+.modal-close {
+  width:30px;height:30px;border-radius:8px;border:none;
+  background:var(--off);color:var(--muted);font-size:18px;
+  display:flex;align-items:center;justify-content:center;
+}
+.modal-close:hover{background:var(--red-lt);color:var(--red);}
+.modal-body{padding:20px 24px;}
+.modal-footer {
+  padding:14px 24px 20px;
+  display:flex;justify-content:flex-end;gap:8px;
+}
+
+/* ── Toast ── */
+.toast {
+  position:fixed;bottom:24px;right:24px;z-index:300;
+  background:var(--navy);color:var(--white);
+  padding:12px 18px;border-radius:10px;
+  font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,0.15);
+  transform:translateY(80px);opacity:0;
+  transition:all .3s cubic-bezier(.22,1,.36,1);
+  display:flex;align-items:center;gap:8px;
+}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.success{background:var(--teal);}
+.toast.error{background:var(--red);}
+
+/* ── Empty state ── */
+.empty {
+  text-align:center;padding:48px 20px;
+  color:var(--muted);font-size:13px;
+}
+.empty-icon{font-size:36px;margin-bottom:10px;opacity:.5;}
+
+/* ── Loading ── */
+.loading{text-align:center;padding:40px;color:var(--muted);font-size:13px;}
+.spinner {
+  width:24px;height:24px;border:2.5px solid var(--border2);
+  border-top-color:var(--teal);border-radius:50%;
+  animation:spin .7s linear infinite;display:inline-block;margin-bottom:8px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Role pill ── */
+.role-pill{display:inline-block;font-size:10px;padding:2px 8px;border-radius:99px;font-weight:500;}
+
+/* Mobile sidebar toggle */
+.sidebar-toggle{display:none;position:fixed;top:12px;left:12px;z-index:60;
+  width:38px;height:38px;border-radius:10px;background:var(--navy);
+  border:none;color:var(--white);font-size:18px;align-items:center;justify-content:center;}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%);}
+  .sidebar.open{transform:translateX(0);}
+  .main{margin-left:0;}
+  .sidebar-toggle{display:flex;}
+}
 </style>
 </head>
 <body>
 
-<div class="glow"></div>
-<div class="vline"></div>
+<!-- ════════════════════════════════════════════════════════
+     LOGIN VIEW
+════════════════════════════════════════════════════════ -->
+<div id="view-login" class="view active">
+  <div class="login-left">
+    <div class="login-brand">
+      <div class="login-logo">
+        <img src="ahphyaylogo.png" alt="AhPhyay" onerror="this.style.display='none';this.parentElement.style.background='var(--teal)'">
+      </div>
+      <h1>AhPhyay</h1>
+      <p>Staff Performance & Management System — empowering community women through better coordination.</p>
+    </div>
+    <div class="login-features">
+      <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">Role-based access for all staff levels</span></div>
+      <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">KPI tracking by project and task</span></div>
+      <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">Weekly, monthly and yearly reporting</span></div>
+      <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">Secure login — no data shared externally</span></div>
+    </div>
+  </div>
+  <div class="login-right">
+    <div class="login-form-wrap">
+      <h2>Welcome back</h2>
+      <p>Sign in to your AhPhyay account</p>
+      <div class="login-error" id="login-error"></div>
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input class="form-input" type="text" id="login-username" placeholder="Enter your username" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password">
+      </div>
+      <button class="login-btn" id="login-btn" onclick="doLogin()">Sign in</button>
+    </div>
+  </div>
+</div>
 
+<!-- ════════════════════════════════════════════════════════
+     APP VIEW
+════════════════════════════════════════════════════════ -->
+<div id="view-app" class="view">
+  <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
 
-<main class="page">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo-row">
+        <div class="sidebar-logo">
+          <img src="ahphyaylogo.png" alt="AhPhyay" onerror="this.style.display='none';this.parentElement.style.background='var(--teal)'">
+        </div>
+        <span class="sidebar-name">AhPhyay</span>
+      </div>
+      <div class="sidebar-tagline">Staff System</div>
+    </div>
 
-  <section class="left">
-    <div class="eyebrow">Coming soon</div>
+    <nav class="sidebar-nav" id="sidebar-nav">
+      <!-- Populated by JS based on role -->
+    </nav>
 
-    <h1>Something<br>beautiful is<br><em>coming.</em></h1>
+    <div class="sidebar-user">
+      <div class="user-card">
+        <div class="user-avatar" id="user-avatar"></div>
+        <div>
+          <div class="user-name" id="user-name"></div>
+          <div class="user-role" id="user-role"></div>
+        </div>
+        <button class="logout-btn" onclick="doLogout()" title="Sign out">⏻</button>
+      </div>
+    </div>
+  </aside>
 
-    <p class="tagline">Empowering community women.</p>
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-right">
+        <span class="topbar-date" id="topbar-date"></span>
+      </div>
+    </div>
+    <div class="page-content">
 
+      <!-- ── DASHBOARD PANEL ── -->
+      <div class="panel active" id="panel-dashboard">
+        <div id="dashboard-content">
+          <div class="loading"><div class="spinner"></div><br>Loading dashboard...</div>
+        </div>
+      </div>
 
+      <!-- ── STAFF PANEL ── -->
+      <div class="panel" id="panel-staff">
+        <div class="section-hd">
+          <div class="section-title">Staff Management</div>
+          <button class="btn btn-primary btn-sm" onclick="openAddStaff()" id="btn-add-staff">+ Add staff</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th><th>Username</th><th>Role</th><th>Type</th>
+                <th>Email</th><th>Projects</th><th>Status</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="staff-table-body">
+              <tr><td colspan="8"><div class="loading"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
+      <!-- ── PROJECTS PANEL ── -->
+      <div class="panel" id="panel-projects">
+        <div class="section-hd">
+          <div class="section-title">Projects</div>
+          <button class="btn btn-primary btn-sm" onclick="openAddProject()" id="btn-add-project">+ Add project</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Short name</th><th>Start</th><th>End</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="projects-table-body">
+              <tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-  </section>
+      <!-- ── TASKS PANEL ── -->
+      <div class="panel" id="panel-tasks">
+        <div class="section-hd">
+          <div class="section-title">Tasks</div>
+          <button class="btn btn-primary btn-sm" onclick="openAddTask()" id="btn-add-task">+ Add task</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Task</th><th>Project</th><th>Category</th><th>Assignee</th><th>Target</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="tasks-table-body">
+              <tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-  <section class="right">
-    <div class="ring"></div>
-    <div class="ring ring-2"></div>
-    <img
-      class="logo-img"
-      src="ahphyaylogo.png"
-      alt="AhPhyay — Community women empowerment"
-    />
-  </section>
+      <!-- ── WORK LOG PANEL ── -->
+      <div class="panel" id="panel-worklog">
+        <div class="section-hd">
+          <div class="section-title">Work Log</div>
+          <button class="btn btn-primary btn-sm" onclick="openAddWorklog()" id="btn-add-worklog">+ Log work</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;" id="worklog-filters">
+          <select class="form-input" style="width:auto;padding:6px 10px;font-size:12px;" id="filter-period" onchange="loadWorklog()">
+            <option value="all">All time</option>
+            <option value="week">This week</option>
+            <option value="month" selected>This month</option>
+            <option value="year">This year</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Date</th><th>Staff</th><th>Project</th><th>Task</th><th>Actual</th><th>Status</th><th>Note</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="worklog-table-body">
+              <tr><td colspan="8"><div class="loading"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-</main>
+      <!-- ── KPI PANEL ── -->
+      <div class="panel" id="panel-kpi">
+        <div class="section-hd">
+          <div class="section-title">KPI Overview</div>
+        </div>
+        <div id="kpi-content">
+          <div class="loading"><div class="spinner"></div><br>Loading KPIs...</div>
+        </div>
+      </div>
 
+      <!-- ── MY PROFILE PANEL ── -->
+      <div class="panel" id="panel-profile">
+        <div class="section-title" style="margin-bottom:16px;">My Profile</div>
+        <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;padding:24px;max-width:480px;">
+          <div id="profile-content"></div>
+          <hr style="border:none;border-top:1px solid var(--border2);margin:20px 0;">
+          <div class="section-title" style="margin-bottom:14px;font-size:14px;">Change password</div>
+          <div class="form-group">
+            <label class="form-label">Current password</label>
+            <input class="form-input" type="password" id="old-password" placeholder="Current password">
+          </div>
+          <div class="form-group">
+            <label class="form-label">New password</label>
+            <input class="form-input" type="password" id="new-password" placeholder="Min. 6 characters">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Confirm new password</label>
+            <input class="form-input" type="password" id="confirm-password" placeholder="Repeat new password">
+          </div>
+          <button class="btn btn-primary" onclick="changePassword()">Update password</button>
+        </div>
+      </div>
+
+    </div><!-- /page-content -->
+  </div><!-- /main -->
+</div><!-- /view-app -->
+
+<!-- ════════ MODALS ════════ -->
+
+<!-- Add Staff -->
+<div class="modal-overlay" id="modal-add-staff">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-staff-title">Add staff member</div>
+      <button class="modal-close" onclick="closeModal('modal-add-staff')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-staff-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Full name *</label>
+          <input class="form-input" id="staff-name" placeholder="e.g. Phwe Phwe">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Username *</label>
+          <input class="form-input" id="staff-username" placeholder="e.g. phwephwe">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password *</label>
+          <input class="form-input" type="password" id="staff-password" placeholder="Min. 6 characters">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="staff-email" placeholder="Gmail address">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role *</label>
+          <select class="form-input" id="staff-role">
+            <option value="Staff">Staff</option>
+            <option value="Management">Management</option>
+            <option value="External">External</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-input" id="staff-type">
+            <option value="Staff">Staff</option>
+            <option value="Consultant">Consultant</option>
+            <option value="Contractor">Contractor</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assigned projects</label>
+        <input class="form-input" id="staff-projects" placeholder="e.g. PROJ-001,PROJ-002 or ALL">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-staff')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveStaff()">Save staff</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Project -->
+<div class="modal-overlay" id="modal-add-project">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Add project</div>
+      <button class="modal-close" onclick="closeModal('modal-add-project')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Project name *</label>
+        <input class="form-input" id="proj-name" placeholder="e.g. SN@IL 2026-2027">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Short name</label>
+          <input class="form-input" id="proj-short" placeholder="e.g. SN@IL">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-input" id="proj-status">
+            <option value="Active">Active</option>
+            <option value="On Hold">On Hold</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start date</label>
+          <input class="form-input" type="date" id="proj-start">
+        </div>
+        <div class="form-group">
+          <label class="form-label">End date</label>
+          <input class="form-input" type="date" id="proj-end">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-input" id="proj-desc" rows="2" placeholder="Brief description"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-project')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProject()">Save project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Task -->
+<div class="modal-overlay" id="modal-add-task">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Add task</div>
+      <button class="modal-close" onclick="closeModal('modal-add-task')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Task name *</label>
+        <input class="form-input" id="task-name" placeholder="e.g. Textile quality workshop">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Project *</label>
+          <select class="form-input" id="task-project"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <input class="form-input" id="task-category" placeholder="e.g. Training">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Target number</label>
+          <input class="form-input" type="number" id="task-target" placeholder="e.g. 60">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit</label>
+          <input class="form-input" id="task-unit" placeholder="e.g. participants">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Assign to</label>
+          <select class="form-input" id="task-assignee"></select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-task')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTask()">Save task</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Work Log -->
+<div class="modal-overlay" id="modal-add-worklog">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Log work</div>
+      <button class="modal-close" onclick="closeModal('modal-add-worklog')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Staff member *</label>
+          <select class="form-input" id="wl-staff" onchange="loadTasksForWorklog()"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date *</label>
+          <input class="form-input" type="date" id="wl-date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Project *</label>
+          <select class="form-input" id="wl-project" onchange="loadTasksForWorklog()"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Task *</label>
+          <select class="form-input" id="wl-task"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Actual achieved *</label>
+          <input class="form-input" type="number" id="wl-actual" placeholder="e.g. 42">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-input" id="wl-status">
+            <option value="Done">Done</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Late">Late</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-input" id="wl-note" rows="2" placeholder="Optional note..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-worklog')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveWorklog()">Save log</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div class="modal-overlay" id="modal-reset-pw">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Reset password</div>
+      <button class="modal-close" onclick="closeModal('modal-reset-pw')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="reset-staff-id">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Set a new temporary password for this staff member. Ask them to change it after logging in.</p>
+      <div class="form-group">
+        <label class="form-label">New password *</label>
+        <input class="form-input" type="password" id="reset-new-pw" placeholder="Min. 6 characters">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-reset-pw')">Cancel</button>
+      <button class="btn btn-primary" onclick="doResetPassword()">Reset password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// CONFIG — change this to your worker URL
+// ════════════════════════════════════════════════════════
+const API = 'https://api.ahphyay.work';
+
+// ════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════
+let token = localStorage.getItem('ahphyay_token');
+let user  = JSON.parse(localStorage.getItem('ahphyay_user') || 'null');
+let cache = { staff: null, projects: null, tasks: null };
+
+// ════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('topbar-date').textContent =
+    new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  if (token && user) {
+    showApp();
+  }
+
+  // Enter key on login
+  ['login-username','login-password'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+  });
+});
+
+// ════════════════════════════════════════════════════════
+// AUTH
+// ════════════════════════════════════════════════════════
+async function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-btn');
+
+  errEl.classList.remove('show');
+  if (!username || !password) {
+    errEl.textContent = 'Please enter username and password.';
+    errEl.classList.add('show'); return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Signing in…';
+
+  try {
+    const res = await fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errEl.textContent = data.error || 'Invalid credentials.';
+      errEl.classList.add('show');
+    } else {
+      token = data.token;
+      user  = data.user;
+      localStorage.setItem('ahphyay_token', token);
+      localStorage.setItem('ahphyay_user', JSON.stringify(user));
+      showApp();
+    }
+  } catch {
+    errEl.textContent = 'Cannot connect to server. Please try again.';
+    errEl.classList.add('show');
+  }
+
+  btn.disabled = false; btn.textContent = 'Sign in';
+}
+
+function doLogout() {
+  localStorage.removeItem('ahphyay_token');
+  localStorage.removeItem('ahphyay_user');
+  token = null; user = null; cache = { staff: null, projects: null, tasks: null };
+  document.getElementById('view-app').classList.remove('active');
+  document.getElementById('view-login').classList.add('active');
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-password').value = '';
+}
+
+// ════════════════════════════════════════════════════════
+// APP SETUP
+// ════════════════════════════════════════════════════════
+function showApp() {
+  document.getElementById('view-login').classList.remove('active');
+  document.getElementById('view-app').classList.add('active');
+
+  // User info in sidebar
+  const initials = user.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('user-avatar').textContent = initials;
+  document.getElementById('user-name').textContent = user.name;
+  document.getElementById('user-role').textContent = user.role;
+
+  buildNav();
+  navigateTo('dashboard');
+}
+
+function buildNav() {
+  const role = user.role;
+  const nav = document.getElementById('sidebar-nav');
+
+  const items = [
+    { panel:'dashboard', icon:'⊞', label:'Dashboard', roles:['admin','management','staff','external'] },
+    { sep:'Management', roles:['admin','management'] },
+    { panel:'worklog',   icon:'✎', label:'Work Log',   roles:['admin','management'] },
+    { panel:'kpi',       icon:'◎', label:'KPI Overview', roles:['admin','management'] },
+    { sep:'Organisation', roles:['admin'] },
+    { panel:'staff',     icon:'⚇', label:'Staff',      roles:['admin'] },
+    { panel:'projects',  icon:'◈', label:'Projects',   roles:['admin','management'] },
+    { panel:'tasks',     icon:'☑', label:'Tasks',      roles:['admin','management'] },
+    { sep:'My Account',  roles:['admin','management','staff','external'] },
+    { panel:'kpi',       icon:'◎', label:'My KPIs',    roles:['staff','external'] },
+    { panel:'profile',   icon:'◯', label:'My Profile', roles:['admin','management','staff','external'] },
+  ];
+
+  nav.innerHTML = '';
+  items.forEach(item => {
+    if (!item.roles.includes(role)) return;
+    if (item.sep) {
+      nav.innerHTML += `<div class="nav-section-label">${item.sep}</div>`;
+      return;
+    }
+    const btn = document.createElement('button');
+    btn.className = 'nav-item';
+    btn.dataset.panel = item.panel;
+    btn.dataset.label = item.label;
+    btn.innerHTML = `<span class="nav-icon">${item.icon}</span><span class="nav-label">${item.label}</span>`;
+    btn.onclick = () => navigateTo(item.panel, item.label);
+    nav.appendChild(btn);
+  });
+}
+
+function navigateTo(panelId, label) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => {
+    b.classList.toggle('active', b.dataset.panel === panelId && b.dataset.label === label);
+  });
+  const panel = document.getElementById(`panel-${panelId}`);
+  if (panel) panel.classList.add('active');
+  document.getElementById('topbar-title').textContent = label || 'Dashboard';
+
+  // Load data
+  if (panelId === 'dashboard') loadDashboard();
+  if (panelId === 'staff') loadStaff();
+  if (panelId === 'projects') loadProjects();
+  if (panelId === 'tasks') loadTasks();
+  if (panelId === 'worklog') loadWorklog();
+  if (panelId === 'kpi') loadKPI();
+  if (panelId === 'profile') loadProfile();
+
+  // Close mobile sidebar
+  document.getElementById('sidebar').classList.remove('open');
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// ════════════════════════════════════════════════════════
+// API HELPER
+// ════════════════════════════════════════════════════════
+async function api(path, opts = {}) {
+  const res = await fetch(`${API}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...(opts.headers || {}),
+    },
+  });
+  if (res.status === 401) { doLogout(); return null; }
+  return res.json();
+}
+
+// ════════════════════════════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════════════════════════════
+async function loadDashboard() {
+  const data = await api('/dashboard');
+  if (!data) return;
+  const el = document.getElementById('dashboard-content');
+
+  if (user.role === 'staff' || user.role === 'external') {
+    // Staff view — own KPIs
+    el.innerHTML = `
+      <div class="section-hd"><div class="section-title">My KPI Progress</div></div>
+      ${data.myKpis.length ? data.myKpis.map(k => `
+        <div style="background:var(--white);border:1px solid var(--border2);border-radius:12px;padding:14px 18px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-weight:500;font-size:14px;color:var(--navy)">${k.taskName}</span>
+            <span class="badge ${k.percentage>=100?'badge-done':k.percentage>=70?'badge-prog':'badge-late'}">
+              <span class="badge-dot"></span>${k.percentage}%
+            </span>
+          </div>
+          <div class="prog-wrap">
+            <div class="prog-bar"><div class="prog-fill ${k.percentage>=70?'prog-green':k.percentage>=40?'prog-amber':'prog-red'}" style="width:${Math.min(k.percentage,100)}%"></div></div>
+            <span class="prog-pct">${k.actual} / ${k.target} ${k.unit}</span>
+          </div>
+        </div>`).join('') : '<div class="empty"><div class="empty-icon">◎</div>No tasks assigned yet.</div>'}`;
+    return;
+  }
+
+  const s = data.stats;
+  el.innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total staff</div>
+        <div class="stat-val"><span class="stat-accent" style="background:var(--teal)"></span>${s.totalStaff}</div>
+        <div class="stat-sub">active members</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active projects</div>
+        <div class="stat-val"><span class="stat-accent" style="background:var(--amber)"></span>${s.activeProjects}</div>
+        <div class="stat-sub">running now</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg KPI</div>
+        <div class="stat-val"><span class="stat-accent" style="background:${s.avgKpiPercent>=70?'var(--teal)':s.avgKpiPercent>=40?'var(--amber)':'var(--red)'}"></span>${s.avgKpiPercent}%</div>
+        <div class="stat-sub">${s.tasksOnTrack} of ${s.totalTasks} tasks on track</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Logs this month</div>
+        <div class="stat-val"><span class="stat-accent" style="background:var(--purple)"></span>${s.logsThisMonth}</div>
+        <div class="stat-sub">work entries</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <div class="section-hd"><div class="section-title">Staff performance</div></div>
+        <div class="staff-cards" style="grid-template-columns:1fr;">
+          ${data.staffSummary.map(s => `
+            <div class="staff-card">
+              <div class="staff-card-head">
+                <div class="s-avatar">${s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
+                <div>
+                  <div class="s-name">${s.name}</div>
+                  <div class="s-role">${s.role} · ${s.taskCount} tasks</div>
+                </div>
+                <span class="badge badge-${s.status==='on-track'?'track':s.status==='at-risk'?'risk':'behind'}" style="margin-left:auto">
+                  <span class="badge-dot"></span>${s.avgKpi}%
+                </span>
+              </div>
+              <div class="prog-wrap">
+                <div class="prog-bar"><div class="prog-fill ${s.avgKpi>=70?'prog-green':s.avgKpi>=40?'prog-amber':'prog-red'}" style="width:${Math.min(s.avgKpi,100)}%"></div></div>
+                <span class="prog-pct">${s.avgKpi}%</span>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <div class="section-hd"><div class="section-title">Recent activity</div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Staff</th><th>Task</th><th>Status</th></tr></thead>
+            <tbody>
+              ${data.recentLogs.length ? data.recentLogs.map(l => `
+                <tr>
+                  <td style="color:var(--muted)">${l.Date}</td>
+                  <td>${l.staffName}</td>
+                  <td>${l.taskName}</td>
+                  <td><span class="badge ${l.Status==='Done'?'badge-done':l.Status==='In Progress'?'badge-prog':'badge-late'}">
+                    <span class="badge-dot"></span>${l.Status}</span></td>
+                </tr>`).join('') : '<tr><td colspan="4"><div class="empty">No activity yet.</div></td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════
+// STAFF
+// ════════════════════════════════════════════════════════
+async function loadStaff() {
+  const data = await api('/staff');
+  if (!data) return;
+  cache.staff = data;
+  const tbody = document.getElementById('staff-table-body');
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon">⚇</div>No staff yet.</div></td></tr>'; return; }
+  tbody.innerHTML = data.map(s => `
+    <tr>
+      <td><strong>${s.Name}</strong></td>
+      <td style="color:var(--muted)">${s.Username}</td>
+      <td><span class="badge badge-${s.Role.toLowerCase()}">${s.Role}</span></td>
+      <td style="color:var(--muted)">${s.Type}</td>
+      <td style="color:var(--muted)">${s.Email||'—'}</td>
+      <td style="color:var(--muted);font-size:11px">${s.Projects||'—'}</td>
+      <td><span class="badge ${s.Active==='true'?'badge-done':'badge-late'}">${s.Active==='true'?'Active':'Inactive'}</span></td>
+      <td>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-outline btn-sm btn-icon" onclick="openEditStaff('${s.ID}')" title="Edit">✎</button>
+          ${user.role==='admin'?`<button class="btn btn-outline btn-sm btn-icon" onclick="openResetPw('${s.ID}')" title="Reset password">🔑</button>`:''}
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function openAddStaff() {
+  document.getElementById('modal-staff-title').textContent = 'Add staff member';
+  document.getElementById('edit-staff-id').value = '';
+  ['staff-name','staff-username','staff-password','staff-email','staff-projects'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('staff-role').value = 'Staff';
+  document.getElementById('staff-type').value = 'Staff';
+  openModal('modal-add-staff');
+}
+
+function openEditStaff(id) {
+  const s = cache.staff?.find(s => s.ID === id);
+  if (!s) return;
+  document.getElementById('modal-staff-title').textContent = 'Edit staff member';
+  document.getElementById('edit-staff-id').value = id;
+  document.getElementById('staff-name').value = s.Name;
+  document.getElementById('staff-username').value = s.Username;
+  document.getElementById('staff-password').value = '';
+  document.getElementById('staff-email').value = s.Email || '';
+  document.getElementById('staff-role').value = s.Role;
+  document.getElementById('staff-type').value = s.Type;
+  document.getElementById('staff-projects').value = s.Projects || '';
+  openModal('modal-add-staff');
+}
+
+async function saveStaff() {
+  const editId = document.getElementById('edit-staff-id').value;
+  const body = {
+    name: document.getElementById('staff-name').value.trim(),
+    username: document.getElementById('staff-username').value.trim(),
+    password: document.getElementById('staff-password').value,
+    staffRole: document.getElementById('staff-role').value,
+    type: document.getElementById('staff-type').value,
+    email: document.getElementById('staff-email').value.trim(),
+    projects: document.getElementById('staff-projects').value.trim(),
+  };
+  if (!body.name || !body.username) { showToast('Name and username are required', 'error'); return; }
+
+  let res;
+  if (editId) {
+    res = await api(`/staff/${editId}`, { method:'PUT', body:JSON.stringify({...body, role:body.staffRole}) });
+  } else {
+    if (!body.password) { showToast('Password is required', 'error'); return; }
+    res = await api('/staff', { method:'POST', body:JSON.stringify(body) });
+  }
+  if (res?.success) {
+    closeModal('modal-add-staff');
+    showToast(editId ? 'Staff updated' : 'Staff added', 'success');
+    cache.staff = null;
+    loadStaff();
+  } else {
+    showToast(res?.error || 'Error saving staff', 'error');
+  }
+}
+
+function openResetPw(staffId) {
+  document.getElementById('reset-staff-id').value = staffId;
+  document.getElementById('reset-new-pw').value = '';
+  openModal('modal-reset-pw');
+}
+
+async function doResetPassword() {
+  const staffId = document.getElementById('reset-staff-id').value;
+  const newPassword = document.getElementById('reset-new-pw').value;
+  if (!newPassword || newPassword.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
+  const res = await api(`/staff/${staffId}/reset-password`, { method:'POST', body:JSON.stringify({ newPassword }) });
+  if (res?.success) {
+    closeModal('modal-reset-pw');
+    showToast('Password reset successfully', 'success');
+  } else {
+    showToast(res?.error || 'Error resetting password', 'error');
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// PROJECTS
+// ════════════════════════════════════════════════════════
+async function loadProjects() {
+  const data = await api('/projects');
+  if (!data) return;
+  cache.projects = data;
+  const tbody = document.getElementById('projects-table-body');
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">◈</div>No projects yet.</div></td></tr>'; return; }
+  tbody.innerHTML = data.map(p => `
+    <tr>
+      <td><strong>${p.Name}</strong><br><span style="font-size:11px;color:var(--muted)">${p.Description||''}</span></td>
+      <td><span class="badge badge-done">${p.ShortName}</span></td>
+      <td style="color:var(--muted)">${p.StartDate}</td>
+      <td style="color:var(--muted)">${p.EndDate}</td>
+      <td><span class="badge ${p.Status==='Active'?'badge-done':p.Status==='On Hold'?'badge-prog':'badge-late'}">${p.Status}</span></td>
+      <td><button class="btn btn-outline btn-sm btn-icon" onclick="openEditProject('${p.ID}')" title="Edit">✎</button></td>
+    </tr>`).join('');
+}
+
+function openAddProject() {
+  ['proj-name','proj-short','proj-desc'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('proj-status').value='Active';
+  document.getElementById('proj-start').value='';
+  document.getElementById('proj-end').value='';
+  openModal('modal-add-project');
+}
+
+function openEditProject(id) {
+  const p = cache.projects?.find(p => p.ID === id);
+  if (!p) return;
+  document.getElementById('proj-name').value = p.Name;
+  document.getElementById('proj-short').value = p.ShortName;
+  document.getElementById('proj-status').value = p.Status;
+  document.getElementById('proj-start').value = p.StartDate;
+  document.getElementById('proj-end').value = p.EndDate;
+  document.getElementById('proj-desc').value = p.Description||'';
+  openModal('modal-add-project');
+}
+
+async function saveProject() {
+  const body = {
+    name: document.getElementById('proj-name').value.trim(),
+    shortName: document.getElementById('proj-short').value.trim(),
+    status: document.getElementById('proj-status').value,
+    startDate: document.getElementById('proj-start').value,
+    endDate: document.getElementById('proj-end').value,
+    description: document.getElementById('proj-desc').value.trim(),
+  };
+  if (!body.name) { showToast('Project name is required', 'error'); return; }
+  const res = await api('/projects', { method:'POST', body:JSON.stringify(body) });
+  if (res?.success) {
+    closeModal('modal-add-project'); showToast('Project added', 'success');
+    cache.projects = null; loadProjects();
+  } else { showToast(res?.error || 'Error', 'error'); }
+}
+
+// ════════════════════════════════════════════════════════
+// TASKS
+// ════════════════════════════════════════════════════════
+async function loadTasks() {
+  const [tasks, projects, staff] = await Promise.all([
+    cache.tasks || api('/tasks'),
+    cache.projects || api('/projects'),
+    cache.staff || api('/staff'),
+  ]);
+  if (!tasks) return;
+  cache.tasks = tasks; cache.projects = projects; cache.staff = staff;
+
+  const tbody = document.getElementById('tasks-table-body');
+  if (!tasks.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">☑</div>No tasks yet.</div></td></tr>'; return; }
+  tbody.innerHTML = tasks.map(t => {
+    const proj = projects?.find(p => p.ID === t.ProjectID);
+    const assignee = staff?.find(s => s.ID === t.AssigneeID);
+    return `<tr>
+      <td><strong>${t.Name}</strong></td>
+      <td><span class="badge badge-done">${proj?.ShortName||t.ProjectID}</span></td>
+      <td style="color:var(--muted)">${t.Category||'—'}</td>
+      <td>${assignee?.Name||'Unassigned'}</td>
+      <td>${t.Target} ${t.Unit}</td>
+      <td><button class="btn btn-outline btn-sm btn-icon" onclick="openEditTask('${t.ID}')" title="Edit">✎</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function openAddTask() {
+  document.getElementById('task-name').value='';
+  document.getElementById('task-category').value='';
+  document.getElementById('task-target').value='';
+  document.getElementById('task-unit').value='';
+
+  const projSel = document.getElementById('task-project');
+  projSel.innerHTML = (cache.projects||[]).map(p=>`<option value="${p.ID}">${p.Name}</option>`).join('');
+
+  const assignSel = document.getElementById('task-assignee');
+  assignSel.innerHTML = '<option value="">Unassigned</option>' +
+    (cache.staff||[]).map(s=>`<option value="${s.ID}">${s.Name}</option>`).join('');
+
+  openModal('modal-add-task');
+}
+
+function openEditTask(id) {
+  const t = cache.tasks?.find(t => t.ID === id);
+  if (!t) return;
+  document.getElementById('task-name').value = t.Name;
+  document.getElementById('task-category').value = t.Category||'';
+  document.getElementById('task-target').value = t.Target;
+  document.getElementById('task-unit').value = t.Unit;
+
+  const projSel = document.getElementById('task-project');
+  projSel.innerHTML = (cache.projects||[]).map(p=>`<option value="${p.ID}" ${p.ID===t.ProjectID?'selected':''}>${p.Name}</option>`).join('');
+
+  const assignSel = document.getElementById('task-assignee');
+  assignSel.innerHTML = '<option value="">Unassigned</option>' +
+    (cache.staff||[]).map(s=>`<option value="${s.ID}" ${s.ID===t.AssigneeID?'selected':''}>${s.Name}</option>`).join('');
+
+  openModal('modal-add-task');
+}
+
+async function saveTask() {
+  const body = {
+    name: document.getElementById('task-name').value.trim(),
+    projectId: document.getElementById('task-project').value,
+    category: document.getElementById('task-category').value.trim(),
+    target: document.getElementById('task-target').value,
+    unit: document.getElementById('task-unit').value.trim(),
+    assigneeId: document.getElementById('task-assignee').value,
+  };
+  if (!body.name || !body.projectId) { showToast('Name and project are required', 'error'); return; }
+  const res = await api('/tasks', { method:'POST', body:JSON.stringify(body) });
+  if (res?.success) {
+    closeModal('modal-add-task'); showToast('Task added', 'success');
+    cache.tasks = null; loadTasks();
+  } else { showToast(res?.error || 'Error', 'error'); }
+}
+
+// ════════════════════════════════════════════════════════
+// WORK LOG
+// ════════════════════════════════════════════════════════
+async function loadWorklog() {
+  const period = document.getElementById('filter-period')?.value || 'month';
+  const { from, to } = getPeriodRange(period);
+  const params = new URLSearchParams({ from, to });
+  const [logs, staff, projects, tasks] = await Promise.all([
+    api(`/worklog?${params}`),
+    cache.staff || api('/staff'),
+    cache.projects || api('/projects'),
+    cache.tasks || api('/tasks'),
+  ]);
+  if (!logs) return;
+  cache.staff = staff; cache.projects = projects; cache.tasks = tasks;
+
+  const tbody = document.getElementById('worklog-table-body');
+  if (!logs.length) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon">✎</div>No work logged for this period.</div></td></tr>'; return; }
+  tbody.innerHTML = [...logs].reverse().map(l => {
+    const s = staff?.find(s => s.ID === l.StaffID);
+    const p = projects?.find(p => p.ID === l.ProjectID);
+    const t = tasks?.find(t => t.ID === l.TaskID);
+    return `<tr>
+      <td style="color:var(--muted)">${l.Date}</td>
+      <td>${s?.Name||l.StaffID}</td>
+      <td><span class="badge badge-done">${p?.ShortName||l.ProjectID}</span></td>
+      <td>${t?.Name||l.TaskID}</td>
+      <td><strong>${l.Actual}</strong> ${l.Unit}</td>
+      <td><span class="badge ${l.Status==='Done'?'badge-done':l.Status==='In Progress'?'badge-prog':'badge-late'}">
+        <span class="badge-dot"></span>${l.Status}</span></td>
+      <td style="color:var(--muted);font-size:12px">${l.Note||'—'}</td>
+      <td>${user.role==='admin'?`<button class="btn btn-danger btn-sm btn-icon" onclick="deleteWorklog('${l.ID}')" title="Delete">✕</button>`:'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openAddWorklog() {
+  const staffSel = document.getElementById('wl-staff');
+  staffSel.innerHTML = (cache.staff||[]).map(s=>`<option value="${s.ID}">${s.Name}</option>`).join('');
+
+  const projSel = document.getElementById('wl-project');
+  projSel.innerHTML = (cache.projects||[]).map(p=>`<option value="${p.ID}">${p.Name}</option>`).join('');
+
+  document.getElementById('wl-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('wl-actual').value = '';
+  document.getElementById('wl-note').value = '';
+  document.getElementById('wl-status').value = 'Done';
+
+  loadTasksForWorklog();
+  openModal('modal-add-worklog');
+}
+
+async function loadTasksForWorklog() {
+  const projId = document.getElementById('wl-project').value;
+  const staffId = document.getElementById('wl-staff').value;
+  const tasks = cache.tasks || await api('/tasks');
+  cache.tasks = tasks;
+  const sel = document.getElementById('wl-task');
+  const filtered = (tasks||[]).filter(t => (!projId || t.ProjectID===projId));
+  sel.innerHTML = filtered.map(t=>`<option value="${t.ID}">${t.Name} (${t.Target} ${t.Unit})</option>`).join('');
+}
+
+async function saveWorklog() {
+  const taskEl = document.getElementById('wl-task');
+  const taskId = taskEl.value;
+  const task = cache.tasks?.find(t => t.ID === taskId);
+  const body = {
+    staffId: document.getElementById('wl-staff').value,
+    projectId: document.getElementById('wl-project').value,
+    taskId,
+    date: document.getElementById('wl-date').value,
+    actual: document.getElementById('wl-actual').value,
+    unit: task?.Unit || '',
+    status: document.getElementById('wl-status').value,
+    note: document.getElementById('wl-note').value.trim(),
+  };
+  if (!body.staffId || !body.projectId || !body.taskId || !body.date || !body.actual)
+    { showToast('Please fill in all required fields', 'error'); return; }
+  const res = await api('/worklog', { method:'POST', body:JSON.stringify(body) });
+  if (res?.success) {
+    closeModal('modal-add-worklog'); showToast('Work logged', 'success'); loadWorklog();
+  } else { showToast(res?.error || 'Error', 'error'); }
+}
+
+async function deleteWorklog(id) {
+  if (!confirm('Delete this log entry?')) return;
+  const res = await api(`/worklog/${id}`, { method:'DELETE' });
+  if (res?.success) { showToast('Log deleted', 'success'); loadWorklog(); }
+  else showToast(res?.error || 'Error', 'error');
+}
+
+function getPeriodRange(period) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const today = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  if (period === 'week') {
+    const d = new Date(now); d.setDate(d.getDate() - 6);
+    return { from:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`, to:today };
+  }
+  if (period === 'month') return { from:`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`, to:today };
+  if (period === 'year')  return { from:`${now.getFullYear()}-01-01`, to:today };
+  return { from:'2000-01-01', to:today };
+}
+
+// ════════════════════════════════════════════════════════
+// KPI
+// ════════════════════════════════════════════════════════
+async function loadKPI() {
+  const data = await api('/kpi');
+  if (!data) return;
+  const el = document.getElementById('kpi-content');
+
+  const getColor = pct => pct >= 70 ? 'prog-green' : pct >= 40 ? 'prog-amber' : 'prog-red';
+  const getBadge = s => s==='achieved'?'badge-done':s==='on-track'?'badge-track':s==='at-risk'?'badge-risk':'badge-behind';
+
+  let html = '';
+
+  if (data.staffSummary?.length) {
+    html += `<div class="section-title" style="margin-bottom:12px;">Staff KPI summary</div>
+    <div class="staff-cards" style="margin-bottom:20px;">
+      ${data.staffSummary.map(s=>`
+        <div class="staff-card">
+          <div class="staff-card-head">
+            <div class="s-avatar">${s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
+            <div><div class="s-name">${s.name}</div><div class="s-role">${s.role} · ${s.taskCount} tasks</div></div>
+            <span class="badge ${getBadge(s.overallStatus)}" style="margin-left:auto">
+              <span class="badge-dot"></span>${s.avgPercentage}%
+            </span>
+          </div>
+          <div class="prog-wrap">
+            <div class="prog-bar"><div class="prog-fill ${getColor(s.avgPercentage)}" style="width:${Math.min(s.avgPercentage,100)}%"></div></div>
+            <span class="prog-pct">${s.avgPercentage}%</span>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  html += `<div class="section-title" style="margin-bottom:12px;">Task KPIs</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Task</th><th>Project</th><th>Target</th><th>Actual</th><th>Progress</th><th>Status</th></tr></thead>
+      <tbody>
+        ${data.kpis.length ? data.kpis.map(k=>`
+          <tr>
+            <td><strong>${k.taskName}</strong></td>
+            <td style="color:var(--muted)">${k.projectId}</td>
+            <td style="color:var(--muted)">${k.target} ${k.unit}</td>
+            <td><strong>${k.actual}</strong></td>
+            <td>
+              <div class="prog-wrap">
+                <div class="prog-bar"><div class="prog-fill ${getColor(k.percentage)}" style="width:${Math.min(k.percentage,100)}%"></div></div>
+                <span class="prog-pct">${k.percentage}%</span>
+              </div>
+            </td>
+            <td><span class="badge ${getBadge(k.status)}"><span class="badge-dot"></span>${k.status}</span></td>
+          </tr>`).join('') : '<tr><td colspan="6"><div class="empty">No KPI data yet.</div></td></tr>'}
+      </tbody>
+    </table>
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════
+// PROFILE
+// ════════════════════════════════════════════════════════
+function loadProfile() {
+  document.getElementById('profile-content').innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+      <div class="s-avatar" style="width:52px;height:52px;font-size:18px">
+        ${user.name.split(' ').map(n=>n[0]).join('').slice(0,2)}
+      </div>
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;color:var(--navy)">${user.name}</div>
+        <div style="font-size:12px;color:var(--muted)">${user.role} · ${user.email||'No email set'}</div>
+      </div>
+    </div>`;
+}
+
+async function changePassword() {
+  const oldPassword = document.getElementById('old-password').value;
+  const newPassword = document.getElementById('new-password').value;
+  const confirmPassword = document.getElementById('confirm-password').value;
+  if (!oldPassword || !newPassword) { showToast('Please fill in all fields', 'error'); return; }
+  if (newPassword.length < 6) { showToast('New password must be at least 6 characters', 'error'); return; }
+  if (newPassword !== confirmPassword) { showToast('Passwords do not match', 'error'); return; }
+  const res = await api('/auth/change-password', { method:'POST', body:JSON.stringify({ oldPassword, newPassword }) });
+  if (res?.success) {
+    showToast('Password updated successfully', 'success');
+    document.getElementById('old-password').value='';
+    document.getElementById('new-password').value='';
+    document.getElementById('confirm-password').value='';
+  } else { showToast(res?.error || 'Error updating password', 'error'); }
+}
+
+// ════════════════════════════════════════════════════════
+// UI HELPERS
+// ════════════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal-overlay')) {
+    e.target.classList.remove('open');
+  }
+});
+
+let toastTimer;
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
 </body>
 </html>
