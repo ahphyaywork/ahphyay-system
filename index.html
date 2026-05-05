@@ -934,7 +934,6 @@ function showApp() {
   document.getElementById('user-role').textContent = user.role;
 
   buildNav();
-  console.log('[APP] nav built, panels:', document.querySelectorAll('.panel').length);
   navigateTo('dashboard');
 }
 
@@ -971,30 +970,25 @@ function buildNav() {
     btn.dataset.panel = item.panel;
     btn.dataset.label = item.label;
     btn.innerHTML = `<span class="nav-icon">${item.icon}</span><span class="nav-label">${item.label}</span>`;
-    btn.onclick = () => { console.log('[BTN] clicked:', item.panel, item.label); navigateTo(item.panel, item.label); };
+    btn.onclick = () => navigateTo(item.panel, item.label);
     nav.appendChild(btn);
   });
 }
 
 function navigateTo(panelId, label) {
-  console.log('[NAV] navigateTo called:', panelId, label);
 
   // hide all panels
   var allPanels = document.querySelectorAll('.panel');
-  console.log('[NAV] total panels found:', allPanels.length);
   allPanels.forEach(p => {
     p.classList.remove('active');
-    console.log('[NAV] hiding panel:', p.id);
-  });
+    });
 
   // show target panel
   var panel = document.getElementById('panel-' + panelId);
   if (panel) {
     panel.classList.add('active');
-    console.log('[NAV] showing panel:', panel.id, '| display:', getComputedStyle(panel).display);
-  } else {
-    console.error('[NAV] panel NOT FOUND: panel-' + panelId);
-  }
+    } else {
+    }
 
   // update nav
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
@@ -1150,7 +1144,7 @@ async function loadStaff() {
       <td style="color:var(--muted)">${s.Type}</td>
       <td style="color:var(--muted)">${s.Email||'—'}</td>
       <td style="color:var(--muted);font-size:11px">${s.Projects||'—'}</td>
-      <td><span class="badge ${s.Active==='true'?'badge-done':'badge-late'}">${s.Active==='true'?'Active':'Inactive'}</span></td>
+      <td><span class="badge ${s.Active?.toLowerCase()==='true'?'badge-done':'badge-late'}">${s.Active?.toLowerCase()==='true'?'Active':'Inactive'}</span></td>
       <td>
         <div style="display:flex;gap:4px;">
           <button class="btn btn-outline btn-sm btn-icon" onclick="openEditStaff('${s.ID}')" title="Edit">✎</button>
