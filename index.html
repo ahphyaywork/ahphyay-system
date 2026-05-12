@@ -1399,52 +1399,84 @@ async function loadTasks() {
 }
 
 function openAddTask() {
-  document.getElementById('task-name').value='';
-  document.getElementById('task-category').value='';
-  document.getElementById('task-target').value='';
-  document.getElementById('task-unit').value='';
+  document.getElementById('modal-task-title').textContent = 'Add task';
+  document.getElementById('edit-task-id').value = '';
+  document.getElementById('task-name').value = '';
+  document.getElementById('task-category').value = '';
+  document.getElementById('task-due').value = '';
+  document.getElementById('task-desc').value = '';
+  document.getElementById('task-status').value = 'Pending';
 
+  const projects = cache.projects || [];
   const projSel = document.getElementById('task-project');
-  projSel.innerHTML = (cache.projects||[]).map(p=>`<option value="${p.ID}">${p.Name}</option>`).join('');
+  projSel.innerHTML = projects.map(p => `<option value="${p.ID}">${p.Name}</option>`).join('');
 
   const assignSel = document.getElementById('task-assignee');
-  assignSel.innerHTML = '<option value="">Unassigned</option>' +
-    (cache.staff||[]).map(s=>`<option value="${s.ID}">${s.Name}</option>`).join('');
-
+  const canAssign = user.role === 'admin' || user.role === 'management';
+  if (canAssign) {
+    assignSel.innerHTML = '<option value="">Unassigned</option>' +
+      (cache.staff||[]).map(s => `<option value="${s.ID}">${s.Name}</option>`).join('');
+    assignSel.disabled = false;
+  } else {
+    assignSel.innerHTML = `<option value="${user.staffId}">${user.name} (me)</option>`;
+    assignSel.disabled = true;
+  }
   openModal('modal-add-task');
 }
 
 function openEditTask(id) {
   const t = cache.tasks?.find(t => t.ID === id);
   if (!t) return;
-  document.getElementById('task-name').value = t.Name;
-  document.getElementById('task-category').value = t.Category||'';
-  document.getElementById('task-target').value = t.Target;
-  document.getElementById('task-unit').value = t.Unit;
+  document.getElementById('modal-task-title').textContent = 'Edit task';
+  document.getElementById('edit-task-id').value = id;
+  document.getElementById('task-name').value = t.Name || '';
+  document.getElementById('task-category').value = t.Category || '';
+  document.getElementById('task-due').value = t.DueDate || '';
+  document.getElementById('task-desc').value = t.Description || '';
+  document.getElementById('task-status').value = t.Status || 'Pending';
 
   const projSel = document.getElementById('task-project');
-  projSel.innerHTML = (cache.projects||[]).map(p=>`<option value="${p.ID}" ${p.ID===t.ProjectID?'selected':''}>${p.Name}</option>`).join('');
+  projSel.innerHTML = (cache.projects||[]).map(p =>
+    `<option value="${p.ID}" ${p.ID === t.ProjectID ? 'selected' : ''}>${p.Name}</option>`
+  ).join('');
 
   const assignSel = document.getElementById('task-assignee');
-  assignSel.innerHTML = '<option value="">Unassigned</option>' +
-    (cache.staff||[]).map(s=>`<option value="${s.ID}" ${s.ID===t.AssigneeID?'selected':''}>${s.Name}</option>`).join('');
-
+  const canAssign = user.role === 'admin' || user.role === 'management';
+  if (canAssign) {
+    assignSel.innerHTML = '<option value="">Unassigned</option>' +
+      (cache.staff||[]).map(s =>
+        `<option value="${s.ID}" ${s.ID === t.AssigneeID ? 'selected' : ''}>${s.Name}</option>`
+      ).join('');
+    assignSel.disabled = false;
+  } else {
+    assignSel.innerHTML = `<option value="${user.staffId}">${user.name} (me)</option>`;
+    assignSel.disabled = true;
+  }
   openModal('modal-add-task');
 }
 
 async function saveTask() {
+  const editId = document.getElementById('edit-task-id').value;
   const body = {
     name: document.getElementById('task-name').value.trim(),
     projectId: document.getElementById('task-project').value,
     category: document.getElementById('task-category').value.trim(),
-    target: document.getElementById('task-target').value,
-    unit: document.getElementById('task-unit').value.trim(),
-    assigneeId: document.getElementById('task-assignee').value,
+    dueDate: document.getElementById('task-due').value,
+    description: document.getElementById('task-desc').value.trim(),
+    status: document.getElementById('task-status').value,
+    assigneeId: document.getElementById('task-assignee').value || user.staffId,
   };
   if (!body.name || !body.projectId) { showToast('Name and project are required', 'error'); return; }
-  const res = await api('/tasks', { method:'POST', body:JSON.stringify(body) });
+
+  let res;
+  if (editId) {
+    res = await api(`/tasks/${editId}`, { method: 'PUT', body: JSON.stringify(body) });
+  } else {
+    res = await api('/tasks', { method: 'POST', body: JSON.stringify(body) });
+  }
   if (res?.success) {
-    closeModal('modal-add-task'); showToast('Task added', 'success');
+    closeModal('modal-add-task');
+    showToast(editId ? 'Task updated' : 'Task added', 'success');
     cache.tasks = null; loadTasks();
   } else { showToast(res?.error || 'Error', 'error'); }
 }
