@@ -1379,9 +1379,9 @@ async function saveProject() {
 // ════════════════════════════════════════════════════════
 async function loadTasks() {
   const [tasks, projects, staff] = await Promise.all([
-    cache.tasks || api('/tasks'),
-    cache.projects || api('/projects'),
-    cache.staff || api('/staff'),
+    api('/tasks'),
+    api('/projects'),
+    api('/staff'),
   ]);
   if (!tasks) return;
   cache.tasks = tasks; cache.projects = projects; cache.staff = staff;
@@ -1627,10 +1627,11 @@ async function loadKPI() {
 
   let html = '';
 
+  // Staff summary cards
   if (data.staffSummary?.length) {
     html += `<div class="section-title" style="margin-bottom:12px;">Staff KPI summary</div>
     <div class="staff-cards" style="margin-bottom:20px;">
-      ${data.staffSummary.map(s=>`
+      ${data.staffSummary.map(s => `
         <div class="staff-card">
           <div class="staff-card-head">
             <div class="s-avatar">${s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
@@ -1643,29 +1644,52 @@ async function loadKPI() {
             <div class="prog-bar"><div class="prog-fill ${getColor(s.avgPercentage)}" style="width:${Math.min(s.avgPercentage,100)}%"></div></div>
             <span class="prog-pct">${s.avgPercentage}%</span>
           </div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            <span class="badge badge-done"><span class="badge-dot"></span>${s.doneCount} done</span>
+            <span class="badge badge-prog"><span class="badge-dot"></span>${s.inProgressCount||0} in progress</span>
+            <span class="badge badge-late"><span class="badge-dot"></span>${s.taskCount - s.doneCount - (s.inProgressCount||0)} pending</span>
+          </div>
         </div>`).join('')}
     </div>`;
   }
 
+  // Task KPI table
   html += `<div class="section-title" style="margin-bottom:12px;">Task KPIs</div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Task</th><th>Project</th><th>Target</th><th>Actual</th><th>Progress</th><th>Status</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Task</th><th>Project</th><th>Category</th><th>Due date</th>
+          <th>Progress</th><th>Evidence</th>
+        </tr>
+      </thead>
       <tbody>
-        ${data.kpis.length ? data.kpis.map(k=>`
+        ${data.kpis.length ? data.kpis.map(k => `
           <tr>
             <td><strong>${k.taskName}</strong></td>
-            <td style="color:var(--muted)">${k.projectId}</td>
-            <td style="color:var(--muted)">${k.target} ${k.unit}</td>
-            <td><strong>${k.actual}</strong></td>
+            <td><span class="badge badge-done">${k.projectName}</span></td>
+            <td style="color:var(--muted)">${k.category || '—'}</td>
+            <td style="color:var(--muted)">${k.dueDate || '—'}</td>
             <td>
               <div class="prog-wrap">
-                <div class="prog-bar"><div class="prog-fill ${getColor(k.percentage)}" style="width:${Math.min(k.percentage,100)}%"></div></div>
+                <div class="prog-bar">
+                  <div class="prog-fill ${getColor(k.percentage)}" style="width:${k.percentage}%"></div>
+                </div>
                 <span class="prog-pct">${k.percentage}%</span>
               </div>
+              <div style="margin-top:4px;">
+                <span class="badge ${k.taskStatus==='Done'?'badge-done':k.taskStatus==='In Progress'?'badge-prog':'badge-late'}">
+                  <span class="badge-dot"></span>${k.taskStatus}
+                </span>
+              </div>
             </td>
-            <td><span class="badge ${getBadge(k.status)}"><span class="badge-dot"></span>${k.status}</span></td>
-          </tr>`).join('') : '<tr><td colspan="6"><div class="empty">No KPI data yet.</div></td></tr>'}
+            <td>
+              ${k.hasEvidence
+                ? `<a href="${k.evidenceLink}" target="_blank" class="btn btn-outline btn-sm" style="color:var(--teal)">View ↗</a>`
+                : '<span style="color:var(--muted);font-size:12px;">No evidence</span>'}
+            </td>
+          </tr>`).join('')
+          : '<tr><td colspan="6"><div class="empty">No tasks yet.</div></td></tr>'}
       </tbody>
     </table>
   </div>`;
