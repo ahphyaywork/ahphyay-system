@@ -1134,16 +1134,20 @@ async function loadDashboard() {
       <div class="section-hd"><div class="section-title">My KPI Progress</div></div>
       ${data.myKpis.length ? data.myKpis.map(k => `
         <div style="background:var(--white);border:1px solid var(--border2);border-radius:12px;padding:14px 18px;margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-            <span style="font-weight:500;font-size:14px;color:var(--navy)">${k.taskName}</span>
-            <span class="badge ${k.percentage>=100?'badge-done':k.percentage>=70?'badge-prog':'badge-late'}">
-              <span class="badge-dot"></span>${k.percentage}%
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div>
+              <span style="font-weight:500;font-size:14px;color:var(--navy)">${k.taskName}</span>
+              ${k.dueDate ? `<br><span style="font-size:11px;color:var(--muted)">Due: ${k.dueDate}</span>` : ''}
+            </div>
+            <span class="badge ${k.taskStatus==='Done'?'badge-done':k.taskStatus==='In Progress'?'badge-prog':'badge-late'}">
+              <span class="badge-dot"></span>${k.taskStatus}
             </span>
           </div>
           <div class="prog-wrap">
             <div class="prog-bar"><div class="prog-fill ${k.percentage>=70?'prog-green':k.percentage>=40?'prog-amber':'prog-red'}" style="width:${Math.min(k.percentage,100)}%"></div></div>
-            <span class="prog-pct">${k.actual} / ${k.target} ${k.unit}</span>
+            <span class="prog-pct">${k.percentage}%</span>
           </div>
+          ${k.hasEvidence ? `<div style="margin-top:8px;"><a href="${k.evidenceLink}" target="_blank" style="font-size:12px;color:var(--teal)">📎 View evidence ↗</a></div>` : ''}
         </div>`).join('') : '<div class="empty"><div class="empty-icon">◎</div>No tasks assigned yet.</div>'}`;
     return;
   }
