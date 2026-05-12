@@ -1417,7 +1417,10 @@ async function loadTasks() {
       <td><span class="badge ${statusBadge}"><span class="badge-dot"></span>${t.Status || 'Pending'}</span></td>
       <td>
         ${hasEvidence
-          ? `<button class="btn btn-outline btn-sm" onclick="viewEvidence('${t.ID}')" style="color:var(--teal)">View ↗</button>`
+          ? `<div>
+              <button class="btn btn-outline btn-sm" onclick="viewEvidence('${t.ID}')" style="color:var(--teal)">View ↗</button>
+              ${t.EvidenceDate ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">Submitted: ${t.EvidenceDate.slice(0,10)}</div>` : ''}
+             </div>`
           : (isMyTask || canEdit)
             ? `<button class="btn btn-primary btn-sm" onclick="openEvidence('${t.ID}')">+ Submit</button>`
             : '—'}
@@ -1717,7 +1720,10 @@ async function loadKPI() {
             </td>
             <td>
               ${k.hasEvidence
-                ? `<a href="${k.evidenceLink}" target="_blank" class="btn btn-outline btn-sm" style="color:var(--teal)">View ↗</a>`
+                ? `<div>
+                    <a href="${k.evidenceLink}" target="_blank" class="btn btn-outline btn-sm" style="color:var(--teal)">View ↗</a>
+                    ${k.evidenceDate ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">Submitted: ${k.evidenceDate.slice(0,10)}</div>` : ''}
+                   </div>`
                 : '<span style="color:var(--muted);font-size:12px;">No evidence</span>'}
             </td>
           </tr>`).join('')
