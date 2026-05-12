@@ -545,7 +545,7 @@ tbody tr:hover td{background:#fafcfb;}
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Task</th><th>Project</th><th>Category</th><th>Assignee</th><th>Target</th><th>Actions</th></tr>
+              <tr><th>Task</th><th>Project</th><th>Category</th><th>Assignee</th><th>Status</th><th>Evidence</th><th>Actions</th></tr>
             </thead>
             <tbody id="tasks-table-body">
               <tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>
@@ -758,10 +758,11 @@ tbody tr:hover td{background:#fafcfb;}
 <div class="modal-overlay" id="modal-add-task">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">Add task</div>
+      <div class="modal-title" id="modal-task-title">Add task</div>
       <button class="modal-close" onclick="closeModal('modal-add-task')">✕</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="edit-task-id">
       <div class="form-group">
         <label class="form-label">Task name *</label>
         <input class="form-input" id="task-name" placeholder="e.g. Textile quality workshop">
@@ -776,22 +777,71 @@ tbody tr:hover td{background:#fafcfb;}
           <input class="form-input" id="task-category" placeholder="e.g. Training">
         </div>
         <div class="form-group">
-          <label class="form-label">Target number</label>
-          <input class="form-input" type="number" id="task-target" placeholder="e.g. 60">
+          <label class="form-label">Due date</label>
+          <input class="form-input" type="date" id="task-due">
         </div>
         <div class="form-group">
-          <label class="form-label">Unit</label>
-          <input class="form-input" id="task-unit" placeholder="e.g. participants">
+          <label class="form-label">Status</label>
+          <select class="form-input" id="task-status">
+            <option value="Pending">Pending</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Done">Done</option>
+          </select>
         </div>
         <div class="form-group" style="grid-column:1/-1;">
-          <label class="form-label">Assign to</label>
+          <label class="form-label">Assign to <span style="color:var(--muted);font-size:10px;font-weight:400;">(leave blank to assign to yourself)</span></label>
           <select class="form-input" id="task-assignee"></select>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-input" id="task-desc" rows="2" placeholder="Brief description of the task..."></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-add-task')">Cancel</button>
       <button class="btn btn-primary" onclick="saveTask()">Save task</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Evidence Modal -->
+<div class="modal-overlay" id="modal-evidence">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-evidence-title">Task Evidence</div>
+      <button class="modal-close" onclick="closeModal('modal-evidence')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="evidence-task-id">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Upload a file or paste a link to prove this task was completed.</p>
+      <div class="form-group">
+        <label class="form-label">Upload file <span style="color:var(--muted);font-size:10px;">(PDF, image, doc — max 10MB)</span></label>
+        <input type="file" id="evidence-file" class="form-input" style="padding:8px;" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls">
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin:8px 0 16px;">
+        <div style="flex:1;height:1px;background:var(--border2);"></div>
+        <span style="font-size:11px;color:var(--muted);">OR</span>
+        <div style="flex:1;height:1px;background:var(--border2);"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Evidence link <span style="color:var(--muted);font-size:10px;">(Google Drive, Dropbox, website, etc.)</span></label>
+        <input class="form-input" id="evidence-link" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-input" id="evidence-note" rows="2" placeholder="Any additional notes about this evidence..."></textarea>
+      </div>
+      <!-- Existing evidence -->
+      <div id="existing-evidence" style="display:none;margin-top:12px;padding:12px;background:var(--teal-lt);border-radius:10px;border:1px solid var(--teal);">
+        <div style="font-size:11px;font-weight:500;color:var(--teal);margin-bottom:6px;">EXISTING EVIDENCE</div>
+        <div id="existing-evidence-content" style="font-size:12px;color:var(--text);"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-evidence')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEvidence()">Submit evidence</button>
     </div>
   </div>
 </div>
@@ -985,7 +1035,7 @@ function buildNav() {
     { sep:'Organisation', roles:['admin','management'] },
     { panel:'staff',     icon:'⚇', label:'Staff',      roles:['admin'] },
     { panel:'projects',  icon:'◈', label:'Projects',   roles:['admin','management'] },
-    { panel:'tasks',     icon:'☑', label:'Tasks',      roles:['admin','management'] },
+    { panel:'tasks',     icon:'☑', label:'Tasks',      roles:['admin','management','staff','external'] },
     { sep:'My Account',  roles:['admin','management','staff','external'] },
     { panel:'kpi',       icon:'◎', label:'My KPIs',    roles:['staff','external'] },
     { panel:'profile',   icon:'◯', label:'My Profile', roles:['admin','management','staff','external'] },
