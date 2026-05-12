@@ -1383,17 +1383,42 @@ async function loadTasks() {
   cache.tasks = tasks; cache.projects = projects; cache.staff = staff;
 
   const tbody = document.getElementById('tasks-table-body');
-  if (!tasks.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">☑</div>No tasks yet.</div></td></tr>'; return; }
+  const canEdit = user.role === 'admin' || user.role === 'management';
+
+  if (!tasks.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">☑</div>No tasks yet.</div></td></tr>';
+    return;
+  }
+
   tbody.innerHTML = tasks.map(t => {
     const proj = projects?.find(p => p.ID === t.ProjectID);
     const assignee = staff?.find(s => s.ID === t.AssigneeID);
+    const isMyTask = t.AssigneeID === user.staffId;
+    const statusBadge = t.Status === 'Done' ? 'badge-done' : t.Status === 'In Progress' ? 'badge-prog' : 'badge-late';
+    const hasEvidence = t.EvidenceLink || t.EvidenceFile;
+
     return `<tr>
-      <td><strong>${t.Name}</strong></td>
-      <td><span class="badge badge-done">${proj?.ShortName||t.ProjectID}</span></td>
-      <td style="color:var(--muted)">${t.Category||'—'}</td>
-      <td>${assignee?.Name||'Unassigned'}</td>
-      <td>${t.Target} ${t.Unit}</td>
-      <td><button class="btn btn-outline btn-sm btn-icon" onclick="openEditTask('${t.ID}')" title="Edit">✎</button></td>
+      <td>
+        <strong>${t.Name}</strong>
+        ${t.Description ? `<br><span style="font-size:11px;color:var(--muted)">${t.Description}</span>` : ''}
+        ${t.DueDate ? `<br><span style="font-size:10px;color:var(--muted)">Due: ${t.DueDate}</span>` : ''}
+      </td>
+      <td><span class="badge badge-done">${proj?.ShortName || t.ProjectID}</span></td>
+      <td style="color:var(--muted)">${t.Category || '—'}</td>
+      <td>${assignee?.Name || 'Unassigned'}</td>
+      <td><span class="badge ${statusBadge}"><span class="badge-dot"></span>${t.Status || 'Pending'}</span></td>
+      <td>
+        ${hasEvidence
+          ? `<button class="btn btn-outline btn-sm" onclick="viewEvidence('${t.ID}')" style="color:var(--teal)">View ↗</button>`
+          : (isMyTask || canEdit)
+            ? `<button class="btn btn-primary btn-sm" onclick="openEvidence('${t.ID}')">+ Submit</button>`
+            : '—'}
+      </td>
+      <td>
+        ${(canEdit || isMyTask)
+          ? `<button class="btn btn-outline btn-sm btn-icon" onclick="openEditTask('${t.ID}')" title="Edit">✎</button>`
+          : ''}
+      </td>
     </tr>`;
   }).join('');
 }
@@ -1770,6 +1795,92 @@ async function changePassword() {
 // ════════════════════════════════════════════════════════
 // UI HELPERS
 // ════════════════════════════════════════════════════════
+
+function openEvidence(taskId) {
+  document.getElementById('evidence-task-id').value = taskId;
+  document.getElementById('evidence-file').value = '';
+  document.getElementById('evidence-link').value = '';
+  document.getElementById('evidence-note').value = '';
+  const t = cache.tasks?.find(t => t.ID === taskId);
+  document.getElementById('modal-evidence-title').textContent = t ? `Evidence: ${t.Name}` : 'Task Evidence';
+  document.getElementById('existing-evidence').style.display = 'none';
+  openModal('modal-evidence');
+}
+
+function viewEvidence(taskId) {
+  const t = cache.tasks?.find(t => t.ID === taskId);
+  if (!t) return;
+  document.getElementById('evidence-task-id').value = taskId;
+  document.getElementById('evidence-file').value = '';
+  document.getElementById('evidence-link').value = t.EvidenceLink || '';
+  document.getElementById('evidence-note').value = t.EvidenceNote || '';
+  document.getElementById('modal-evidence-title').textContent = `Evidence: ${t.Name}`;
+  const existing = document.getElementById('existing-evidence');
+  const existingContent = document.getElementById('existing-evidence-content');
+  existing.style.display = 'block';
+  let html = '';
+  if (t.EvidenceFile) html += `<div style="margin-bottom:4px;">📎 File: <a href="${t.EvidenceFile}" target="_blank" style="color:var(--teal)">View uploaded file ↗</a></div>`;
+  if (t.EvidenceLink) html += `<div>🔗 Link: <a href="${t.EvidenceLink}" target="_blank" style="color:var(--teal)">${t.EvidenceLink}</a></div>`;
+  if (t.EvidenceNote) html += `<div style="margin-top:6px;color:var(--muted)">Note: ${t.EvidenceNote}</div>`;
+  existingContent.innerHTML = html || 'No evidence details.';
+  openModal('modal-evidence');
+}
+
+async function saveEvidence() {
+  const taskId = document.getElementById('evidence-task-id').value;
+  const link = document.getElementById('evidence-link').value.trim();
+  const note = document.getElementById('evidence-note').value.trim();
+  const fileInput = document.getElementById('evidence-file');
+  const btn = document.querySelector('[onclick="saveEvidence()"]');
+
+  if (!link && !fileInput.files[0]) {
+    showToast('Please upload a file or add a link', 'error');
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Uploading…';
+
+  try {
+    let fileUrl = '';
+    if (fileInput.files[0]) {
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      const res = await fetch(`${API}/tasks/${taskId}/evidence`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!data.success) {
+        showToast(data.error || 'File upload failed', 'error');
+        btn.disabled = false; btn.textContent = 'Submit evidence';
+        return;
+      }
+      fileUrl = data.fileUrl;
+    }
+
+    const res = await api(`/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        evidenceLink: link,
+        evidenceFile: fileUrl,
+        evidenceNote: note,
+        status: 'Done',
+      })
+    });
+
+    if (res?.success) {
+      closeModal('modal-evidence');
+      showToast('Evidence submitted — task marked Done ✓', 'success');
+      cache.tasks = null; loadTasks();
+    } else {
+      showToast(res?.error || 'Error saving evidence', 'error');
+    }
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Submit evidence';
+}
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
