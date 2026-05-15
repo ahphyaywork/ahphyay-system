@@ -616,7 +616,22 @@ tbody tr:hover td{background:#fafcfb;}
         <div class="section-hd">
           <div class="section-title">KPI Overview</div>
         </div>
-        <!-- KPI Filters (admin/management only) -->
+        <!-- KPI tab nav -->
+        <div id="kpi-tab-nav" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border2);padding-bottom:0;">
+          <button onclick="switchKpiTab('overview')" id="kpi-tab-overview"
+            style="padding:8px 18px;border:none;background:none;font-size:13px;font-weight:500;cursor:pointer;color:var(--teal);border-bottom:2px solid var(--teal);margin-bottom:-2px;">
+            Overview
+          </button>
+          <button onclick="switchKpiTab('project')" id="kpi-tab-project"
+            style="padding:8px 18px;border:none;background:none;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;">
+            By Project
+          </button>
+          <button onclick="switchKpiTab('staff')" id="kpi-tab-staff"
+            style="padding:8px 18px;border:none;background:none;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;">
+            By Staff
+          </button>
+        </div>
+        <!-- KPI Filters (overview tab only) -->
         <div id="kpi-filters" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
           <select class="form-input" id="kpi-filter-project" style="width:auto;padding:6px 10px;font-size:12px;" onchange="loadKPI()">
             <option value="">All projects</option>
@@ -2120,6 +2135,229 @@ function clearKpiFilters() {
   if (p) p.value = '';
   if (s) s.value = '';
   loadKPI();
+}
+
+let currentKpiTab = 'overview';
+
+function switchKpiTab(tab) {
+  currentKpiTab = tab;
+  // Update tab styles
+  ['overview','project','staff'].forEach(t => {
+    const btn = document.getElementById('kpi-tab-' + t);
+    if (!btn) return;
+    if (t === tab) {
+      btn.style.color = 'var(--teal)';
+      btn.style.borderBottom = '2px solid var(--teal)';
+    } else {
+      btn.style.color = 'var(--muted)';
+      btn.style.borderBottom = '2px solid transparent';
+    }
+  });
+  // Show/hide filters (only for overview)
+  const filters = document.getElementById('kpi-filters');
+  if (filters) filters.style.display = tab === 'overview' ? 'flex' : 'none';
+
+  if (tab === 'overview') loadKPI();
+  else if (tab === 'project') loadKpiByProject();
+  else if (tab === 'staff') loadKpiByStaff();
+}
+
+async function loadKpiByProject() {
+  const el = document.getElementById('kpi-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Loading...</div>';
+
+  const [allTasks, projects, staff] = await Promise.all([
+    api('/tasks'),
+    cache.projects || api('/projects'),
+    cache.staff || api('/staff'),
+  ]);
+  cache.tasks = allTasks; cache.projects = projects; cache.staff = staff;
+
+  if (!projects || !allTasks) return;
+
+  const getColor = pct => pct >= 70 ? 'var(--teal)' : pct >= 40 ? 'var(--amber)' : 'var(--red)';
+  const getBg    = pct => pct >= 70 ? 'prog-green' : pct >= 40 ? 'prog-amber' : 'prog-red';
+
+  let html = '';
+  projects.forEach(proj => {
+    const projTasks = allTasks.filter(t => t.ProjectID === proj.ID);
+    if (!projTasks.length) return;
+
+    const done    = projTasks.filter(t => t.Status === 'Done').length;
+    const inProg  = projTasks.filter(t => t.Status === 'In Progress').length;
+    const pending = projTasks.filter(t => !t.Status || t.Status === 'Pending').length;
+    const pct     = Math.round((done / projTasks.length) * 100);
+
+    // Staff assigned to this project
+    const assignedIds = [...new Set(projTasks.map(t => t.AssigneeID).filter(Boolean))];
+    const assignedStaff = assignedIds.map(id => {
+      const s = staff.find(s => s.ID === id);
+      if (!s) return null;
+      const sTasks = projTasks.filter(t => t.AssigneeID === id);
+      const sDone  = sTasks.filter(t => t.Status === 'Done').length;
+      const sPct   = sTasks.length ? Math.round((sDone / sTasks.length) * 100) : 0;
+      return { ...s, taskCount: sTasks.length, donePct: sPct };
+    }).filter(Boolean);
+
+    html += `
+      <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;margin-bottom:16px;overflow:hidden;">
+        <!-- Project header -->
+        <div style="background:var(--navy);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--white);">${proj.Name}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px;">${projTasks.length} tasks · ${assignedStaff.length} staff</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:${getColor(pct)};">${pct}%</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.4);">completion</div>
+          </div>
+        </div>
+
+        <div style="padding:16px 20px;">
+          <!-- Progress bar -->
+          <div class="prog-wrap" style="margin-bottom:14px;">
+            <div class="prog-bar" style="height:8px;">
+              <div class="prog-fill ${getBg(pct)}" style="width:${pct}%;height:8px;"></div>
+            </div>
+          </div>
+
+          <!-- Status badges -->
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            <span class="badge badge-done"><span class="badge-dot"></span>${done} done</span>
+            <span class="badge badge-prog"><span class="badge-dot"></span>${inProg} in progress</span>
+            <span class="badge badge-late"><span class="badge-dot"></span>${pending} pending</span>
+          </div>
+
+          <!-- Staff breakdown -->
+          <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">Staff assigned</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
+            ${assignedStaff.map(s => `
+              <div style="background:var(--off);border:1px solid var(--border2);border-radius:10px;padding:12px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                  <div class="s-avatar" style="width:30px;height:30px;font-size:11px;">
+                    ${s.Name.split(' ').map(n=>n[0]).join('').slice(0,2)}
+                  </div>
+                  <div>
+                    <div style="font-size:12px;font-weight:500;color:var(--navy);">${s.Name}</div>
+                    <div style="font-size:10px;color:var(--muted);">${s.taskCount} tasks</div>
+                  </div>
+                  <span style="margin-left:auto;font-size:12px;font-weight:700;color:${getColor(s.donePct)};">${s.donePct}%</span>
+                </div>
+                <div class="prog-wrap">
+                  <div class="prog-bar">
+                    <div class="prog-fill ${getBg(s.donePct)}" style="width:${s.donePct}%;"></div>
+                  </div>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  });
+
+  el.innerHTML = html || '<div class="empty">No project data yet.</div>';
+}
+
+async function loadKpiByStaff() {
+  const el = document.getElementById('kpi-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Loading...</div>';
+
+  const [allTasks, projects, staff] = await Promise.all([
+    cache.tasks || api('/tasks'),
+    cache.projects || api('/projects'),
+    cache.staff || api('/staff'),
+  ]);
+  cache.tasks = allTasks; cache.projects = projects; cache.staff = staff;
+
+  if (!staff || !allTasks) return;
+
+  const getColor = pct => pct >= 70 ? 'var(--teal)' : pct >= 40 ? 'var(--amber)' : 'var(--red)';
+  const getBg    = pct => pct >= 70 ? 'prog-green' : pct >= 40 ? 'prog-amber' : 'prog-red';
+  const getStatus= pct => pct >= 70 ? 'On Track' : pct >= 40 ? 'At Risk' : 'Behind';
+  const getStatusBadge = pct => pct >= 70 ? 'badge-track' : pct >= 40 ? 'badge-risk' : 'badge-behind';
+
+  let html = '';
+  staff.filter(s => s.Active?.toLowerCase() === 'true').forEach(s => {
+    const myTasks = allTasks.filter(t => t.AssigneeID === s.ID);
+    if (!myTasks.length) return;
+
+    const done   = myTasks.filter(t => t.Status === 'Done').length;
+    const inProg = myTasks.filter(t => t.Status === 'In Progress').length;
+    const pct    = Math.round((done / myTasks.length) * 100);
+
+    // Group tasks by project
+    const projIds = [...new Set(myTasks.map(t => t.ProjectID))];
+    const byProject = projIds.map(pid => {
+      const proj   = projects.find(p => p.ID === pid);
+      const pTasks = myTasks.filter(t => t.ProjectID === pid);
+      const pDone  = pTasks.filter(t => t.Status === 'Done').length;
+      const pPct   = pTasks.length ? Math.round((pDone / pTasks.length) * 100) : 0;
+      return { proj, tasks: pTasks, done: pDone, pct: pPct };
+    });
+
+    html += `
+      <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;margin-bottom:16px;overflow:hidden;">
+        <!-- Staff header -->
+        <div style="padding:16px 20px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border2);">
+          <div style="position:relative;width:52px;height:52px;flex-shrink:0;">
+            <svg width="52" height="52" viewBox="0 0 52 52">
+              <circle cx="26" cy="26" r="22" fill="none" stroke="#E2EDE8" stroke-width="4"/>
+              <circle cx="26" cy="26" r="22" fill="none"
+                stroke="${getColor(pct)}"
+                stroke-width="4"
+                stroke-dasharray="${(pct/100)*138.2} 138.2"
+                stroke-linecap="round"
+                transform="rotate(-90 26 26)"/>
+              <text x="26" y="30" text-anchor="middle" font-size="10" font-weight="bold"
+                fill="${getColor(pct)}">${pct}%</text>
+            </svg>
+          </div>
+          <div style="flex:1;">
+            <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--navy);">${s.Name}</div>
+            <div style="font-size:12px;color:var(--muted);">${s.Role} · ${myTasks.length} tasks across ${projIds.length} project${projIds.length>1?'s':''}</div>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+              <span class="badge badge-done"><span class="badge-dot"></span>${done} done</span>
+              <span class="badge badge-prog"><span class="badge-dot"></span>${inProg} in progress</span>
+              <span class="badge badge-late"><span class="badge-dot"></span>${myTasks.length-done-inProg} pending</span>
+            </div>
+          </div>
+          <span class="badge ${getStatusBadge(pct)}" style="font-size:11px;padding:5px 12px;">
+            <span class="badge-dot"></span>${getStatus(pct)}
+          </span>
+        </div>
+
+        <!-- Per-project breakdown -->
+        <div style="padding:16px 20px;">
+          <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;">KPI by project</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            ${byProject.map(bp => `
+              <div style="background:var(--off);border-radius:10px;padding:12px 14px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                  <div>
+                    <span class="badge badge-done" style="margin-right:6px;">${bp.proj?.ShortName||bp.proj?.ID||'—'}</span>
+                    <span style="font-size:12px;color:var(--navy);font-weight:500;">${bp.proj?.Name||'Unknown project'}</span>
+                  </div>
+                  <span style="font-size:13px;font-weight:700;color:${getColor(bp.pct)};">${bp.pct}%</span>
+                </div>
+                <div class="prog-wrap" style="margin-bottom:8px;">
+                  <div class="prog-bar">
+                    <div class="prog-fill ${getBg(bp.pct)}" style="width:${bp.pct}%;"></div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                  ${bp.tasks.map(t => `
+                    <span style="font-size:10px;padding:2px 8px;border-radius:99px;
+                      background:${t.Status==='Done'?'var(--teal-lt)':t.Status==='In Progress'?'var(--amber-lt)':'var(--red-lt)'};
+                      color:${t.Status==='Done'?'#085041':t.Status==='In Progress'?'#633806':'#791F1F'};">
+                      ${t.Name.length > 25 ? t.Name.slice(0,25)+'...' : t.Name}
+                    </span>`).join('')}
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  });
+
+  el.innerHTML = html || '<div class="empty">No staff data yet.</div>';
 }
 
 // ════════════════════════════════════════════════════════
