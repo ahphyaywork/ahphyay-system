@@ -404,6 +404,7 @@ tbody tr:hover td{background:#fafcfb;}
   .sidebar-toggle{display:flex;}
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -614,6 +615,16 @@ tbody tr:hover td{background:#fafcfb;}
       <div class="panel" id="panel-kpi">
         <div class="section-hd">
           <div class="section-title">KPI Overview</div>
+        </div>
+        <!-- KPI Filters (admin/management only) -->
+        <div id="kpi-filters" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          <select class="form-input" id="kpi-filter-project" style="width:auto;padding:6px 10px;font-size:12px;" onchange="loadKPI()">
+            <option value="">All projects</option>
+          </select>
+          <select class="form-input" id="kpi-filter-staff" style="width:auto;padding:6px 10px;font-size:12px;" onchange="loadKPI()">
+            <option value="">All staff</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="clearKpiFilters()" style="font-size:12px;">✕ Clear</button>
         </div>
         <div id="kpi-content">
           <div class="loading"><div class="spinner"></div><br>Loading KPIs...</div>
@@ -1166,12 +1177,40 @@ async function loadDashboard() {
   if (!data) return;
   const el = document.getElementById('dashboard-content');
 
+  // ── Staff view ──────────────────────────────────────────
   if (user.role === 'staff' || user.role === 'external') {
-    // Staff view — own KPIs
+    const done   = data.myKpis.filter(k => k.taskStatus === 'Done').length;
+    const inProg = data.myKpis.filter(k => k.taskStatus === 'In Progress').length;
+    const pending= data.myKpis.filter(k => k.taskStatus === 'Pending').length;
+    const total  = data.myKpis.length;
+    const pct    = total ? Math.round((done/total)*100) : 0;
+
     el.innerHTML = `
-      <div class="section-hd"><div class="section-title">My KPI Progress</div></div>
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="stat-card">
+          <div class="stat-label">My tasks</div>
+          <div class="stat-val"><span class="stat-accent" style="background:var(--navy)"></span>${total}</div>
+          <div class="stat-sub">assigned to me</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Completed</div>
+          <div class="stat-val"><span class="stat-accent" style="background:var(--teal)"></span>${done}</div>
+          <div class="stat-sub">tasks done</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">In progress</div>
+          <div class="stat-val"><span class="stat-accent" style="background:var(--amber)"></span>${inProg}</div>
+          <div class="stat-sub">ongoing</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">My KPI score</div>
+          <div class="stat-val"><span class="stat-accent" style="background:${pct>=70?'var(--teal)':pct>=40?'var(--amber)':'var(--red)'}"></span>${pct}%</div>
+          <div class="stat-sub">${pending} tasks pending</div>
+        </div>
+      </div>
+      <div class="section-hd"><div class="section-title">My task progress</div></div>
       ${data.myKpis.length ? data.myKpis.map(k => `
-        <div style="background:var(--white);border:1px solid var(--border2);border-radius:12px;padding:14px 18px;margin-bottom:10px;">
+        <div style="background:var(--white);border:1px solid var(--border2);border-radius:12px;padding:14px 18px;margin-bottom:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <div>
               <span style="font-weight:500;font-size:14px;color:var(--navy)">${k.taskName}</span>
@@ -1182,7 +1221,7 @@ async function loadDashboard() {
             </span>
           </div>
           <div class="prog-wrap">
-            <div class="prog-bar"><div class="prog-fill ${k.percentage>=70?'prog-green':k.percentage>=40?'prog-amber':'prog-red'}" style="width:${Math.min(k.percentage,100)}%"></div></div>
+            <div class="prog-bar"><div class="prog-fill ${k.percentage>=70?'prog-green':k.percentage>=40?'prog-amber':'prog-red'}" style="width:${k.percentage}%"></div></div>
             <span class="prog-pct">${k.percentage}%</span>
           </div>
           ${k.hasEvidence ? `<div style="margin-top:8px;"><a href="${k.evidenceLink}" target="_blank" style="font-size:12px;color:var(--teal)">📎 View evidence ↗</a></div>` : ''}
@@ -1190,13 +1229,20 @@ async function loadDashboard() {
     return;
   }
 
+  // ── Admin / Management view ─────────────────────────────
   const s = data.stats;
+  const done    = data.staffSummary.reduce((a,s)=>a+(s.avgKpi===100?1:0),0);
+  const onTrack = data.staffSummary.filter(s=>s.status==='on-track').length;
+  const atRisk  = data.staffSummary.filter(s=>s.status==='at-risk').length;
+  const behind  = data.staffSummary.filter(s=>s.status==='behind').length;
+
   el.innerHTML = `
-    <div class="stats-grid">
+    <!-- Stat cards -->
+    <div class="stats-grid" style="margin-bottom:20px;">
       <div class="stat-card">
-        <div class="stat-label">Total staff</div>
-        <div class="stat-val"><span class="stat-accent" style="background:var(--teal)"></span>${s.totalStaff}</div>
-        <div class="stat-sub">active members</div>
+        <div class="stat-label">Active staff</div>
+        <div class="stat-val"><span class="stat-accent" style="background:var(--navy)"></span>${s.totalStaff}</div>
+        <div class="stat-sub">team members</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Active projects</div>
@@ -1204,51 +1250,88 @@ async function loadDashboard() {
         <div class="stat-sub">running now</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Avg KPI</div>
-        <div class="stat-val"><span class="stat-accent" style="background:${s.avgKpiPercent>=70?'var(--teal)':s.avgKpiPercent>=40?'var(--amber)':'var(--red)'}"></span>${s.avgKpiPercent}%</div>
-        <div class="stat-sub">${s.tasksOnTrack} of ${s.totalTasks} tasks on track</div>
+        <div class="stat-label">Total tasks</div>
+        <div class="stat-val"><span class="stat-accent" style="background:var(--purple)"></span>${s.totalTasks}</div>
+        <div class="stat-sub">${s.tasksOnTrack} on track or done</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Logs this month</div>
-        <div class="stat-val"><span class="stat-accent" style="background:var(--purple)"></span>${s.logsThisMonth}</div>
-        <div class="stat-sub">work entries</div>
+        <div class="stat-label">Overall KPI</div>
+        <div class="stat-val"><span class="stat-accent" style="background:${s.avgKpiPercent>=70?'var(--teal)':s.avgKpiPercent>=40?'var(--amber)':'var(--red)'}"></span>${s.avgKpiPercent}%</div>
+        <div class="stat-sub">team average</div>
       </div>
     </div>
 
+    <!-- Charts row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;">
+      <!-- Task status donut -->
+      <div class="stat-card" style="display:flex;flex-direction:column;align-items:center;">
+        <div class="stat-label" style="margin-bottom:10px;align-self:flex-start;">Task breakdown</div>
+        <canvas id="chart-task-status" width="160" height="160"></canvas>
+        <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;justify-content:center;">
+          <span style="font-size:10px;color:var(--teal)">● Done</span>
+          <span style="font-size:10px;color:var(--amber)">● In Progress</span>
+          <span style="font-size:10px;color:var(--red)">● Pending</span>
+        </div>
+      </div>
+      <!-- Priority bar chart -->
+      <div class="stat-card">
+        <div class="stat-label" style="margin-bottom:10px;">Tasks by priority</div>
+        <canvas id="chart-priority" height="140"></canvas>
+      </div>
+      <!-- Staff KPI status -->
+      <div class="stat-card">
+        <div class="stat-label" style="margin-bottom:10px;">Staff KPI health</div>
+        <canvas id="chart-staff-health" height="140"></canvas>
+      </div>
+    </div>
+
+    <!-- Staff performance + recent activity -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
       <div>
         <div class="section-hd"><div class="section-title">Staff performance</div></div>
-        <div class="staff-cards" style="grid-template-columns:1fr;">
+        <div style="display:flex;flex-direction:column;gap:10px;">
           ${data.staffSummary.map(s => `
             <div class="staff-card">
               <div class="staff-card-head">
-                <div class="s-avatar">${s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
-                <div>
+                <div style="position:relative;width:44px;height:44px;flex-shrink:0;">
+                  <svg width="44" height="44" viewBox="0 0 44 44">
+                    <circle cx="22" cy="22" r="18" fill="none" stroke="#E2EDE8" stroke-width="4"/>
+                    <circle cx="22" cy="22" r="18" fill="none"
+                      stroke="${s.avgKpi>=70?'#1D9E75':s.avgKpi>=40?'#EF9F27':'#E24B4A'}"
+                      stroke-width="4"
+                      stroke-dasharray="${(s.avgKpi/100)*113.1} 113.1"
+                      stroke-linecap="round"
+                      transform="rotate(-90 22 22)"/>
+                    <text x="22" y="26" text-anchor="middle" font-size="9" font-weight="bold"
+                      fill="${s.avgKpi>=70?'#1D9E75':s.avgKpi>=40?'#EF9F27':'#E24B4A'}">${s.avgKpi}%</text>
+                  </svg>
+                </div>
+                <div style="flex:1;">
                   <div class="s-name">${s.name}</div>
                   <div class="s-role">${s.role} · ${s.taskCount} tasks</div>
                 </div>
-                <span class="badge badge-${s.status==='on-track'?'track':s.status==='at-risk'?'risk':'behind'}" style="margin-left:auto">
-                  <span class="badge-dot"></span>${s.avgKpi}%
+                <span class="badge badge-${s.status==='on-track'?'track':s.status==='at-risk'?'risk':'behind'}">
+                  <span class="badge-dot"></span>${s.status}
                 </span>
               </div>
-              <div class="prog-wrap">
-                <div class="prog-bar"><div class="prog-fill ${s.avgKpi>=70?'prog-green':s.avgKpi>=40?'prog-amber':'prog-red'}" style="width:${Math.min(s.avgKpi,100)}%"></div></div>
-                <span class="prog-pct">${s.avgKpi}%</span>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <span class="badge badge-done"><span class="badge-dot"></span>${s.avgKpi===100?s.taskCount:Math.round(s.taskCount*s.avgKpi/100)} done</span>
+                <span class="badge badge-late"><span class="badge-dot"></span>${s.taskCount - Math.round(s.taskCount*s.avgKpi/100)} remaining</span>
               </div>
             </div>`).join('')}
         </div>
       </div>
       <div>
-        <div class="section-hd"><div class="section-title">Recent activity</div></div>
+        <div class="section-hd"><div class="section-title">Recent task updates</div></div>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Date</th><th>Staff</th><th>Task</th><th>Status</th></tr></thead>
             <tbody>
               ${data.recentLogs.length ? data.recentLogs.map(l => `
                 <tr>
-                  <td style="color:var(--muted)">${l.Date}</td>
-                  <td>${l.staffName}</td>
-                  <td>${l.taskName}</td>
+                  <td style="color:var(--muted);font-size:11px">${l.Date}</td>
+                  <td style="font-size:12px">${l.staffName}</td>
+                  <td style="font-size:12px">${l.taskName}</td>
                   <td><span class="badge ${l.Status==='Done'?'badge-done':l.Status==='In Progress'?'badge-prog':'badge-late'}">
                     <span class="badge-dot"></span>${l.Status}</span></td>
                 </tr>`).join('') : '<tr><td colspan="4"><div class="empty">No activity yet.</div></td></tr>'}
@@ -1257,6 +1340,68 @@ async function loadDashboard() {
         </div>
       </div>
     </div>`;
+
+  // ── Render charts after DOM is set ──────────────────────
+  setTimeout(() => {
+    const tasks = cache.tasks || [];
+    const doneCount   = tasks.filter(t=>t.Status==='Done').length;
+    const progCount   = tasks.filter(t=>t.Status==='In Progress').length;
+    const pendCount   = tasks.filter(t=>(!t.Status||t.Status==='Pending')).length;
+    const highCount   = tasks.filter(t=>t.Priority==='High').length;
+    const medCount    = tasks.filter(t=>(!t.Priority||t.Priority==='Medium')).length;
+    const lowCount    = tasks.filter(t=>t.Priority==='Low').length;
+
+    // Donut — task status
+    const ctx1 = document.getElementById('chart-task-status');
+    if (ctx1) new Chart(ctx1, {
+      type: 'doughnut',
+      data: {
+        labels: ['Done','In Progress','Pending'],
+        datasets: [{ data: [doneCount, progCount, pendCount],
+          backgroundColor: ['#1D9E75','#EF9F27','#E24B4A'],
+          borderWidth: 0, hoverOffset: 4 }]
+      },
+      options: { cutout: '70%', plugins: { legend: { display: false } }, responsive: false }
+    });
+
+    // Bar — priority
+    const ctx2 = document.getElementById('chart-priority');
+    if (ctx2) new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: ['High','Medium','Low'],
+        datasets: [{ data: [highCount, medCount, lowCount],
+          backgroundColor: ['#E24B4A','#EF9F27','#1D9E75'],
+          borderRadius: 6, borderWidth: 0 }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#E2EDE8' } },
+          x: { ticks: { font: { size: 10 } }, grid: { display: false } }
+        }
+      }
+    });
+
+    // Bar — staff health
+    const ctx3 = document.getElementById('chart-staff-health');
+    if (ctx3) new Chart(ctx3, {
+      type: 'bar',
+      data: {
+        labels: ['On Track','At Risk','Behind'],
+        datasets: [{ data: [onTrack, atRisk, behind],
+          backgroundColor: ['#1D9E75','#EF9F27','#E24B4A'],
+          borderRadius: 6, borderWidth: 0 }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#E2EDE8' } },
+          x: { ticks: { font: { size: 10 } }, grid: { display: false } }
+        }
+      }
+    });
+  }, 100);
 }
 
 // ════════════════════════════════════════════════════════
@@ -1743,22 +1888,42 @@ function getPeriodRange(period) {
 // KPI
 // ════════════════════════════════════════════════════════
 async function loadKPI() {
-  const data = await api('/kpi');
+  // Populate filter dropdowns
+  const projSel = document.getElementById('kpi-filter-project');
+  const staffSel = document.getElementById('kpi-filter-staff');
+  if (projSel && !projSel.options.length > 1) {
+    (cache.projects || await api('/projects') || []).forEach(p => {
+      if (!projSel.querySelector(`option[value="${p.ID}"]`)) {
+        const o = document.createElement('option'); o.value = p.ID; o.textContent = p.Name;
+        projSel.appendChild(o);
+      }
+    });
+  }
+  if (staffSel && staffSel.options.length <= 1) {
+    (cache.staff || await api('/staff') || []).forEach(s => {
+      const o = document.createElement('option'); o.value = s.ID; o.textContent = s.Name;
+      staffSel.appendChild(o);
+    });
+  }
+
+  const projectId    = document.getElementById('kpi-filter-project')?.value || '';
+  const filterStaffId= document.getElementById('kpi-filter-staff')?.value || '';
+  const params       = new URLSearchParams();
+  if (projectId)     params.set('projectId', projectId);
+  if (filterStaffId) params.set('filterStaffId', filterStaffId);
+
+  const data = await api('/kpi?' + params.toString());
   if (!data) return;
   const el = document.getElementById('kpi-content');
 
   const getColor = pct => pct >= 70 ? 'prog-green' : pct >= 40 ? 'prog-amber' : 'prog-red';
   const getBadge = s => s==='achieved'?'badge-done':s==='on-track'?'badge-track':s==='at-risk'?'badge-risk':'badge-behind';
-
   const role = user.role;
 
-  // ── Staff / External — show own task cards ──
+  // ── Staff / External ────────────────────────────────────
   if (role === 'staff' || role === 'external') {
     const kpis = data.kpis || [];
-    if (!kpis.length) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">◎</div>No tasks assigned yet.</div>';
-      return;
-    }
+    if (!kpis.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">◎</div>No tasks assigned yet.</div>'; return; }
     el.innerHTML = kpis.map(k => `
       <div style="background:var(--white);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
@@ -1772,85 +1937,188 @@ async function loadKPI() {
           </span>
         </div>
         <div class="prog-wrap">
-          <div class="prog-bar">
-            <div class="prog-fill ${getColor(k.percentage)}" style="width:${k.percentage}%"></div>
-          </div>
+          <div class="prog-bar"><div class="prog-fill ${getColor(k.percentage)}" style="width:${k.percentage}%"></div></div>
           <span class="prog-pct">${k.percentage}%</span>
         </div>
         ${k.hasEvidence
-          ? `<div style="margin-top:10px;"><a href="${k.evidenceLink}" target="_blank" style="font-size:12px;color:var(--teal);">📎 View evidence ↗</a></div>`
+          ? `<div style="margin-top:10px;">
+              <a href="${k.evidenceLink}" target="_blank" style="font-size:12px;color:var(--teal);">📎 View evidence ↗</a>
+              ${k.evidenceDate ? `<span style="font-size:10px;color:var(--muted);margin-left:8px;">· ${k.evidenceDate.slice(0,10)}</span>` : ''}
+             </div>`
           : `<div style="margin-top:10px;"><span style="font-size:12px;color:var(--muted);">No evidence submitted yet</span></div>`}
       </div>`).join('');
     return;
   }
 
-  // ── Admin / Management — full overview ──
-  let html = '';
+  // ── Admin / Management ──────────────────────────────────
+  const kpis   = data.kpis || [];
+  const summary= data.staffSummary || [];
+  const doneCount = kpis.filter(k=>k.taskStatus==='Done').length;
+  const progCount = kpis.filter(k=>k.taskStatus==='In Progress').length;
+  const pendCount = kpis.filter(k=>k.taskStatus==='Pending').length;
+  const withEvidence = kpis.filter(k=>k.hasEvidence).length;
+  const avgPct = kpis.length ? Math.round(kpis.reduce((a,k)=>a+k.percentage,0)/kpis.length) : 0;
 
-  if (data.staffSummary?.length) {
+  let html = `
+    <!-- KPI stat cards -->
+    <div class="stats-grid" style="margin-bottom:20px;">
+      <div class="stat-card">
+        <div class="stat-label">Tasks tracked</div>
+        <div class="stat-val"><span class="stat-accent" style="background:var(--navy)"></span>${kpis.length}</div>
+        <div class="stat-sub">across all staff</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Completed</div>
+        <div class="stat-val"><span class="stat-accent" style="background:var(--teal)"></span>${doneCount}</div>
+        <div class="stat-sub">${progCount} in progress · ${pendCount} pending</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Evidence submitted</div>
+        <div class="stat-val"><span class="stat-accent" style="background:var(--purple)"></span>${withEvidence}</div>
+        <div class="stat-sub">of ${doneCount} done tasks</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg completion</div>
+        <div class="stat-val"><span class="stat-accent" style="background:${avgPct>=70?'var(--teal)':avgPct>=40?'var(--amber)':'var(--red)'}"></span>${avgPct}%</div>
+        <div class="stat-sub">overall KPI score</div>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div class="stat-card">
+        <div class="stat-label" style="margin-bottom:12px;">Task completion status</div>
+        <canvas id="kpi-chart-status" height="120"></canvas>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label" style="margin-bottom:12px;">Staff KPI comparison</div>
+        <canvas id="kpi-chart-staff" height="120"></canvas>
+      </div>
+    </div>`;
+
+  // Staff summary cards
+  if (summary.length) {
     html += `<div class="section-title" style="margin-bottom:12px;">Staff KPI summary</div>
     <div class="staff-cards" style="margin-bottom:20px;">
-      ${data.staffSummary.map(s => `
+      ${summary.map(s => `
         <div class="staff-card">
           <div class="staff-card-head">
-            <div class="s-avatar">${s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
-            <div><div class="s-name">${s.name}</div><div class="s-role">${s.role} · ${s.taskCount} tasks</div></div>
+            <div style="position:relative;width:48px;height:48px;flex-shrink:0;">
+              <svg width="48" height="48" viewBox="0 0 48 48">
+                <circle cx="24" cy="24" r="20" fill="none" stroke="#E2EDE8" stroke-width="4"/>
+                <circle cx="24" cy="24" r="20" fill="none"
+                  stroke="${s.avgPercentage>=70?'#1D9E75':s.avgPercentage>=40?'#EF9F27':'#E24B4A'}"
+                  stroke-width="4"
+                  stroke-dasharray="${(s.avgPercentage/100)*125.7} 125.7"
+                  stroke-linecap="round"
+                  transform="rotate(-90 24 24)"/>
+                <text x="24" y="28" text-anchor="middle" font-size="9" font-weight="bold"
+                  fill="${s.avgPercentage>=70?'#1D9E75':s.avgPercentage>=40?'#EF9F27':'#E24B4A'}">${s.avgPercentage}%</text>
+              </svg>
+            </div>
+            <div style="flex:1;">
+              <div class="s-name">${s.name}</div>
+              <div class="s-role">${s.role} · ${s.taskCount} tasks</div>
+            </div>
             <span class="badge ${getBadge(s.overallStatus)}" style="margin-left:auto">
               <span class="badge-dot"></span>${s.avgPercentage}%
             </span>
           </div>
-          <div class="prog-wrap">
+          <div class="prog-wrap" style="margin-bottom:8px;">
             <div class="prog-bar"><div class="prog-fill ${getColor(s.avgPercentage)}" style="width:${Math.min(s.avgPercentage,100)}%"></div></div>
             <span class="prog-pct">${s.avgPercentage}%</span>
           </div>
-          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <span class="badge badge-done"><span class="badge-dot"></span>${s.doneCount} done</span>
             <span class="badge badge-prog"><span class="badge-dot"></span>${s.inProgressCount||0} in progress</span>
-            <span class="badge badge-late"><span class="badge-dot"></span>${s.taskCount - s.doneCount - (s.inProgressCount||0)} pending</span>
+            <span class="badge badge-late"><span class="badge-dot"></span>${s.taskCount-s.doneCount-(s.inProgressCount||0)} pending</span>
           </div>
         </div>`).join('')}
     </div>`;
   }
 
-  html += `<div class="section-title" style="margin-bottom:12px;">Task KPIs</div>
+  // Task table
+  html += `<div class="section-title" style="margin-bottom:12px;">Task KPI detail</div>
   <div class="table-wrap">
     <table>
-      <thead>
-        <tr><th>Task</th><th>Project</th><th>Category</th><th>Due date</th><th>Progress</th><th>Evidence</th></tr>
-      </thead>
+      <thead><tr><th>Task</th><th>Project</th><th>Assignee</th><th>Priority</th><th>Due date</th><th>Progress</th><th>Evidence</th></tr></thead>
       <tbody>
-        ${data.kpis?.length ? data.kpis.map(k => `
+        ${kpis.length ? kpis.map(k => `
           <tr>
-            <td><strong>${k.taskName}</strong></td>
+            <td><strong>${k.taskName}</strong>${k.category?`<br><span style="font-size:10px;color:var(--muted)">${k.category}</span>`:''}</td>
             <td><span class="badge badge-done">${k.projectName}</span></td>
-            <td style="color:var(--muted)">${k.category || '—'}</td>
-            <td style="color:var(--muted)">${k.dueDate || '—'}</td>
+            <td style="font-size:12px">${(cache.staff||[]).find(s=>s.ID===k.assigneeId)?.Name||'—'}</td>
+            <td><span class="badge ${k.priority==='High'?'badge-late':k.priority==='Low'?'badge-staff':'badge-prog'}">${k.priority||'Medium'}</span></td>
+            <td style="color:var(--muted);font-size:11px">${k.dueDate||'—'}</td>
             <td>
               <div class="prog-wrap">
                 <div class="prog-bar"><div class="prog-fill ${getColor(k.percentage)}" style="width:${k.percentage}%"></div></div>
                 <span class="prog-pct">${k.percentage}%</span>
               </div>
-              <div style="margin-top:4px;">
-                <span class="badge ${k.taskStatus==='Done'?'badge-done':k.taskStatus==='In Progress'?'badge-prog':'badge-late'}">
-                  <span class="badge-dot"></span>${k.taskStatus}
-                </span>
-              </div>
+              <span class="badge ${k.taskStatus==='Done'?'badge-done':k.taskStatus==='In Progress'?'badge-prog':'badge-late'}" style="margin-top:4px;">
+                <span class="badge-dot"></span>${k.taskStatus}
+              </span>
             </td>
             <td>
               ${k.hasEvidence
-                ? `<div>
-                    <a href="${k.evidenceLink}" target="_blank" class="btn btn-outline btn-sm" style="color:var(--teal)">View ↗</a>
-                    ${k.evidenceDate ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">Submitted: ${k.evidenceDate.slice(0,10)}</div>` : ''}
-                   </div>`
-                : '<span style="color:var(--muted);font-size:12px;">No evidence</span>'}
+                ? `<a href="${k.evidenceLink}" target="_blank" class="btn btn-outline btn-sm" style="color:var(--teal)">View ↗</a>
+                   ${k.evidenceDate?`<div style="font-size:10px;color:var(--muted);margin-top:2px;">${k.evidenceDate.slice(0,10)}</div>`:''}`
+                : '<span style="color:var(--muted);font-size:11px;">No evidence</span>'}
             </td>
           </tr>`).join('')
-          : '<tr><td colspan="6"><div class="empty">No tasks yet.</div></td></tr>'}
+          : '<tr><td colspan="7"><div class="empty">No tasks found.</div></td></tr>'}
       </tbody>
     </table>
   </div>`;
 
   el.innerHTML = html;
+
+  // ── Render charts ────────────────────────────────────────
+  setTimeout(() => {
+    const ctx1 = document.getElementById('kpi-chart-status');
+    if (ctx1) new Chart(ctx1, {
+      type: 'bar',
+      data: {
+        labels: ['Done','In Progress','Pending'],
+        datasets: [{ data: [doneCount, progCount, pendCount],
+          backgroundColor: ['#1D9E75','#EF9F27','#E24B4A'],
+          borderRadius: 6, borderWidth: 0 }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#E2EDE8' } },
+          x: { ticks: { font: { size: 10 } }, grid: { display: false } }
+        }
+      }
+    });
+
+    const ctx2 = document.getElementById('kpi-chart-staff');
+    if (ctx2 && summary.length) new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: summary.map(s => s.name.split(' ')[0]),
+        datasets: [{ data: summary.map(s => s.avgPercentage),
+          backgroundColor: summary.map(s => s.avgPercentage>=70?'#1D9E75':s.avgPercentage>=40?'#EF9F27':'#E24B4A'),
+          borderRadius: 6, borderWidth: 0 }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, max: 100, ticks: { font: { size: 10 }, callback: v => v+'%' }, grid: { color: '#E2EDE8' } },
+          x: { ticks: { font: { size: 10 } }, grid: { display: false } }
+        }
+      }
+    });
+  }, 100);
+}
+
+function clearKpiFilters() {
+  const p = document.getElementById('kpi-filter-project');
+  const s = document.getElementById('kpi-filter-staff');
+  if (p) p.value = '';
+  if (s) s.value = '';
+  loadKPI();
 }
 
 // ════════════════════════════════════════════════════════
