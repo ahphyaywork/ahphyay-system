@@ -542,6 +542,30 @@ tbody tr:hover td{background:#fafcfb;}
           <div class="section-title">Tasks</div>
           <button class="btn btn-primary btn-sm" onclick="openAddTask()" id="btn-add-task">+ Add task</button>
         </div>
+
+        <!-- Filters -->
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+          <select class="form-input" id="filter-task-project" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()">
+            <option value="">All projects</option>
+          </select>
+          <select class="form-input" id="filter-task-status" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()">
+            <option value="">All statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Done">Done</option>
+          </select>
+          <select class="form-input" id="filter-task-assignee" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()">
+            <option value="">All assignees</option>
+          </select>
+          <select class="form-input" id="filter-task-category" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()">
+            <option value="">All categories</option>
+          </select>
+          <input class="form-input" type="date" id="filter-task-from" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()" title="Due date from">
+          <input class="form-input" type="date" id="filter-task-to" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()" title="Due date to">
+          <button class="btn btn-outline btn-sm" onclick="clearTaskFilters()" style="font-size:12px;">✕ Clear</button>
+          <span id="filter-task-count" style="font-size:11px;color:var(--muted);margin-left:4px;"></span>
+        </div>
+
         <div class="table-wrap">
           <table>
             <thead>
@@ -1390,11 +1414,81 @@ async function loadTasks() {
   if (!tasks) return;
   cache.tasks = tasks; cache.projects = projects; cache.staff = staff;
 
+  // Populate filter dropdowns
+  const projSel = document.getElementById('filter-task-project');
+  if (projSel) {
+    const current = projSel.value;
+    projSel.innerHTML = '<option value="">All projects</option>' +
+      (projects||[]).map(p => `<option value="${p.ID}" ${p.ID===current?'selected':''}>${p.Name}</option>`).join('');
+  }
+
+  const assignSel = document.getElementById('filter-task-assignee');
+  if (assignSel) {
+    const current = assignSel.value;
+    assignSel.innerHTML = '<option value="">All assignees</option>' +
+      (staff||[]).map(s => `<option value="${s.ID}" ${s.ID===current?'selected':''}>${s.Name}</option>`).join('');
+  }
+
+  const categories = [...new Set(tasks.map(t => t.Category).filter(Boolean))].sort();
+  const catSel = document.getElementById('filter-task-category');
+  if (catSel) {
+    const current = catSel.value;
+    catSel.innerHTML = '<option value="">All categories</option>' +
+      categories.map(c => `<option value="${c}" ${c===current?'selected':''}>${c}</option>`).join('');
+  }
+
+  applyTaskFilters();
+}
+
+function applyTaskFilters() {
+  const tasks    = cache.tasks || [];
+  const projects = cache.projects || [];
+  const staff    = cache.staff || [];
+
+  const filterProject  = document.getElementById('filter-task-project')?.value || '';
+  const filterStatus   = document.getElementById('filter-task-status')?.value || '';
+  const filterAssignee = document.getElementById('filter-task-assignee')?.value || '';
+  const filterCategory = document.getElementById('filter-task-category')?.value || '';
+  const filterFrom     = document.getElementById('filter-task-from')?.value || '';
+  const filterTo       = document.getElementById('filter-task-to')?.value || '';
+
+  let filtered = tasks;
+  if (filterProject)  filtered = filtered.filter(t => t.ProjectID === filterProject);
+  if (filterStatus)   filtered = filtered.filter(t => (t.Status || 'Pending') === filterStatus);
+  if (filterAssignee) filtered = filtered.filter(t => t.AssigneeID === filterAssignee);
+  if (filterCategory) filtered = filtered.filter(t => t.Category === filterCategory);
+  if (filterFrom)     filtered = filtered.filter(t => t.DueDate >= filterFrom);
+  if (filterTo)       filtered = filtered.filter(t => t.DueDate <= filterTo);
+
+  // Update count
+  const countEl = document.getElementById('filter-task-count');
+  if (countEl) {
+    const total = tasks.length;
+    const shown = filtered.length;
+    countEl.textContent = shown < total ? `${shown} of ${total} tasks` : `${total} tasks`;
+  }
+
+  renderTaskRows(filtered, projects, staff);
+}
+
+function clearTaskFilters() {
+  ['filter-task-project','filter-task-status','filter-task-assignee','filter-task-category'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['filter-task-from','filter-task-to'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  applyTaskFilters();
+}
+
+function renderTaskRows(tasks, projects, staff) {
   const tbody = document.getElementById('tasks-table-body');
   const canEdit = user.role === 'admin' || user.role === 'management';
 
   if (!tasks.length) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">☑</div>No tasks yet.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">☑</div>No tasks match the filters.</div></td></tr>';
     return;
   }
 
