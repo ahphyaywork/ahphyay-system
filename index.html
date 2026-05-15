@@ -2343,13 +2343,16 @@ async function loadKpiByStaff() {
                     <div class="prog-fill ${getBg(bp.pct)}" style="width:${bp.pct}%;"></div>
                   </div>
                 </div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                  ${bp.tasks.map(t => `
-                    <span style="font-size:10px;padding:2px 8px;border-radius:99px;
-                      background:${t.Status==='Done'?'var(--teal-lt)':t.Status==='In Progress'?'var(--amber-lt)':'var(--red-lt)'};
-                      color:${t.Status==='Done'?'#085041':t.Status==='In Progress'?'#633806':'#791F1F'};">
-                      ${t.Name.length > 25 ? t.Name.slice(0,25)+'...' : t.Name}
-                    </span>`).join('')}
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <span class="badge badge-done"><span class="badge-dot"></span>${bp.tasks.filter(t=>t.Status==='Done').length} done</span>
+                    <span class="badge badge-prog"><span class="badge-dot"></span>${bp.tasks.filter(t=>t.Status==='In Progress').length} in progress</span>
+                    <span class="badge badge-late"><span class="badge-dot"></span>${bp.tasks.filter(t=>!t.Status||t.Status==='Pending').length} pending</span>
+                    <span style="font-size:11px;color:var(--muted);margin-left:4px;">${bp.tasks.length} tasks total</span>
+                  </div>
+                  <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="switchKpiTab('overview');document.getElementById('kpi-filter-staff').value='${s.ID}';document.getElementById('kpi-filter-project').value='${bp.proj?.ID||''}';loadKPI();">
+                    View tasks ↗
+                  </button>
                 </div>
               </div>`).join('')}
           </div>
