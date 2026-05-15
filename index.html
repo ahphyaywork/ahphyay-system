@@ -1342,6 +1342,7 @@ async function loadDashboard() {
     </div>`;
 
   // ── Render charts after DOM is set ──────────────────────
+  if (!cache.tasks) cache.tasks = await api('/tasks');
   setTimeout(() => {
     const tasks = cache.tasks || [];
     const doneCount   = tasks.filter(t=>t.Status==='Done').length;
