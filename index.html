@@ -1172,6 +1172,7 @@ function toggleSidebar() {
 // API HELPER
 // ════════════════════════════════════════════════════════
 async function api(path, opts = {}) {
+  if (!token) { doLogout(); return null; }   
   const res = await fetch(`${API}${path}`, {
     ...opts,
     headers: {
@@ -1188,6 +1189,7 @@ async function api(path, opts = {}) {
 // DASHBOARD
 // ════════════════════════════════════════════════════════
 async function loadDashboard() {
+  if (!user) { doLogout(); return; }   // ← add this line
   const data = await api('/dashboard');
   if (!data) return;
   const el = document.getElementById('dashboard-content');
