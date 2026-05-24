@@ -873,7 +873,8 @@ tbody tr:hover td{background:#fafcfb;}
       <input type="hidden" id="evidence-task-id">
       <div class="form-group">
         <label class="form-label">Upload file <span style="color:var(--muted);font-size:10px;">(PDF, image, doc, xlsx — max 10MB)</span></label>
-        <input type="file" id="evidence-file" class="form-input" style="padding:8px;" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls,.pptx">
+        <input type="file" id="evidence-file" class="form-input" style="padding:8px;" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls,.pptx" multiple onchange="updateFileList()">
+        <div id="file-list" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;"></div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin:4px 0 14px;">
         <div style="flex:1;height:1px;background:var(--border2);"></div>
@@ -2475,6 +2476,7 @@ function openEvidence(taskId) {
   document.getElementById('evidence-file').value = '';
   document.getElementById('evidence-link').value = '';
   document.getElementById('evidence-note').value = '';
+  document.getElementById('file-list').innerHTML = '';
   const t = cache.tasks?.find(t => t.ID === taskId);
   document.getElementById('modal-evidence-title').textContent = t ? `Evidence: ${t.Name}` : 'Task Evidence';
   document.getElementById('existing-evidence').style.display = 'none';
@@ -2493,11 +2495,29 @@ function viewEvidence(taskId) {
   const existingContent = document.getElementById('existing-evidence-content');
   existing.style.display = 'block';
   let html = '';
-  if (t.EvidenceFile) html += `<div style="margin-bottom:4px;">📎 File: <a href="${t.EvidenceFile}" target="_blank" style="color:var(--teal)">View uploaded file ↗</a></div>`;
+  if (t.EvidenceFile) {
+    const fileUrls = t.EvidenceFile.split(',').map(u => u.trim()).filter(Boolean);
+    fileUrls.forEach((url, i) => {
+      html += `<div style="margin-bottom:4px;">📎 File ${fileUrls.length > 1 ? (i+1) + ': ' : ': '}<a href="${url}" target="_blank" style="color:var(--teal)">View file ${fileUrls.length > 1 ? i+1 : ''} ↗</a></div>`;
+    });
+  }
   if (t.EvidenceLink) html += `<div>🔗 Link: <a href="${t.EvidenceLink}" target="_blank" style="color:var(--teal)">${t.EvidenceLink}</a></div>`;
   if (t.EvidenceNote) html += `<div style="margin-top:6px;color:var(--muted)">Note: ${t.EvidenceNote}</div>`;
   existingContent.innerHTML = html || 'No evidence details.';
   openModal('modal-evidence');
+}
+
+function updateFileList() {
+  const fileInput = document.getElementById('evidence-file');
+  const listEl = document.getElementById('file-list');
+  listEl.innerHTML = '';
+  Array.from(fileInput.files).forEach((file, i) => {
+    const size = (file.size / 1024 / 1024).toFixed(1);
+    const color = file.size > 10 * 1024 * 1024 ? 'var(--red)' : 'var(--muted)';
+    listEl.innerHTML += `<div style="font-size:11px;color:${color};display:flex;align-items:center;gap:6px;">
+      <span>📎</span><span>${file.name}</span><span style="opacity:.6;">(${size} MB)</span>
+    </div>`;
+  });
 }
 
 async function saveEvidence() {
@@ -2506,25 +2526,32 @@ async function saveEvidence() {
   const note = document.getElementById('evidence-note').value.trim();
   const fileInput = document.getElementById('evidence-file');
   const btn = document.querySelector('[onclick="saveEvidence()"]');
+  const files = Array.from(fileInput.files);
 
-  if (!link && !fileInput.files[0]) {
+  if (!link && files.length === 0) {
     showToast('Please upload a file or add a link', 'error');
     return;
   }
 
-  btn.disabled = true; btn.textContent = 'Uploading…';
+  // Check all files are under 10MB
+  const oversized = files.find(f => f.size > 10 * 1024 * 1024);
+  if (oversized) {
+    showToast(`"${oversized.name}" is over 10MB. Please remove it.`, 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  const fileUrls = [];
 
   try {
-    let fileUrl = '';
+    // Upload each file one by one
+    for (let i = 0; i < files.length; i++) {
+      btn.textContent = files.length > 1
+        ? `Uploading ${i + 1} of ${files.length}…`
+        : 'Uploading…';
 
-    if (fileInput.files[0]) {
-      if (fileInput.files[0].size > 10 * 1024 * 1024) {
-        showToast('File must be under 10MB', 'error');
-        btn.disabled = false; btn.textContent = 'Submit evidence';
-        return;
-      }
       const formData = new FormData();
-      formData.append('file', fileInput.files[0]);
+      formData.append('file', files[i]);
       const res = await fetch(`${API}/tasks/${taskId}/evidence`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -2532,18 +2559,27 @@ async function saveEvidence() {
       });
       const data = await res.json();
       if (!data.success) {
-        showToast(data.error || 'File upload failed', 'error');
+        showToast(`Failed to upload "${files[i].name}": ${data.error || 'Unknown error'}`, 'error');
         btn.disabled = false; btn.textContent = 'Submit evidence';
         return;
       }
-      fileUrl = data.fileUrl;
+      fileUrls.push(data.fileUrl);
     }
+
+    btn.textContent = 'Saving…';
+
+    // Get existing file URLs to append (don't overwrite previous submissions)
+    const task = cache.tasks?.find(t => t.ID === taskId);
+    const existingFiles = task?.EvidenceFile
+      ? task.EvidenceFile.split(',').map(u => u.trim()).filter(Boolean)
+      : [];
+    const allFileUrls = [...existingFiles, ...fileUrls].join(',');
 
     const res = await api(`/tasks/${taskId}`, {
       method: 'PUT',
       body: JSON.stringify({
         evidenceLink: link,
-        evidenceFile: fileUrl,
+        evidenceFile: allFileUrls,
         evidenceNote: note,
         status: 'Done',
       })
@@ -2551,7 +2587,10 @@ async function saveEvidence() {
 
     if (res?.success) {
       closeModal('modal-evidence');
-      showToast('Evidence submitted — task marked Done ✓', 'success');
+      const count = fileUrls.length;
+      showToast(count > 0
+        ? `${count} file${count>1?'s':''} uploaded — task marked Done ✓`
+        : 'Evidence submitted — task marked Done ✓', 'success');
       cache.tasks = null; loadTasks();
     } else {
       showToast(res?.error || 'Error saving evidence', 'error');
