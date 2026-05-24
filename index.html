@@ -436,7 +436,12 @@ tbody tr:hover td{background:#fafcfb;}
       </div>
       <div class="form-group">
         <label class="form-label">Password</label>
-        <input class="form-input" type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password">
+        <div style="position:relative;">
+          <input class="form-input" type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password" style="padding-right:44px;">
+          <button type="button" onclick="toggleLoginPassword()" id="login-pw-toggle"
+            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px;line-height:1;"
+            title="Show/hide password">👁</button>
+        </div>
       </div>
       <button class="login-btn" id="login-btn" onclick="doLogin()">Sign in</button>
     </div>
@@ -974,7 +979,7 @@ tbody tr:hover td{background:#fafcfb;}
 // ════════════════════════════════════════════════════════
 // CONFIG
 // ════════════════════════════════════════════════════════
-const API = '/api';//  const API = 'https://api.ahphyay.work';
+const API = '/api';   // ← changed from 'https://api.ahphyay.work'
 
 // ════════════════════════════════════════════════════════
 // STATE
@@ -1048,6 +1053,18 @@ async function doLogin() {
   }
 
   btn.disabled = false; btn.textContent = 'Sign in';
+}
+
+function toggleLoginPassword() {
+  const input = document.getElementById('login-password');
+  const btn = document.getElementById('login-pw-toggle');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁';
+  }
 }
 
 function doLogout() {
