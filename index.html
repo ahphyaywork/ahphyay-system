@@ -1665,6 +1665,14 @@ function applyTaskFilters() {
     countEl.textContent = shown < total ? `${shown} of ${total} tasks` : `${total} tasks`;
   }
 
+  // Sort: Pending → In Progress → Done
+  const statusOrder = { 'Pending': 0, 'In Progress': 1, 'Done': 2 };
+  filtered = [...filtered].sort((a, b) => {
+    const aOrder = statusOrder[a.Status || 'Pending'] ?? 0;
+    const bOrder = statusOrder[b.Status || 'Pending'] ?? 0;
+    return aOrder - bOrder;
+  });
+
   renderTaskRows(filtered, projects, staff);
 }
 
