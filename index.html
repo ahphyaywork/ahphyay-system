@@ -994,7 +994,7 @@ const API = '/api';   // ← changed from 'https://api.ahphyay.work'
 // ════════════════════════════════════════════════════════
 let token = localStorage.getItem('ahphyay_token');
 let user  = JSON.parse(localStorage.getItem('ahphyay_user') || 'null');
-let cache = { staff: null, projects: null, tasks: null };
+let cache = { staff: null, staffNames: null, projects: null, tasks: null };
 
 // ════════════════════════════════════════════════════════
 // INIT
@@ -1078,7 +1078,7 @@ function toggleLoginPassword() {
 function doLogout() {
   localStorage.removeItem('ahphyay_token');
   localStorage.removeItem('ahphyay_user');
-  token = null; user = null; cache = { staff: null, projects: null, tasks: null };
+  token = null; user = null; cache = { staff: null, staffNames: null, projects: null, tasks: null };
   document.getElementById('view-app').classList.remove('active');
   document.getElementById('view-login').classList.add('active');
   document.getElementById('login-username').value = '';
@@ -1101,6 +1101,7 @@ function showApp() {
   navigateTo('dashboard');
   setTimeout(() => {
     if (!cache.staff) api('/staff').then(d => { if (d) cache.staff = d; });
+    if (!cache.staffNames) api('/staff/names').then(d => { if (d) cache.staffNames = d; });
     if (!cache.projects) api('/projects').then(d => { if (d) cache.projects = d; });
     if (!cache.tasks) api('/tasks').then(d => { if (d) cache.tasks = d; });
   }, 2000);
@@ -1599,13 +1600,16 @@ async function saveProject() {
 // TASKS
 // ════════════════════════════════════════════════════════
 async function loadTasks() {
-  const [tasks, projects, staff] = await Promise.all([
+  const [tasks, projects, staff, staffNames] = await Promise.all([
     api('/tasks'),
     api('/projects'),
     api('/staff'),
+    api('/staff/names'),
   ]);
   if (!tasks) return;
   cache.tasks = tasks; cache.projects = projects; cache.staff = staff;
+  // staffNames has all active staff ID+Name for resolving assignees regardless of role
+  if (staffNames) cache.staffNames = staffNames;
 
   const projSel = document.getElementById('filter-task-project');
   if (projSel) {
@@ -1688,7 +1692,9 @@ function renderTaskRows(tasks, projects, staff) {
   tbody.innerHTML = tasks.map(t => {
     const proj = projects?.find(p => p.ID === t.ProjectID);
     const assigneeIds = (t.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
-    const assigneeNames = assigneeIds.map(id => staff?.find(s => s.ID === id)?.Name).filter(Boolean);
+    // Use staffNames (all staff) for display so shared assignees always resolve
+    const nameSource = cache.staffNames || staff || [];
+    const assigneeNames = assigneeIds.map(id => nameSource.find(s => s.ID === id)?.Name).filter(Boolean);
     const isMyTask = assigneeIds.includes(user.staffId);
     const statusBadge = t.Status === 'Done' ? 'badge-done' : t.Status === 'In Progress' ? 'badge-prog' : 'badge-late';
     const hasEvidence = t.EvidenceLink || t.EvidenceFile;
