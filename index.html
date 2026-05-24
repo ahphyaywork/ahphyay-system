@@ -873,8 +873,12 @@ tbody tr:hover td{background:#fafcfb;}
       <input type="hidden" id="evidence-task-id">
       <div class="form-group">
         <label class="form-label">Upload file <span style="color:var(--muted);font-size:10px;">(PDF, image, doc, xlsx — max 10MB)</span></label>
-        <input type="file" id="evidence-file" class="form-input" style="padding:8px;" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls,.pptx" multiple onchange="updateFileList()">
-        <div id="file-list" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;"></div>
+        <input type="file" id="evidence-file" style="display:none;" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls,.pptx" multiple onchange="addSelectedFiles()">
+        <button type="button" onclick="document.getElementById('evidence-file').click()"
+          class="btn btn-outline btn-sm" style="width:100%;justify-content:center;padding:10px;">
+          + Add files
+        </button>
+        <div id="file-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;"></div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin:4px 0 14px;">
         <div style="flex:1;height:1px;background:var(--border2);"></div>
@@ -2472,6 +2476,7 @@ async function changePassword() {
 // UI HELPERS
 // ════════════════════════════════════════════════════════
 function openEvidence(taskId) {
+  evidenceFiles = [];
   document.getElementById('evidence-task-id').value = taskId;
   document.getElementById('evidence-file').value = '';
   document.getElementById('evidence-link').value = '';
@@ -2507,36 +2512,64 @@ function viewEvidence(taskId) {
   openModal('modal-evidence');
 }
 
-function updateFileList() {
+// Accumulated file list across multiple picks
+let evidenceFiles = [];
+
+function addSelectedFiles() {
   const fileInput = document.getElementById('evidence-file');
-  const listEl = document.getElementById('file-list');
-  listEl.innerHTML = '';
-  Array.from(fileInput.files).forEach((file, i) => {
-    const size = (file.size / 1024 / 1024).toFixed(1);
-    const color = file.size > 10 * 1024 * 1024 ? 'var(--red)' : 'var(--muted)';
-    listEl.innerHTML += `<div style="font-size:11px;color:${color};display:flex;align-items:center;gap:6px;">
-      <span>📎</span><span>${file.name}</span><span style="opacity:.6;">(${size} MB)</span>
-    </div>`;
+  const newFiles = Array.from(fileInput.files);
+
+  // Add new files, skip duplicates by name+size
+  newFiles.forEach(newFile => {
+    const isDuplicate = evidenceFiles.some(
+      f => f.name === newFile.name && f.size === newFile.size
+    );
+    if (!isDuplicate) evidenceFiles.push(newFile);
   });
+
+  // Reset input so the same file can be re-selected if needed
+  fileInput.value = '';
+  renderFileList();
+}
+
+function removeEvidenceFile(index) {
+  evidenceFiles.splice(index, 1);
+  renderFileList();
+}
+
+function renderFileList() {
+  const listEl = document.getElementById('file-list');
+  if (!evidenceFiles.length) { listEl.innerHTML = ''; return; }
+  listEl.innerHTML = evidenceFiles.map((file, i) => {
+    const size = (file.size / 1024 / 1024).toFixed(1);
+    const over = file.size > 10 * 1024 * 1024;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--off);border:1px solid var(--border2);border-radius:8px;">
+      <span style="font-size:13px;">📎</span>
+      <span style="font-size:12px;color:var(--text);flex:1;word-break:break-all;">${file.name}</span>
+      <span style="font-size:11px;color:${over?'var(--red)':'var(--muted)'};flex-shrink:0;">${size} MB${over?' ⚠':''}
+      </span>
+      <button type="button" onclick="removeEvidenceFile(${i})"
+        style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0 2px;flex-shrink:0;"
+        title="Remove">✕</button>
+    </div>`;
+  }).join('');
 }
 
 async function saveEvidence() {
   const taskId = document.getElementById('evidence-task-id').value;
   const link = document.getElementById('evidence-link').value.trim();
   const note = document.getElementById('evidence-note').value.trim();
-  const fileInput = document.getElementById('evidence-file');
   const btn = document.querySelector('[onclick="saveEvidence()"]');
-  const files = Array.from(fileInput.files);
 
-  if (!link && files.length === 0) {
-    showToast('Please upload a file or add a link', 'error');
+  if (!link && evidenceFiles.length === 0) {
+    showToast('Please add a file or a link', 'error');
     return;
   }
 
   // Check all files are under 10MB
-  const oversized = files.find(f => f.size > 10 * 1024 * 1024);
+  const oversized = evidenceFiles.find(f => f.size > 10 * 1024 * 1024);
   if (oversized) {
-    showToast(`"${oversized.name}" is over 10MB. Please remove it.`, 'error');
+    showToast(`"${oversized.name}" is over 10MB — remove it first`, 'error');
     return;
   }
 
@@ -2545,13 +2578,13 @@ async function saveEvidence() {
 
   try {
     // Upload each file one by one
-    for (let i = 0; i < files.length; i++) {
-      btn.textContent = files.length > 1
-        ? `Uploading ${i + 1} of ${files.length}…`
+    for (let i = 0; i < evidenceFiles.length; i++) {
+      btn.textContent = evidenceFiles.length > 1
+        ? `Uploading ${i + 1} of ${evidenceFiles.length}…`
         : 'Uploading…';
 
       const formData = new FormData();
-      formData.append('file', files[i]);
+      formData.append('file', evidenceFiles[i]);
       const res = await fetch(`${API}/tasks/${taskId}/evidence`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -2559,7 +2592,7 @@ async function saveEvidence() {
       });
       const data = await res.json();
       if (!data.success) {
-        showToast(`Failed to upload "${files[i].name}": ${data.error || 'Unknown error'}`, 'error');
+        showToast(`Failed to upload "${evidenceFiles[i].name}": ${data.error || 'Unknown error'}`, 'error');
         btn.disabled = false; btn.textContent = 'Submit evidence';
         return;
       }
@@ -2568,7 +2601,7 @@ async function saveEvidence() {
 
     btn.textContent = 'Saving…';
 
-    // Get existing file URLs to append (don't overwrite previous submissions)
+    // Append to any previously submitted files
     const task = cache.tasks?.find(t => t.ID === taskId);
     const existingFiles = task?.EvidenceFile
       ? task.EvidenceFile.split(',').map(u => u.trim()).filter(Boolean)
