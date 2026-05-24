@@ -646,6 +646,36 @@ tbody tr:hover td{background:#fafcfb;}
         </div>
       </div>
 
+      <!-- ── STORAGE PANEL ── -->
+      <div class="panel" id="panel-storage">
+        <div class="section-hd">
+          <div class="section-title">Storage</div>
+          <div style="display:flex;gap:8px;" id="storage-header-actions">
+            <button class="btn btn-outline btn-sm" onclick="loadStorage()" title="Refresh">↻ Refresh</button>
+            <button class="btn btn-primary btn-sm" id="btn-init-folders" onclick="initMissingFolders()" style="display:none;">⚙ Create missing folders</button>
+          </div>
+        </div>
+
+        <!-- Storage overview / staff list -->
+        <div id="storage-overview" style="margin-bottom:20px;"></div>
+
+        <!-- Individual staff storage view -->
+        <div id="storage-detail" style="display:none;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+            <button class="btn btn-outline btn-sm" onclick="closeStorageDetail()">← Back</button>
+            <div class="section-title" id="storage-detail-title"></div>
+            <div style="margin-left:auto;display:flex;gap:8px;">
+              <input class="form-input" type="text" id="storage-search" placeholder="Search files…" style="width:200px;padding:6px 12px;font-size:12px;" oninput="debounceStorageSearch()">
+              <button class="btn btn-primary btn-sm" onclick="openStorageUpload()">+ Upload</button>
+            </div>
+          </div>
+          <!-- Usage bar -->
+          <div id="storage-usage-bar" style="margin-bottom:16px;"></div>
+          <!-- File tree -->
+          <div id="storage-files"></div>
+        </div>
+      </div>
+
       <!-- ── MY PROFILE PANEL ── -->
       <div class="panel" id="panel-profile">
         <div class="section-title" style="margin-bottom:16px;">My Profile</div>
@@ -980,6 +1010,60 @@ tbody tr:hover td{background:#fafcfb;}
   </div>
 </div>
 
+<!-- Storage Upload Modal -->
+<div class="modal-overlay" id="modal-storage-upload">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Upload files</div>
+      <button class="modal-close" onclick="closeModal('modal-storage-upload')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Folder</label>
+        <select class="form-input" id="storage-upload-folder">
+          <option value="General">General</option>
+          <option value="Evidence">Evidence</option>
+          <option value="Profile">Profile</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Files <span style="color:var(--muted);font-size:10px;">(max 50MB each)</span></label>
+        <input type="file" id="storage-upload-file" style="display:none;" multiple onchange="addStorageFiles()">
+        <button type="button" onclick="document.getElementById('storage-upload-file').click()"
+          class="btn btn-outline btn-sm" style="width:100%;justify-content:center;padding:10px;">
+          + Choose files
+        </button>
+        <div id="storage-upload-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-storage-upload')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitStorageUpload()">Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- Storage Rename Modal -->
+<div class="modal-overlay" id="modal-storage-rename">
+  <div class="modal" style="width:min(360px,92vw);">
+    <div class="modal-header">
+      <div class="modal-title">Rename file</div>
+      <button class="modal-close" onclick="closeModal('modal-storage-rename')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rename-file-id">
+      <div class="form-group">
+        <label class="form-label">New name</label>
+        <input class="form-input" id="rename-file-name" placeholder="filename.pdf">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-storage-rename')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -1120,6 +1204,7 @@ function buildNav() {
     { panel:'staff',     icon:'⚇', label:'Staff',      roles:['admin'] },
     { panel:'projects',  icon:'◈', label:'Projects',   roles:['admin','management'] },
     { panel:'tasks',     icon:'☑', label:'Tasks',      roles:['admin','management','staff','external'] },
+    { panel:'storage',   icon:'◫', label:'Storage',    roles:['admin','management','staff','external'] },
     { sep:'My Account',  roles:['admin','management','staff','external'] },
     { panel:'kpi',       icon:'◎', label:'My KPIs',    roles:['staff','external'] },
     { panel:'profile',   icon:'◯', label:'My Profile', roles:['admin','management','staff','external'] },
@@ -1175,6 +1260,7 @@ function navigateTo(panelId, label) {
   else if (panelId === 'tasks') loadTasks();
   else if (panelId === 'worklog') loadWorklog();
   else if (panelId === 'kpi') loadKPI();
+  else if (panelId === 'storage') loadStorage();
   else if (panelId === 'profile') loadProfile();
 
   document.getElementById('sidebar').classList.remove('open');
@@ -2762,6 +2848,323 @@ async function saveEvidence() {
     showToast('Error: ' + e.message, 'error');
   }
   btn.disabled = false; btn.textContent = 'Submit evidence';
+}
+
+// ════════════════════════════════════════════════════════
+// STORAGE
+// ════════════════════════════════════════════════════════
+let currentStorageStaffId = null;
+let storageUploadFiles = [];
+let storageSearchTimer = null;
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B','KB','MB','GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function fileIcon(mimeType, name) {
+  if (!mimeType) return '📄';
+  if (mimeType.startsWith('image/')) return '🖼';
+  if (mimeType === 'application/pdf') return '📕';
+  if (mimeType.includes('spreadsheet') || name?.endsWith('.xlsx') || name?.endsWith('.xls')) return '📊';
+  if (mimeType.includes('presentation') || name?.endsWith('.pptx')) return '📊';
+  if (mimeType.includes('document') || name?.endsWith('.docx')) return '📝';
+  if (mimeType.includes('zip') || mimeType.includes('compressed')) return '🗜';
+  if (mimeType.startsWith('video/')) return '🎬';
+  if (mimeType.startsWith('audio/')) return '🎵';
+  return '📄';
+}
+
+async function loadStorage() {
+  const el = document.getElementById('storage-overview');
+  const detail = document.getElementById('storage-detail');
+  detail.style.display = 'none';
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Loading storage…</div>';
+
+  // Show init button for admin
+  const initBtn = document.getElementById('btn-init-folders');
+  if (initBtn) initBtn.style.display = user.role === 'admin' ? 'block' : 'none';
+
+  const data = await api('/storage');
+  if (!data) return;
+
+  const { staffStorage } = data;
+  const LIMIT = 500 * 1024 * 1024; // 500MB soft limit per staff
+
+  if (user.role === 'staff' || user.role === 'external') {
+    // Staff: go straight to their own storage
+    if (staffStorage.length > 0) {
+      el.innerHTML = '';
+      openStorageDetail(staffStorage[0].staffId, staffStorage[0].name);
+    } else {
+      el.innerHTML = '<div class="empty"><div class="empty-icon">◫</div>No storage folder yet. Contact your admin.</div>';
+    }
+    return;
+  }
+
+  // Admin/management: show all staff
+  const missing = staffStorage.filter(s => !s.folderId).length;
+  el.innerHTML = `
+    ${missing > 0 ? `<div style="background:var(--amber-lt);border:1px solid var(--amber);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#633806;">
+      ⚠ ${missing} staff member${missing>1?'s':''} don't have a storage folder yet.
+      <button class="btn btn-sm" onclick="initMissingFolders()" style="margin-left:8px;background:var(--amber);color:var(--white);border:none;">Create now</button>
+    </div>` : ''}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+      ${staffStorage.map(s => {
+        const pct = Math.min(Math.round((s.usedBytes / LIMIT) * 100), 100);
+        const color = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--amber)' : 'var(--teal)';
+        const bgColor = pct >= 90 ? 'prog-red' : pct >= 70 ? 'prog-amber' : 'prog-green';
+        return `<div class="stat-card" style="cursor:pointer;" onclick="openStorageDetail('${s.staffId}','${s.name.replace(/'/g,"\\'")}')">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <div class="s-avatar">${s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
+            <div>
+              <div style="font-weight:500;font-size:13px;color:var(--navy);">${s.name}</div>
+              <div style="font-size:11px;color:var(--muted);">${s.role}</div>
+            </div>
+            ${!s.folderId ? '<span class="badge badge-late" style="margin-left:auto;">No folder</span>' : ''}
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${formatBytes(s.usedBytes)} used</div>
+          <div class="prog-bar" style="height:6px;">
+            <div class="prog-fill ${bgColor}" style="width:${pct}%;height:6px;"></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function openStorageDetail(staffId, staffName) {
+  currentStorageStaffId = staffId;
+  document.getElementById('storage-overview').style.display = 'none';
+  const detail = document.getElementById('storage-detail');
+  detail.style.display = 'block';
+  document.getElementById('storage-detail-title').textContent = staffName + "'s Storage";
+  document.getElementById('storage-search').value = '';
+  document.getElementById('storage-files').innerHTML = '<div class="loading"><div class="spinner"></div><br>Loading files…</div>';
+  await refreshStorageDetail();
+}
+
+function closeStorageDetail() {
+  currentStorageStaffId = null;
+  document.getElementById('storage-overview').style.display = 'block';
+  document.getElementById('storage-detail').style.display = 'none';
+}
+
+async function refreshStorageDetail() {
+  if (!currentStorageStaffId) return;
+  const data = await api('/storage/' + currentStorageStaffId);
+  if (!data) return;
+
+  const LIMIT = 500 * 1024 * 1024;
+  const pct = Math.min(Math.round((data.usedBytes / LIMIT) * 100), 100);
+  const barColor = pct >= 90 ? 'prog-red' : pct >= 70 ? 'prog-amber' : 'prog-green';
+
+  document.getElementById('storage-usage-bar').innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;">
+      <span>${formatBytes(data.usedBytes)} used</span>
+      <span>${formatBytes(500*1024*1024)} limit</span>
+    </div>
+    <div class="prog-bar" style="height:8px;">
+      <div class="prog-fill ${barColor}" style="width:${pct}%;height:8px;"></div>
+    </div>`;
+
+  renderStorageFiles(data.structure || []);
+}
+
+function renderStorageFiles(structure) {
+  const el = document.getElementById('storage-files');
+  if (!structure.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">◫</div>No files yet.</div>';
+    return;
+  }
+
+  el.innerHTML = structure.map(section => {
+    const isEvidence = section.folder.name === 'Evidence';
+    let inner = '';
+
+    if (isEvidence && section.taskGroups?.length) {
+      inner = section.taskGroups.map(tg => `
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;padding-left:4px;">📁 ${tg.folder.name}</div>
+          ${tg.files.length ? tg.files.map(f => renderFileRow(f)).join('') : '<div style="font-size:12px;color:var(--muted);padding:8px 4px;">Empty folder</div>'}
+        </div>`).join('');
+      if (section.files?.length) {
+        inner += section.files.map(f => renderFileRow(f)).join('');
+      }
+    } else {
+      inner = section.files?.length
+        ? section.files.map(f => renderFileRow(f)).join('')
+        : '<div style="font-size:12px;color:var(--muted);padding:8px 4px;">No files</div>';
+    }
+
+    return `<div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;margin-bottom:12px;overflow:hidden;">
+      <div style="background:var(--off);padding:10px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:13px;font-weight:600;color:var(--navy);">📂 ${section.folder.name}</div>
+      </div>
+      <div style="padding:8px 12px;">${inner}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderFileRow(f) {
+  const size = f.size ? formatBytes(parseInt(f.size)) : '—';
+  const date = f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('en-GB') : '—';
+  const icon = fileIcon(f.mimeType, f.name);
+  const canEdit = user.role === 'admin' || user.role === 'management' || currentStorageStaffId === user.staffId;
+
+  return `<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border2);">
+    <span style="font-size:18px;flex-shrink:0;">${icon}</span>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.name}</div>
+      <div style="font-size:10px;color:var(--muted);">${size} · ${date}</div>
+    </div>
+    <div style="display:flex;gap:4px;flex-shrink:0;">
+      <a href="${f.webViewLink}" target="_blank" class="btn btn-outline btn-sm btn-icon" title="Open" style="text-decoration:none;">↗</a>
+      ${canEdit ? `
+      <button class="btn btn-outline btn-sm btn-icon" onclick="openRename('${f.id}','${f.name.replace(/'/g,"\\'")}')" title="Rename">✎</button>
+      <button class="btn btn-danger btn-sm btn-icon" onclick="deleteStorageFile('${f.id}','${f.name.replace(/'/g,"\\'")}')" title="Delete">✕</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function debounceStorageSearch() {
+  clearTimeout(storageSearchTimer);
+  storageSearchTimer = setTimeout(runStorageSearch, 400);
+}
+
+async function runStorageSearch() {
+  const q = document.getElementById('storage-search').value.trim();
+  if (!q) { await refreshStorageDetail(); return; }
+
+  const data = await api('/storage/' + currentStorageStaffId + '?q=' + encodeURIComponent(q));
+  if (!data) return;
+
+  const el = document.getElementById('storage-files');
+  if (!data.files?.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">◫</div>No files found.</div>';
+    return;
+  }
+  el.innerHTML = `<div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;overflow:hidden;">
+    <div style="background:var(--off);padding:10px 16px;border-bottom:1px solid var(--border2);font-size:13px;font-weight:600;color:var(--navy);">
+      Search results (${data.files.length})
+    </div>
+    <div style="padding:8px 12px;">${data.files.map(f => renderFileRow(f)).join('')}</div>
+  </div>`;
+}
+
+function openStorageUpload() {
+  storageUploadFiles = [];
+  document.getElementById('storage-upload-file').value = '';
+  document.getElementById('storage-upload-list').innerHTML = '';
+  openModal('modal-storage-upload');
+}
+
+function addStorageFiles() {
+  const input = document.getElementById('storage-upload-file');
+  Array.from(input.files).forEach(f => {
+    if (!storageUploadFiles.some(e => e.name === f.name && e.size === f.size)) {
+      storageUploadFiles.push(f);
+    }
+  });
+  input.value = '';
+  renderStorageUploadList();
+}
+
+function renderStorageUploadList() {
+  const el = document.getElementById('storage-upload-list');
+  el.innerHTML = storageUploadFiles.map((f, i) => {
+    const size = formatBytes(f.size);
+    const over = f.size > 50 * 1024 * 1024;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--off);border:1px solid var(--border2);border-radius:8px;">
+      <span style="font-size:13px;">${fileIcon(f.type, f.name)}</span>
+      <span style="font-size:12px;flex:1;word-break:break-all;">${f.name}</span>
+      <span style="font-size:11px;color:${over?'var(--red)':'var(--muted)'};">${size}${over?' ⚠':''}</span>
+      <button type="button" onclick="storageUploadFiles.splice(${i},1);renderStorageUploadList();"
+        style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function submitStorageUpload() {
+  if (!storageUploadFiles.length) { showToast('No files selected', 'error'); return; }
+  const oversized = storageUploadFiles.find(f => f.size > 50 * 1024 * 1024);
+  if (oversized) { showToast(`"${oversized.name}" is over 50MB`, 'error'); return; }
+
+  const subfolder = document.getElementById('storage-upload-folder').value;
+  const btn = document.querySelector('[onclick="submitStorageUpload()"]');
+  btn.disabled = true;
+
+  for (let i = 0; i < storageUploadFiles.length; i++) {
+    btn.textContent = `Uploading ${i+1} of ${storageUploadFiles.length}…`;
+    const formData = new FormData();
+    formData.append('file', storageUploadFiles[i]);
+    formData.append('subfolder', subfolder);
+    const res = await fetch(`${API}/storage/${currentStorageStaffId}/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const data = await res.json();
+    if (!data.success) {
+      showToast(`Failed: ${storageUploadFiles[i].name}`, 'error');
+      btn.disabled = false; btn.textContent = 'Upload';
+      return;
+    }
+  }
+
+  closeModal('modal-storage-upload');
+  showToast(`${storageUploadFiles.length} file${storageUploadFiles.length>1?'s':''} uploaded ✓`, 'success');
+  btn.disabled = false; btn.textContent = 'Upload';
+  await refreshStorageDetail();
+}
+
+async function deleteStorageFile(fileId, fileName) {
+  if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+  const res = await api(`/storage/file/${fileId}`, { method: 'DELETE' });
+  if (res?.success) {
+    showToast('File deleted', 'success');
+    await refreshStorageDetail();
+  } else {
+    showToast(res?.error || 'Delete failed', 'error');
+  }
+}
+
+function openRename(fileId, currentName) {
+  document.getElementById('rename-file-id').value = fileId;
+  document.getElementById('rename-file-name').value = currentName;
+  openModal('modal-storage-rename');
+}
+
+async function submitRename() {
+  const fileId = document.getElementById('rename-file-id').value;
+  const newName = document.getElementById('rename-file-name').value.trim();
+  if (!newName) { showToast('Please enter a name', 'error'); return; }
+  const res = await api(`/storage/file/${fileId}/rename`, {
+    method: 'PUT',
+    body: JSON.stringify({ newName }),
+  });
+  if (res?.success) {
+    closeModal('modal-storage-rename');
+    showToast('File renamed ✓', 'success');
+    await refreshStorageDetail();
+  } else {
+    showToast(res?.error || 'Rename failed', 'error');
+  }
+}
+
+async function initMissingFolders() {
+  const btn = document.getElementById('btn-init-folders');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating folders…'; }
+  const res = await api('/storage/init-missing', { method: 'POST' });
+  if (res?.success) {
+    showToast(`Created ${res.created} folder${res.created !== 1 ? 's' : ''} ✓`, 'success');
+    await loadStorage();
+  } else {
+    showToast(res?.error || 'Failed', 'error');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '⚙ Create missing folders'; }
 }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
