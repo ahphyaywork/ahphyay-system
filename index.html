@@ -838,8 +838,11 @@ tbody tr:hover td{background:#fafcfb;}
           </select>
         </div>
         <div class="form-group" style="grid-column:1/-1;">
-          <label class="form-label">Assign to <span style="color:var(--muted);font-size:10px;font-weight:400;">(leave blank to assign to yourself)</span></label>
-          <select class="form-input" id="task-assignee"></select>
+          <label class="form-label">Assign to <span style="color:var(--muted);font-size:10px;font-weight:400;">(click names to assign — multiple allowed)</span></label>
+          <div id="assignee-tags" style="display:flex;flex-wrap:wrap;gap:6px;min-height:36px;padding:8px;border:1.5px solid var(--border2);border-radius:10px;background:var(--off);cursor:default;">
+            <span style="font-size:12px;color:var(--muted);align-self:center;" id="assignee-placeholder">No one assigned yet</span>
+          </div>
+          <div id="assignee-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
         </div>
       </div>
       <div class="form-group">
@@ -1645,7 +1648,7 @@ function applyTaskFilters() {
   let filtered = tasks;
   if (filterProject)  filtered = filtered.filter(t => t.ProjectID === filterProject);
   if (filterStatus)   filtered = filtered.filter(t => (t.Status || 'Pending') === filterStatus);
-  if (filterAssignee) filtered = filtered.filter(t => t.AssigneeID === filterAssignee);
+  if (filterAssignee) filtered = filtered.filter(t => (t.AssigneeID||'').split(',').map(s=>s.trim()).includes(filterAssignee));
   if (filterCategory) filtered = filtered.filter(t => t.Category === filterCategory);
   if (filterPriority)  filtered = filtered.filter(t => (t.Priority || 'Medium') === filterPriority);
   if (filterFrom)     filtered = filtered.filter(t => t.DueDate >= filterFrom);
@@ -1684,8 +1687,9 @@ function renderTaskRows(tasks, projects, staff) {
 
   tbody.innerHTML = tasks.map(t => {
     const proj = projects?.find(p => p.ID === t.ProjectID);
-    const assignee = staff?.find(s => s.ID === t.AssigneeID);
-    const isMyTask = t.AssigneeID === user.staffId;
+    const assigneeIds = (t.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
+    const assigneeNames = assigneeIds.map(id => staff?.find(s => s.ID === id)?.Name).filter(Boolean);
+    const isMyTask = assigneeIds.includes(user.staffId);
     const statusBadge = t.Status === 'Done' ? 'badge-done' : t.Status === 'In Progress' ? 'badge-prog' : 'badge-late';
     const hasEvidence = t.EvidenceLink || t.EvidenceFile;
 
@@ -1697,7 +1701,7 @@ function renderTaskRows(tasks, projects, staff) {
       </td>
       <td><span class="badge badge-done">${proj?.ShortName || t.ProjectID}</span></td>
       <td style="color:var(--muted)">${t.Category || '—'}</td>
-      <td>${assignee?.Name || 'Unassigned'}</td>
+      <td>${assigneeNames.length ? assigneeNames.map(n => `<span style="display:inline-block;background:var(--teal-lt);color:#085041;font-size:10px;padding:2px 7px;border-radius:99px;margin:1px;">${n}</span>`).join(' ') : '<span style="color:var(--muted)">Unassigned</span>'}</td>
       <td>
         <span class="badge ${t.Priority==='High'?'badge-late':t.Priority==='Low'?'badge-staff':'badge-prog'}">
           ${t.Priority || 'Medium'}
@@ -1723,6 +1727,86 @@ function renderTaskRows(tasks, projects, staff) {
   }).join('');
 }
 
+// ── Assignee tag picker ──────────────────────────────────
+let selectedAssigneeIds = [];
+
+function initAssigneePicker(staffList, preselectedIds) {
+  selectedAssigneeIds = [...preselectedIds];
+  renderAssigneeTags();
+  renderAssigneeList(staffList);
+}
+
+function renderAssigneeTags() {
+  const tagsEl = document.getElementById('assignee-tags');
+  const placeholder = document.getElementById('assignee-placeholder');
+  if (!tagsEl) return;
+  // Remove existing tags (not the placeholder)
+  tagsEl.querySelectorAll('.assignee-tag').forEach(el => el.remove());
+  if (selectedAssigneeIds.length === 0) {
+    placeholder.style.display = 'block';
+  } else {
+    placeholder.style.display = 'none';
+    selectedAssigneeIds.forEach(id => {
+      const s = (cache.staff||[]).find(s => s.ID === id);
+      if (!s) return;
+      const tag = document.createElement('span');
+      tag.className = 'assignee-tag';
+      tag.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:var(--navy);color:var(--white);font-size:11px;font-weight:500;padding:3px 10px;border-radius:99px;';
+      tag.innerHTML = `${s.Name}<button type="button" onclick="removeAssignee('${id}')" style="background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:13px;padding:0;margin-left:2px;line-height:1;">✕</button>`;
+      tagsEl.appendChild(tag);
+    });
+  }
+}
+
+function renderAssigneeList(staffList) {
+  const listEl = document.getElementById('assignee-list');
+  if (!listEl) return;
+  if (!staffList.length) { listEl.innerHTML = ''; return; }
+  listEl.innerHTML = staffList.map(s => {
+    const selected = selectedAssigneeIds.includes(s.ID);
+    return `<button type="button" onclick="toggleAssignee('${s.ID}')" id="assignee-btn-${s.ID}"
+      style="padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;
+        background:${selected?'var(--teal)':'var(--off)'};
+        color:${selected?'var(--white)':'var(--text)'};
+        border:1.5px solid ${selected?'var(--teal)':'var(--border2)'};">
+      ${s.Name}
+    </button>`;
+  }).join('');
+}
+
+function toggleAssignee(staffId) {
+  const idx = selectedAssigneeIds.indexOf(staffId);
+  if (idx === -1) {
+    selectedAssigneeIds.push(staffId);
+  } else {
+    selectedAssigneeIds.splice(idx, 1);
+  }
+  // Update button style
+  const btn = document.getElementById('assignee-btn-' + staffId);
+  if (btn) {
+    const selected = selectedAssigneeIds.includes(staffId);
+    btn.style.background = selected ? 'var(--teal)' : 'var(--off)';
+    btn.style.color = selected ? 'var(--white)' : 'var(--text)';
+    btn.style.borderColor = selected ? 'var(--teal)' : 'var(--border2)';
+  }
+  renderAssigneeTags();
+}
+
+function removeAssignee(staffId) {
+  selectedAssigneeIds = selectedAssigneeIds.filter(id => id !== staffId);
+  const btn = document.getElementById('assignee-btn-' + staffId);
+  if (btn) {
+    btn.style.background = 'var(--off)';
+    btn.style.color = 'var(--text)';
+    btn.style.borderColor = 'var(--border2)';
+  }
+  renderAssigneeTags();
+}
+
+function getSelectedAssignees() {
+  return selectedAssigneeIds.join(',');
+}
+
 function openAddTask() {
   document.getElementById('modal-task-title').textContent = 'Add task';
   document.getElementById('edit-task-id').value = '';
@@ -1737,16 +1821,8 @@ function openAddTask() {
   const projSel = document.getElementById('task-project');
   projSel.innerHTML = projects.map(p => `<option value="${p.ID}">${p.Name}</option>`).join('');
 
-  const assignSel = document.getElementById('task-assignee');
   const canAssign = user.role === 'admin' || user.role === 'management';
-  if (canAssign) {
-    assignSel.innerHTML = '<option value="">Unassigned</option>' +
-      (cache.staff||[]).map(s => `<option value="${s.ID}">${s.Name}</option>`).join('');
-    assignSel.disabled = false;
-  } else {
-    assignSel.innerHTML = `<option value="${user.staffId}">${user.name} (me)</option>`;
-    assignSel.disabled = true;
-  }
+  initAssigneePicker(canAssign ? (cache.staff||[]) : [], []);
   openModal('modal-add-task');
 }
 
@@ -1767,18 +1843,9 @@ function openEditTask(id) {
     `<option value="${p.ID}" ${p.ID === t.ProjectID ? 'selected' : ''}>${p.Name}</option>`
   ).join('');
 
-  const assignSel = document.getElementById('task-assignee');
   const canAssign = user.role === 'admin' || user.role === 'management';
-  if (canAssign) {
-    assignSel.innerHTML = '<option value="">Unassigned</option>' +
-      (cache.staff||[]).map(s =>
-        `<option value="${s.ID}" ${s.ID === t.AssigneeID ? 'selected' : ''}>${s.Name}</option>`
-      ).join('');
-    assignSel.disabled = false;
-  } else {
-    assignSel.innerHTML = `<option value="${user.staffId}">${user.name} (me)</option>`;
-    assignSel.disabled = true;
-  }
+  const selectedIds = (t.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
+  initAssigneePicker(canAssign ? (cache.staff||[]) : [], selectedIds);
   openModal('modal-add-task');
 }
 
@@ -1792,7 +1859,7 @@ async function saveTask() {
     description: document.getElementById('task-desc').value.trim(),
     status: document.getElementById('task-status').value,
     priority: document.getElementById('task-priority').value,
-    assigneeId: document.getElementById('task-assignee').value || user.staffId,
+    assigneeId: getSelectedAssignees() || user.staffId,
   };
   if (!body.name || !body.projectId) { showToast('Name and project are required', 'error'); return; }
 
@@ -2068,7 +2135,7 @@ async function loadKPI() {
           <tr>
             <td><strong>${k.taskName}</strong>${k.category?`<br><span style="font-size:10px;color:var(--muted)">${k.category}</span>`:''}</td>
             <td><span class="badge badge-done">${k.projectName}</span></td>
-            <td style="font-size:12px">${(cache.staff||[]).find(s=>s.ID===k.assigneeId)?.Name||'—'}</td>
+            <td style="font-size:12px">${(k.assigneeId||'').split(',').map(id=>(cache.staff||[]).find(s=>s.ID===id.trim())?.Name).filter(Boolean).join(', ')||'—'}</td>
             <td><span class="badge ${k.priority==='High'?'badge-late':k.priority==='Low'?'badge-staff':'badge-prog'}">${k.priority||'Medium'}</span></td>
             <td style="color:var(--muted);font-size:11px">${k.dueDate||'—'}</td>
             <td>

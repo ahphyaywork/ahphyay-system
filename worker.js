@@ -21,6 +21,9 @@ export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const url = new URL(request.url);
+    // Strip /api prefix so the worker responds to both:
+    //   api.ahphyay.work/auth/login        (old route, kept as fallback)
+    //   ahphyay.work/api/auth/login        (new same-origin route)
     const path = url.pathname.replace(/^\/api/, '') || '/';
 
     try {
@@ -222,7 +225,7 @@ async function updateStaff(request, env, role, targetId) {
 
 function sanitizeStaff(s) {
   const { Password, ...safe } = s;
-  return safe; // includes PhotoURL
+  return safe;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -279,7 +282,6 @@ async function addTask(request, env, role, staffId) {
   const body = await request.json();
   if (!body.name || !body.projectId) return json({ error: 'Name and project are required' }, 400);
 
-  // Staff/external can only add tasks assigned to themselves
   const assigneeId = (role === ROLES.STAFF || role === ROLES.EXTERNAL)
     ? staffId
     : (body.assigneeId || '');
@@ -304,7 +306,6 @@ async function updateTask(request, env, role, taskId, staffId) {
   if (rowIdx === -1) return json({ error: 'Not found' }, 404);
   const e = tasks[rowIdx];
 
-  // Staff can only update their own tasks
   if (role === ROLES.STAFF || role === ROLES.EXTERNAL) {
     if (e.AssigneeID !== staffId) return json({ error: 'You can only update your own tasks' }, 403);
   }
@@ -459,12 +460,10 @@ async function getDashboard(env, role, staffId) {
   const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true');
   const activeProjects = projects.filter(p => p.Status?.toLowerCase() === 'active');
 
-  // This month
   const now = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const thisMonthLogs = logs.filter(l => l.Date >= monthStart);
 
-  // KPI overview — based on task status
   const activeTasks = tasks.filter(t => t.Active?.toLowerCase() === 'true');
   const kpiPcts = activeTasks.map(t => {
     const s = t.Status || 'Pending';
@@ -473,7 +472,6 @@ async function getDashboard(env, role, staffId) {
   const avgKpi = kpiPcts.length ? Math.round(kpiPcts.reduce((a, b) => a + b, 0) / kpiPcts.length) : 0;
   const onTrack = activeTasks.filter(t => t.Status === 'Done' || t.Status === 'In Progress').length;
 
-  // Recent task updates (last 5 tasks with status set)
   const recentLogs = activeTasks
     .filter(t => t.Status && t.Status !== 'Pending')
     .slice(-5).reverse()
@@ -535,7 +533,7 @@ async function uploadEvidence(request, env, staffId, taskId) {
     const file = formData.get('file');
     if (!file) return json({ error: 'No file provided' }, 400);
 
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     const arrayBuffer = await file.arrayBuffer();
     if (arrayBuffer.byteLength > maxSize) return json({ error: 'File must be under 10MB' }, 400);
 
@@ -580,7 +578,6 @@ async function uploadEvidence(request, env, staffId, taskId) {
     const uploadData = await uploadRes.json();
     if (!uploadData.id) return json({ error: 'Upload failed', detail: uploadData }, 500);
 
-    // Make file publicly readable
     await fetch('https://www.googleapis.com/drive/v3/files/' + uploadData.id + '/permissions', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -600,11 +597,10 @@ async function uploadProfilePhoto(request, env, staffId) {
     const file = formData.get('photo');
     if (!file) return json({ error: 'No photo provided' }, 400);
 
-    const maxSize = 2 * 1024 * 1024; // 2MB
+    const maxSize = 2 * 1024 * 1024;
     const arrayBuffer = await file.arrayBuffer();
     if (arrayBuffer.byteLength > maxSize) return json({ error: 'Image must be under 2MB' }, 400);
 
-    // Convert to base64 data URL
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) {
@@ -613,7 +609,6 @@ async function uploadProfilePhoto(request, env, staffId) {
     const base64 = btoa(binary);
     const photoUrl = 'data:' + (file.type || 'image/jpeg') + ';base64,' + base64;
 
-    // Save to Staff sheet PhotoURL column
     const staff = await sheetsRead(env, 'Staff');
     const rowIdx = staff.findIndex(s => s.ID === staffId);
     if (rowIdx !== -1) {
@@ -676,7 +671,6 @@ async function getGoogleToken(env) {
   return access_token;
 }
 
-// ── OAuth2 token for Drive uploads ───────────────────────
 async function getDriveToken(env) {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -689,7 +683,12 @@ async function getDriveToken(env) {
     }),
   });
   const data = await res.json();
-  if (!data.access_token) throw new Error('OAuth token failed: ' + JSON.stringify(data));
+  if (!data.access_token) {
+    if (data.error === 'invalid_grant') {
+      throw new Error('Drive access expired. Admin must regenerate DRIVE_REFRESH_TOKEN in worker settings.');
+    }
+    throw new Error('Drive auth failed: ' + (data.error_description || data.error || 'unknown'));
+  }
   return data.access_token;
 }
 
@@ -739,7 +738,6 @@ async function sheetsUpdateRow(env, sheetName, rowNum, rowData) {
 
 async function sheetsDeleteRow(env, sheetName, rowNum) {
   const token = await getGoogleToken(env);
-  // Get sheet ID first
   const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.SPREADSHEET_ID}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
