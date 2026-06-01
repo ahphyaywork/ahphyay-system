@@ -504,9 +504,9 @@ tbody tr:hover td{background:#fafcfb;}
       <div class="topbar-right">
         <span class="topbar-date" id="topbar-date"></span>
         <div style="position:relative;" id="notif-wrapper">
-          <button onclick="toggleNotifDropdown()" style="background:none;border:none;cursor:pointer;padding:6px;position:relative;color:var(--navy);font-size:20px;line-height:1;" title="Notifications">
-            <i class="ti ti-bell" style="font-size:18px;"></i>
-            <span id="notif-badge" style="display:none;position:absolute;top:0;right:0;background:var(--red);color:white;border-radius:99px;font-size:9px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px;">0</span>
+          <button onclick="toggleNotifDropdown()" style="background:none;border:none;cursor:pointer;padding:8px;position:relative;color:var(--navy);line-height:1;display:flex;align-items:center;justify-content:center;overflow:visible;" title="Notifications">
+            <i class="ti ti-bell" style="font-size:20px;display:block;"></i>
+            <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#E24B4A;color:white;border-radius:99px;font-size:10px;font-weight:700;padding:0 5px;min-width:18px;height:18px;line-height:18px;text-align:center;z-index:10;pointer-events:none;">0</span>
           </button>
           <div id="notif-dropdown" style="display:none;position:absolute;right:0;top:44px;width:340px;background:var(--white);border:1px solid var(--border2);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.12);z-index:200;overflow:hidden;">
             <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border2);">
@@ -3653,13 +3653,13 @@ async function fetchNotifications() {
 
   // Update badge
   const badge = document.getElementById('notif-badge');
+  const count = parseInt(data.unreadCount) || 0;
+  console.log('[Notif] unreadCount:', data.unreadCount, '→ parsed:', count, '| badge el:', !!badge);
   if (badge) {
-    const count = parseInt(data.unreadCount) || 0;
     if (count > 0) {
-      badge.style.display = 'flex';
-      badge.style.alignItems = 'center';
-      badge.style.justifyContent = 'center';
+      badge.style.display = 'inline-block';
       badge.textContent = count > 99 ? '99+' : String(count);
+      console.log('[Notif] badge shown with count:', count);
     } else {
       badge.style.display = 'none';
     }
