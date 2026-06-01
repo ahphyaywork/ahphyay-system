@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AhPhyay — Staff System</title>
 <style>
@@ -452,7 +453,7 @@ tbody tr:hover td{background:#fafcfb;}
           <input class="form-input" type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password" style="padding-right:44px;">
           <button type="button" onclick="toggleLoginPassword()" id="login-pw-toggle"
             style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px;line-height:1;"
-            title="Show/hide password">👁</button>
+            title="Show/hide password"><i class="ti ti-eye"></i></button>
         </div>
       </div>
       <button class="login-btn" id="login-btn" onclick="doLogin()">Sign in</button>
@@ -502,6 +503,19 @@ tbody tr:hover td{background:#fafcfb;}
       </div>
       <div class="topbar-right">
         <span class="topbar-date" id="topbar-date"></span>
+        <div style="position:relative;" id="notif-wrapper">
+          <button onclick="toggleNotifDropdown()" style="background:none;border:none;cursor:pointer;padding:6px;position:relative;color:var(--navy);font-size:20px;line-height:1;" title="Notifications">
+            <i class="ti ti-bell" style="font-size:18px;"></i>
+            <span id="notif-badge" style="display:none;position:absolute;top:0;right:0;background:var(--red);color:white;border-radius:99px;font-size:9px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px;">0</span>
+          </button>
+          <div id="notif-dropdown" style="display:none;position:absolute;right:0;top:44px;width:340px;background:var(--white);border:1px solid var(--border2);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.12);z-index:200;overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border2);">
+              <div style="font-size:14px;font-weight:700;color:var(--navy);">Notifications</div>
+              <button onclick="markAllRead()" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--teal);font-weight:500;">Mark all read</button>
+            </div>
+            <div id="notif-list" style="max-height:380px;overflow-y:auto;"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="page-content">
@@ -517,7 +531,7 @@ tbody tr:hover td{background:#fafcfb;}
       <div class="panel" id="panel-staff">
         <div class="section-hd">
           <div class="section-title">Staff Management</div>
-          <button class="btn btn-primary btn-sm" onclick="openAddStaff()" id="btn-add-staff">+ Add staff</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddStaff()" id="btn-add-staff"><i class="ti ti-user-plus"></i> Add staff</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -538,7 +552,7 @@ tbody tr:hover td{background:#fafcfb;}
       <div class="panel" id="panel-projects">
         <div class="section-hd">
           <div class="section-title">Projects</div>
-          <button class="btn btn-primary btn-sm" onclick="openAddProject()" id="btn-add-project">+ Add project</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddProject()" id="btn-add-project"><i class="ti ti-folder-plus"></i> Add project</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -556,7 +570,7 @@ tbody tr:hover td{background:#fafcfb;}
       <div class="panel" id="panel-tasks">
         <div class="section-hd">
           <div class="section-title">Tasks</div>
-          <button class="btn btn-primary btn-sm" onclick="openAddTask()" id="btn-add-task">+ Add task</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddTask()" id="btn-add-task"><i class="ti ti-plus"></i> Add task</button>
         </div>
         <div id="task-overdue-warning" style="display:none;background:var(--red-lt);border:1px solid var(--red);border-radius:10px;padding:10px 14px;font-size:13px;color:#791F1F;margin-bottom:12px;"></div>
 
@@ -584,7 +598,7 @@ tbody tr:hover td{background:#fafcfb;}
             <option value="Medium">Medium</option>
             <option value="Low">Low</option>
           </select>
-          <button class="btn btn-outline btn-sm" onclick="clearTaskFilters()" style="font-size:12px;">✕ Clear</button>
+          <button class="btn btn-outline btn-sm" onclick="clearTaskFilters()" style="font-size:12px;"><i class="ti ti-x"></i> Clear</button>
           <span id="filter-task-count" style="font-size:11px;color:var(--muted);margin-left:4px;"></span>
         </div>
 
@@ -604,7 +618,7 @@ tbody tr:hover td{background:#fafcfb;}
       <div class="panel" id="panel-worklog">
         <div class="section-hd">
           <div class="section-title">Work Log</div>
-          <button class="btn btn-primary btn-sm" onclick="openAddWorklog()" id="btn-add-worklog">+ Log work</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddWorklog()" id="btn-add-worklog"><i class="ti ti-plus"></i> Log work</button>
         </div>
         <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;" id="worklog-filters">
           <select class="form-input" style="width:auto;padding:6px 10px;font-size:12px;" id="filter-period" onchange="loadWorklog()">
@@ -633,7 +647,7 @@ tbody tr:hover td{background:#fafcfb;}
           <div style="display:flex;gap:8px;align-items:center;" id="kpi-report-actions">
             <input type="date" id="report-date-from" class="form-input" style="width:auto;padding:6px 10px;font-size:12px;" title="Report from">
             <input type="date" id="report-date-to" class="form-input" style="width:auto;padding:6px 10px;font-size:12px;" title="Report to">
-            <button class="btn btn-outline btn-sm" onclick="downloadKPIReport()" id="btn-download-report">⬇ Download PDF</button>
+            <button class="btn btn-outline btn-sm" onclick="downloadKPIReport()" id="btn-download-report"><i class="ti ti-download"></i> Download PDF</button>
           </div>
         </div>
         <div id="kpi-tab-nav" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border2);padding-bottom:0;">
@@ -657,7 +671,7 @@ tbody tr:hover td{background:#fafcfb;}
           <select class="form-input" id="kpi-filter-staff" style="width:auto;padding:6px 10px;font-size:12px;" onchange="loadKPI()">
             <option value="">All staff</option>
           </select>
-          <button class="btn btn-outline btn-sm" onclick="clearKpiFilters()" style="font-size:12px;">✕ Clear</button>
+          <button class="btn btn-outline btn-sm" onclick="clearKpiFilters()" style="font-size:12px;"><i class="ti ti-x"></i> Clear</button>
         </div>
         <div id="kpi-content">
           <div class="loading"><div class="spinner"></div><br>Loading KPIs...</div>
@@ -669,8 +683,8 @@ tbody tr:hover td{background:#fafcfb;}
         <div class="section-hd">
           <div class="section-title">Storage</div>
           <div style="display:flex;gap:8px;" id="storage-header-actions">
-            <button class="btn btn-outline btn-sm" onclick="loadStorage()" title="Refresh">↻ Refresh</button>
-            <button class="btn btn-primary btn-sm" id="btn-init-folders" onclick="initMissingFolders()" style="display:none;">⚙ Create missing folders</button>
+            <button class="btn btn-outline btn-sm" onclick="loadStorage()" title="Refresh"><i class="ti ti-refresh"></i> Refresh</button>
+            <button class="btn btn-primary btn-sm" id="btn-init-folders" onclick="initMissingFolders()" style="display:none;"><i class="ti ti-settings"></i> Create missing folders</button>
           </div>
         </div>
 
@@ -680,11 +694,11 @@ tbody tr:hover td{background:#fafcfb;}
         <!-- Individual staff storage view -->
         <div id="storage-detail" style="display:none;">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-            <button class="btn btn-outline btn-sm" onclick="closeStorageDetail()">← Back</button>
+            <button class="btn btn-outline btn-sm" onclick="closeStorageDetail()"><i class="ti ti-arrow-left"></i> Back</button>
             <div class="section-title" id="storage-detail-title"></div>
             <div style="margin-left:auto;display:flex;gap:8px;">
               <input class="form-input" type="text" id="storage-search" placeholder="Search files…" style="width:200px;padding:6px 12px;font-size:12px;" oninput="debounceStorageSearch()">
-              <button class="btn btn-primary btn-sm" onclick="openStorageUpload()">+ Upload</button>
+              <button class="btn btn-primary btn-sm" onclick="openStorageUpload()"><i class="ti ti-upload"></i> Upload</button>
             </div>
           </div>
           <!-- Usage bar -->
@@ -705,7 +719,7 @@ tbody tr:hover td{background:#fafcfb;}
                   <span id="profile-avatar-initials"></span>
                   <img id="profile-avatar-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;">
                 </div>
-                <label for="profile-pic-input" style="position:absolute;bottom:0;right:0;width:22px;height:22px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;color:var(--white);" title="Change photo">✎</label>
+                <label for="profile-pic-input" style="position:absolute;bottom:0;right:0;width:22px;height:22px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;color:var(--white);" title="Change photo"><i class="ti ti-pencil"></i></label>
                 <input type="file" id="profile-pic-input" accept="image/*" style="display:none;" onchange="previewProfilePic(this)">
               </div>
               <div style="flex:1;">
@@ -754,7 +768,7 @@ tbody tr:hover td{background:#fafcfb;}
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modal-staff-title">Add staff member</div>
-      <button class="modal-close" onclick="closeModal('modal-add-staff')">✕</button>
+      <button class="modal-close" onclick="closeModal('modal-add-staff')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="edit-staff-id">
@@ -818,7 +832,7 @@ tbody tr:hover td{background:#fafcfb;}
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title">Add project</div>
-      <button class="modal-close" onclick="closeModal('modal-add-project')">✕</button>
+      <button class="modal-close" onclick="closeModal('modal-add-project')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
@@ -864,7 +878,7 @@ tbody tr:hover td{background:#fafcfb;}
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modal-task-title">Add task</div>
-      <button class="modal-close" onclick="closeModal('modal-add-task')">✕</button>
+      <button class="modal-close" onclick="closeModal('modal-add-task')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="edit-task-id">
@@ -926,7 +940,7 @@ tbody tr:hover td{background:#fafcfb;}
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modal-evidence-title">Task Evidence</div>
-      <button class="modal-close" onclick="closeModal('modal-evidence')">✕</button>
+      <button class="modal-close" onclick="closeModal('modal-evidence')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="evidence-task-id">
@@ -935,7 +949,7 @@ tbody tr:hover td{background:#fafcfb;}
         <input type="file" id="evidence-file" style="display:none;" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls,.pptx" multiple onchange="addSelectedFiles()">
         <button type="button" onclick="document.getElementById('evidence-file').click()"
           class="btn btn-outline btn-sm" style="width:100%;justify-content:center;padding:10px;">
-          + Add files
+          <i class="ti ti-plus"></i> Add files
         </button>
         <div id="file-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;"></div>
       </div>
@@ -969,7 +983,7 @@ tbody tr:hover td{background:#fafcfb;}
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title">Log work</div>
-      <button class="modal-close" onclick="closeModal('modal-add-worklog')">✕</button>
+      <button class="modal-close" onclick="closeModal('modal-add-worklog')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -1019,7 +1033,7 @@ tbody tr:hover td{background:#fafcfb;}
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title">Reset password</div>
-      <button class="modal-close" onclick="closeModal('modal-reset-pw')">✕</button>
+      <button class="modal-close" onclick="closeModal('modal-reset-pw')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="reset-staff-id">
@@ -1041,7 +1055,7 @@ tbody tr:hover td{background:#fafcfb;}
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title">Upload files</div>
-      <button class="modal-close" onclick="closeModal('modal-storage-upload')">✕</button>
+      <button class="modal-close" onclick="closeModal('modal-storage-upload')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
@@ -1057,7 +1071,7 @@ tbody tr:hover td{background:#fafcfb;}
         <input type="file" id="storage-upload-file" style="display:none;" multiple onchange="addStorageFiles()">
         <button type="button" onclick="document.getElementById('storage-upload-file').click()"
           class="btn btn-outline btn-sm" style="width:100%;justify-content:center;padding:10px;">
-          + Choose files
+          <i class="ti ti-plus"></i> Choose files
         </button>
         <div id="storage-upload-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;"></div>
       </div>
@@ -1074,7 +1088,7 @@ tbody tr:hover td{background:#fafcfb;}
   <div class="modal" style="width:min(360px,92vw);">
     <div class="modal-header">
       <div class="modal-title">Rename file</div>
-      <button class="modal-close" onclick="closeModal('modal-storage-rename')">✕</button>
+      <button class="modal-close" onclick="closeModal('modal-storage-rename')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="rename-file-id">
@@ -1095,7 +1109,7 @@ tbody tr:hover td{background:#fafcfb;}
   <div class="modal" style="width:min(540px,92vw);">
     <div class="modal-header">
       <div class="modal-title" id="modal-comments-title">Task Comments</div>
-      <button class="modal-close" onclick="closeModal('modal-comments')">✕</button>
+      <button class="modal-close" onclick="closeModal('modal-comments')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body" style="padding-bottom:0;">
       <div id="comments-list" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:16px;min-height:60px;">
@@ -1200,10 +1214,10 @@ function toggleLoginPassword() {
   const btn = document.getElementById('login-pw-toggle');
   if (input.type === 'password') {
     input.type = 'text';
-    btn.textContent = '🙈';
+    btn.innerHTML = '<i class="ti ti-eye-off"></i>';
   } else {
     input.type = 'password';
-    btn.textContent = '👁';
+    btn.innerHTML = '<i class="ti ti-eye"></i>';
   }
 }
 
@@ -1231,6 +1245,7 @@ function showApp() {
 
   buildNav();
   navigateTo('dashboard');
+  startNotifPolling();
   setTimeout(() => {
     if (!cache.staff) api('/staff').then(d => { if (d) cache.staff = d; });
     if (!cache.staffNames) api('/staff/names').then(d => { if (d) cache.staffNames = d; });
@@ -1249,18 +1264,18 @@ function buildNav() {
   const staffRoles = ['officer','assistant','specialist','tailor','advisor','intern'];
 
   const items = [
-    { panel:'dashboard', icon:'⊞', label:'Dashboard',   roles: allRoles },
+    { panel:'dashboard', icon:'<i class="ti ti-layout-dashboard"></i>', label:'Dashboard',   roles: allRoles },
     { sep:'Management',                                  roles: mgmtRoles },
-    { panel:'worklog',   icon:'✎', label:'Work Log',    roles: mgmtRoles },
-    { panel:'kpi',       icon:'◎', label:'KPI Overview',roles: mgmtRoles },
+    { panel:'worklog',   icon:'<i class="ti ti-clipboard-list"></i>', label:'Work Log',    roles: mgmtRoles },
+    { panel:'kpi',       icon:'<i class="ti ti-chart-bar"></i>', label:'KPI Overview',roles: mgmtRoles },
     { sep:'Organisation',                                roles: mgmtRoles },
-    { panel:'staff',     icon:'⚇', label:'Staff',       roles: ['bod'] },
-    { panel:'projects',  icon:'◈', label:'Projects',    roles: mgmtRoles },
-    { panel:'tasks',     icon:'☑', label:'Tasks',       roles: allRoles },
-    { panel:'storage',   icon:'◫', label:'Storage',     roles: allRoles },
+    { panel:'staff',     icon:'<i class="ti ti-users"></i>', label:'Staff',       roles: ['bod'] },
+    { panel:'projects',  icon:'<i class="ti ti-folder"></i>', label:'Projects',    roles: mgmtRoles },
+    { panel:'tasks',     icon:'<i class="ti ti-checklist"></i>', label:'Tasks',       roles: allRoles },
+    { panel:'storage',   icon:'<i class="ti ti-database"></i>', label:'Storage',     roles: allRoles },
     { sep:'My Account',                                  roles: allRoles },
-    { panel:'kpi',       icon:'◎', label:'My KPIs',     roles: staffRoles },
-    { panel:'profile',   icon:'◯', label:'My Profile',  roles: allRoles },
+    { panel:'kpi',       icon:'<i class="ti ti-chart-line"></i>', label:'My KPIs',     roles: staffRoles },
+    { panel:'profile',   icon:'<i class="ti ti-user-circle"></i>', label:'My Profile',  roles: allRoles },
   ];
 
   nav.innerHTML = '';
@@ -1409,8 +1424,8 @@ async function loadDashboard() {
             <div class="prog-bar"><div class="prog-fill ${k.percentage>=70?'prog-green':k.percentage>=40?'prog-amber':'prog-red'}" style="width:${k.percentage}%"></div></div>
             <span class="prog-pct">${k.percentage}%</span>
           </div>
-          ${k.hasEvidence ? `<div style="margin-top:8px;"><a href="${k.evidenceLink}" target="_blank" style="font-size:12px;color:var(--teal)">📎 View evidence ↗</a></div>` : ''}
-        </div>`).join('') : '<div class="empty"><div class="empty-icon">◎</div>No tasks assigned yet.</div>'}`;
+          ${k.hasEvidence ? `<div style="margin-top:8px;"><a href="${k.evidenceLink}" target="_blank" style="font-size:12px;color:var(--teal)"><i class="ti ti-paperclip" style="font-size:12px;"></i> View evidence <i class="ti ti-external-link" style="font-size:11px;"></i></a></div>` : ''}
+        </div>`).join('') : '<div class="empty"><div class="empty-icon"><i class="ti ti-chart-bar"></i></div>No tasks assigned yet.</div>'}`;
     return;
   }
 
@@ -1587,7 +1602,7 @@ async function loadStaff() {
   if (!data) return;
   cache.staff = data;
   const tbody = document.getElementById('staff-table-body');
-  if (!data.length) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon">⚇</div>No staff yet.</div></td></tr>'; return; }
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon"><i class="ti ti-users"></i></div>No staff yet.</div></td></tr>'; return; }
   tbody.innerHTML = data.map(s => `
     <tr>
       <td><strong>${s.Name}</strong></td>
@@ -1599,7 +1614,7 @@ async function loadStaff() {
       <td><span class="badge ${s.Active?.toLowerCase()==='true'?'badge-done':'badge-late'}">${s.Active?.toLowerCase()==='true'?'Active':'Inactive'}</span></td>
       <td>
         <div style="display:flex;gap:4px;">
-          <button class="btn btn-outline btn-sm btn-icon" onclick="openEditStaff('${s.ID}')" title="Edit">✎</button>
+          <button class="btn btn-outline btn-sm btn-icon" onclick="openEditStaff('${s.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>
           ${user.role==='bod'?`<button class="btn btn-outline btn-sm btn-icon" onclick="openResetPw('${s.ID}')" title="Reset password">🔑</button>`:''}
         </div>
       </td>
@@ -1687,7 +1702,7 @@ async function loadProjects() {
   if (!data) return;
   cache.projects = data;
   const tbody = document.getElementById('projects-table-body');
-  if (!data.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">◈</div>No projects yet.</div></td></tr>'; return; }
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon"><i class="ti ti-folder"></i></div>No projects yet.</div></td></tr>'; return; }
   tbody.innerHTML = data.map(p => `
     <tr>
       <td><strong>${p.Name}</strong><br><span style="font-size:11px;color:var(--muted)">${p.Description||''}</span></td>
@@ -1695,7 +1710,7 @@ async function loadProjects() {
       <td style="color:var(--muted)">${p.StartDate}</td>
       <td style="color:var(--muted)">${p.EndDate}</td>
       <td><span class="badge ${p.Status==='Active'?'badge-done':p.Status==='On Hold'?'badge-prog':'badge-late'}">${p.Status}</span></td>
-      <td><button class="btn btn-outline btn-sm btn-icon" onclick="openEditProject('${p.ID}')" title="Edit">✎</button></td>
+      <td><button class="btn btn-outline btn-sm btn-icon" onclick="openEditProject('${p.ID}')" title="Edit"><i class="ti ti-pencil"></i></button></td>
     </tr>`).join('');
 }
 
@@ -1854,7 +1869,7 @@ function renderTaskRows(tasks, projects, staff) {
   const canEdit = ['bod','senior','coordinator'].includes(user.role);
 
   if (!tasks.length) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">☑</div>No tasks match the filters.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon"><i class="ti ti-checklist"></i></div>No tasks match the filters.</div></td></tr>';
     return;
   }
 
@@ -1896,7 +1911,7 @@ function renderTaskRows(tasks, projects, staff) {
       <td>
         ${hasEvidence
           ? `<div>
-              <button class="btn btn-outline btn-sm" onclick="viewEvidence('${t.ID}')" style="color:var(--teal)">View ↗</button>
+              <button class="btn btn-outline btn-sm" onclick="viewEvidence('${t.ID}')" style="color:var(--teal)"><i class="ti ti-external-link" style="font-size:13px;"></i> View</button>
               ${t.EvidenceDate ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">Submitted: ${t.EvidenceDate.slice(0,10)}</div>` : ''}
              </div>`
           : (isMyTask || canEdit)
@@ -1906,10 +1921,10 @@ function renderTaskRows(tasks, projects, staff) {
       <td>
         <div style="display:flex;gap:4px;">
           ${(canEdit || isMyTask)
-            ? `<button class="btn btn-outline btn-sm btn-icon" onclick="openEditTask('${t.ID}')" title="Edit">✎</button>`
+            ? `<button class="btn btn-outline btn-sm btn-icon" onclick="openEditTask('${t.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>`
             : ''}
           <button class="btn btn-outline btn-sm btn-icon" onclick="openComments('${t.ID}','${t.Name.replace(/'/g,"\'")}','${t._commentCount||0}')" title="Comments" style="position:relative;">
-            💬${t._commentCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;background:var(--teal);color:white;border-radius:99px;font-size:9px;padding:1px 4px;min-width:14px;text-align:center;">${t._commentCount}</span>` : ''}
+            <i class="ti ti-message"></i>${t._commentCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;background:var(--teal);color:white;border-radius:99px;font-size:9px;padding:1px 4px;min-width:14px;text-align:center;">${t._commentCount}</span>` : ''}
           </button>
         </div>
       </td>
@@ -1977,7 +1992,7 @@ function renderAssigneeTags() {
       const tag = document.createElement('span');
       tag.className = 'assignee-tag';
       tag.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:var(--navy);color:var(--white);font-size:11px;font-weight:500;padding:3px 10px;border-radius:99px;';
-      tag.innerHTML = `${s.Name}<button type="button" onclick="removeAssignee('${id}')" style="background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:13px;padding:0;margin-left:2px;line-height:1;">✕</button>`;
+      tag.innerHTML = `${s.Name}<button type="button" onclick="removeAssignee('${id}')" style="background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:13px;padding:0;margin-left:2px;line-height:1;"><i class="ti ti-x"></i></button>`;
       tagsEl.appendChild(tag);
     });
   }
@@ -2132,7 +2147,7 @@ async function loadWorklog() {
   cache.staff = staff; cache.projects = projects; cache.tasks = tasks;
 
   const tbody = document.getElementById('worklog-table-body');
-  if (!logs.length) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon">✎</div>No work logged for this period.</div></td></tr>'; return; }
+  if (!logs.length) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon"><i class="ti ti-pencil"></i></div>No work logged for this period.</div></td></tr>'; return; }
   tbody.innerHTML = [...logs].reverse().map(l => {
     const s = staff?.find(s => s.ID === l.StaffID);
     const p = projects?.find(p => p.ID === l.ProjectID);
@@ -2146,7 +2161,7 @@ async function loadWorklog() {
       <td><span class="badge ${l.Status==='Done'?'badge-done':l.Status==='In Progress'?'badge-prog':'badge-late'}">
         <span class="badge-dot"></span>${l.Status}</span></td>
       <td style="color:var(--muted);font-size:12px">${l.Note||'—'}</td>
-      <td>${user.role==='bod'?`<button class="btn btn-danger btn-sm btn-icon" onclick="deleteWorklog('${l.ID}')" title="Delete">✕</button>`:'—'}</td>
+      <td>${user.role==='bod'?`<button class="btn btn-danger btn-sm btn-icon" onclick="deleteWorklog('${l.ID}')" title="Delete"><i class="ti ti-x"></i></button>`:'—'}</td>
     </tr>`;
   }).join('');
 }
@@ -2256,7 +2271,7 @@ async function loadKPI() {
   const staffRolesKpi = ['officer','assistant','specialist','tailor','advisor','intern'];
   if (staffRolesKpi.includes(role)) {
     const kpis = data.kpis || [];
-    if (!kpis.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">◎</div>No tasks assigned yet.</div>'; return; }
+    if (!kpis.length) { el.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-chart-bar"></i></div>No tasks assigned yet.</div>'; return; }
     el.innerHTML = kpis.map(k => `
       <div style="background:var(--white);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
@@ -2275,7 +2290,7 @@ async function loadKPI() {
         </div>
         ${k.hasEvidence
           ? `<div style="margin-top:10px;">
-              <a href="${k.evidenceLink}" target="_blank" style="font-size:12px;color:var(--teal);">📎 View evidence ↗</a>
+              <a href="${k.evidenceLink}" target="_blank" style="font-size:12px;color:var(--teal);"><i class="ti ti-paperclip" style="font-size:12px;"></i> View evidence <i class="ti ti-external-link" style="font-size:11px;"></i></a>
               ${k.evidenceDate ? `<span style="font-size:10px;color:var(--muted);margin-left:8px;">· ${k.evidenceDate.slice(0,10)}</span>` : ''}
              </div>`
           : `<div style="margin-top:10px;"><span style="font-size:12px;color:var(--muted);">No evidence submitted yet</span></div>`}
@@ -2389,7 +2404,7 @@ async function loadKPI() {
             </td>
             <td>
               ${k.hasEvidence
-                ? `<a href="${k.evidenceLink}" target="_blank" class="btn btn-outline btn-sm" style="color:var(--teal)">View ↗</a>
+                ? `<a href="${k.evidenceLink}" target="_blank" class="btn btn-outline btn-sm" style="color:var(--teal)"><i class="ti ti-external-link" style="font-size:12px;"></i> View</a>
                    ${k.evidenceDate?`<div style="font-size:10px;color:var(--muted);margin-top:2px;">${k.evidenceDate.slice(0,10)}</div>`:''}`
                 : '<span style="color:var(--muted);font-size:11px;">No evidence</span>'}
             </td>
@@ -2648,7 +2663,7 @@ async function loadKpiByStaff() {
                     <span style="font-size:11px;color:var(--muted);margin-left:4px;">${bp.tasks.length} tasks total</span>
                   </div>
                   <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="switchKpiTab('overview');document.getElementById('kpi-filter-staff').value='${s.ID}';document.getElementById('kpi-filter-project').value='${bp.proj?.ID||''}';loadKPI();">
-                    View tasks ↗
+                    View tasks <i class="ti ti-arrow-right" style="font-size:12px;"></i>
                   </button>
                 </div>
               </div>`).join('')}
@@ -2810,7 +2825,7 @@ function viewEvidence(taskId) {
   if (t.EvidenceFile) {
     const fileUrls = t.EvidenceFile.split(',').map(u => u.trim()).filter(Boolean);
     fileUrls.forEach((url, i) => {
-      html += `<div style="margin-bottom:4px;">📎 File ${fileUrls.length > 1 ? (i+1) + ': ' : ': '}<a href="${url}" target="_blank" style="color:var(--teal)">View file ${fileUrls.length > 1 ? i+1 : ''} ↗</a></div>`;
+      html += `<div style="margin-bottom:4px;"><i class="ti ti-paperclip" style="font-size:12px;"></i> File ${fileUrls.length > 1 ? (i+1) + \": \" : \": \"}<a href="${url}" target="_blank" style="color:var(--teal)">View <i class="ti ti-external-link" style="font-size:11px;"></i></a></div>`;
     });
   }
   if (t.EvidenceLink) html += `<div>🔗 Link: <a href="${t.EvidenceLink}" target="_blank" style="color:var(--teal)">${t.EvidenceLink}</a></div>`;
@@ -2851,13 +2866,13 @@ function renderFileList() {
     const size = (file.size / 1024 / 1024).toFixed(1);
     const over = file.size > 100 * 1024 * 1024;
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--off);border:1px solid var(--border2);border-radius:8px;">
-      <span style="font-size:13px;">📎</span>
+      <i class="ti ti-paperclip" style="font-size:14px;color:var(--muted);"></i>
       <span style="font-size:12px;color:var(--text);flex:1;word-break:break-all;">${file.name}</span>
       <span style="font-size:11px;color:${over?'var(--red)':'var(--muted)'};flex-shrink:0;">${size} MB${over?' ⚠':''}
       </span>
       <button type="button" onclick="removeEvidenceFile(${i})"
         style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0 2px;flex-shrink:0;"
-        title="Remove">✕</button>
+        title="Remove"><i class="ti ti-x"></i></button>
     </div>`;
   }).join('');
 }
@@ -2900,7 +2915,7 @@ async function saveEvidence() {
       const data = await res.json();
       if (!data.success) {
         showToast(`Failed to upload "${evidenceFiles[i].name}": ${data.error || 'Unknown error'}`, 'error');
-        btn.disabled = false; btn.textContent = 'Submit evidence';
+        btn.disabled = false; btn.innerHTML = 'Submit evidence';
         return;
       }
       fileUrls.push(data.fileUrl);
@@ -2938,7 +2953,7 @@ async function saveEvidence() {
   } catch(e) {
     showToast('Error: ' + e.message, 'error');
   }
-  btn.disabled = false; btn.textContent = 'Submit evidence';
+  btn.disabled = false; btn.innerHTML = 'Submit evidence';
 }
 
 // ════════════════════════════════════════════════════════
@@ -2957,16 +2972,17 @@ function formatBytes(bytes) {
 }
 
 function fileIcon(mimeType, name) {
-  if (!mimeType) return '📄';
-  if (mimeType.startsWith('image/')) return '🖼';
-  if (mimeType === 'application/pdf') return '📕';
-  if (mimeType.includes('spreadsheet') || name?.endsWith('.xlsx') || name?.endsWith('.xls')) return '📊';
-  if (mimeType.includes('presentation') || name?.endsWith('.pptx')) return '📊';
-  if (mimeType.includes('document') || name?.endsWith('.docx')) return '📝';
-  if (mimeType.includes('zip') || mimeType.includes('compressed')) return '🗜';
-  if (mimeType.startsWith('video/')) return '🎬';
-  if (mimeType.startsWith('audio/')) return '🎵';
-  return '📄';
+  const s = 'font-size:18px;';
+  if (!mimeType) return `<i class="ti ti-file" style="${s}color:var(--muted);"></i>`;
+  if (mimeType.startsWith('image/')) return `<i class="ti ti-photo" style="${s}color:#534AB7;"></i>`;
+  if (mimeType === 'application/pdf') return `<i class="ti ti-file-type-pdf" style="${s}color:#E24B4A;"></i>`;
+  if (mimeType.includes('spreadsheet') || name?.endsWith('.xlsx') || name?.endsWith('.xls')) return `<i class="ti ti-file-spreadsheet" style="${s}color:#1D9E75;"></i>`;
+  if (mimeType.includes('presentation') || name?.endsWith('.pptx')) return `<i class="ti ti-presentation" style="${s}color:#E65100;"></i>`;
+  if (mimeType.includes('document') || name?.endsWith('.docx')) return `<i class="ti ti-file-word" style="${s}color:#185FA5;"></i>`;
+  if (mimeType.includes('zip') || mimeType.includes('compressed')) return `<i class="ti ti-file-zip" style="${s}color:#BA7517;"></i>`;
+  if (mimeType.startsWith('video/')) return `<i class="ti ti-video" style="${s}color:#534AB7;"></i>`;
+  if (mimeType.startsWith('audio/')) return `<i class="ti ti-music" style="${s}color:#880E4F;"></i>`;
+  return `<i class="ti ti-file" style="${s}color:var(--muted);"></i>`;
 }
 
 async function loadStorage() {
@@ -2992,7 +3008,7 @@ async function loadStorage() {
       el.innerHTML = '';
       openStorageDetail(mine.staffId, mine.name);
     } else {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">◫</div>No storage folder yet. Contact your admin.</div>';
+      el.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-database"></i></div>No storage folder yet. Contact your admin.</div>';
     }
     return;
   }
@@ -3068,7 +3084,7 @@ async function refreshStorageDetail() {
 function renderStorageFiles(structure) {
   const el = document.getElementById('storage-files');
   if (!structure.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">◫</div>No files yet.</div>';
+    el.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-database"></i></div>No files yet.</div>';
     return;
   }
 
@@ -3079,7 +3095,7 @@ function renderStorageFiles(structure) {
     if (isEvidence && section.taskGroups?.length) {
       inner = section.taskGroups.map(tg => `
         <div style="margin-bottom:12px;">
-          <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;padding-left:4px;">📁 ${tg.folder.name}</div>
+          <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;padding-left:4px;"><i class="ti ti-folder" style="font-size:12px;color:#BA7517;"></i> ${tg.folder.name}</div>
           ${tg.files.length ? tg.files.map(f => renderFileRow(f)).join('') : '<div style="font-size:12px;color:var(--muted);padding:8px 4px;">Empty folder</div>'}
         </div>`).join('');
       if (section.files?.length) {
@@ -3093,7 +3109,7 @@ function renderStorageFiles(structure) {
 
     return `<div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;margin-bottom:12px;overflow:hidden;">
       <div style="background:var(--off);padding:10px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:13px;font-weight:600;color:var(--navy);">📂 ${section.folder.name}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--navy);"><i class="ti ti-folder-open" style="font-size:14px;color:#BA7517;"></i> ${section.folder.name}</div>
       </div>
       <div style="padding:8px 12px;">${inner}</div>
     </div>`;
@@ -3113,10 +3129,10 @@ function renderFileRow(f) {
       <div style="font-size:10px;color:var(--muted);">${size} · ${date}</div>
     </div>
     <div style="display:flex;gap:4px;flex-shrink:0;">
-      <a href="${f.webViewLink}" target="_blank" class="btn btn-outline btn-sm btn-icon" title="Open" style="text-decoration:none;">↗</a>
+      <a href="${f.webViewLink}" target="_blank" class="btn btn-outline btn-sm btn-icon" title="Open" style="text-decoration:none;"><i class="ti ti-external-link"></i></a>
       ${canEdit ? `
-      <button class="btn btn-outline btn-sm btn-icon" onclick="openRename('${f.id}','${f.name.replace(/'/g,"\\'")}')" title="Rename">✎</button>
-      <button class="btn btn-danger btn-sm btn-icon" onclick="deleteStorageFile('${f.id}','${f.name.replace(/'/g,"\\'")}')" title="Delete">✕</button>` : ''}
+      <button class="btn btn-outline btn-sm btn-icon" onclick="openRename('${f.id}','${f.name.replace(/'/g,"\\'")}')" title="Rename"><i class="ti ti-pencil"></i></button>
+      <button class="btn btn-danger btn-sm btn-icon" onclick="deleteStorageFile('${f.id}','${f.name.replace(/'/g,"\\'")}')" title="Delete"><i class="ti ti-x"></i></button>` : ''}
     </div>
   </div>`;
 }
@@ -3135,7 +3151,7 @@ async function runStorageSearch() {
 
   const el = document.getElementById('storage-files');
   if (!data.files?.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">◫</div>No files found.</div>';
+    el.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-database"></i></div>No files found.</div>';
     return;
   }
   el.innerHTML = `<div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;overflow:hidden;">
@@ -3174,7 +3190,7 @@ function renderStorageUploadList() {
       <span style="font-size:12px;flex:1;word-break:break-all;">${f.name}</span>
       <span style="font-size:11px;color:${over?'var(--red)':'var(--muted)'};">${size}${over?' ⚠':''}</span>
       <button type="button" onclick="storageUploadFiles.splice(${i},1);renderStorageUploadList();"
-        style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;">✕</button>
+        style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;"><i class="ti ti-x"></i></button>
     </div>`;
   }).join('');
 }
@@ -3210,7 +3226,7 @@ async function submitStorageUpload() {
       const data = await res.json();
       if (!data.success) {
         showToast(`Failed: ${file.name}`, 'error');
-        btn.disabled = false; btn.textContent = 'Upload';
+        btn.disabled = false; btn.innerHTML = '<i class="ti ti-upload"></i> Upload';
         return;
       }
     } else {
@@ -3228,7 +3244,7 @@ async function submitStorageUpload() {
         });
         if (!initRes?.uploadUrl) {
           showToast(`Failed to start upload: ${file.name}`, 'error');
-          btn.disabled = false; btn.textContent = 'Upload';
+          btn.disabled = false; btn.innerHTML = '<i class="ti ti-upload"></i> Upload';
           return;
         }
 
@@ -3259,7 +3275,7 @@ async function submitStorageUpload() {
 
       } catch (e) {
         showToast(`Failed: ${file.name} — ${e.message}`, 'error');
-        btn.disabled = false; btn.textContent = 'Upload';
+        btn.disabled = false; btn.innerHTML = '<i class="ti ti-upload"></i> Upload';
         return;
       }
     }
@@ -3267,7 +3283,7 @@ async function submitStorageUpload() {
 
   closeModal('modal-storage-upload');
   showToast(`${storageUploadFiles.length} file${storageUploadFiles.length>1?'s':''} uploaded ✓`, 'success');
-  btn.disabled = false; btn.textContent = 'Upload';
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-upload"></i> Upload';
   await refreshStorageDetail();
 }
 
@@ -3318,7 +3334,7 @@ async function initMissingFolders() {
   } else {
     showToast(res?.error || 'Failed', 'error');
   }
-  if (btn) { btn.disabled = false; btn.textContent = '⚙ Create missing folders'; }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-settings"></i> Create missing folders'; }
 }
 
 // ════════════════════════════════════════════════════════
@@ -3378,7 +3394,7 @@ async function submitComment() {
   } else {
     showToast(res?.error || 'Failed to post comment', 'error');
   }
-  btn.disabled = false; btn.textContent = 'Post';
+  btn.disabled = false; btn.innerHTML = 'Post';
 }
 
 // Enter to submit comment (Shift+Enter for new line)
@@ -3410,7 +3426,7 @@ function initReportDates() {
 
 async function downloadKPIReport() {
   const btn = document.getElementById('btn-download-report');
-  btn.disabled = true; btn.textContent = 'Generating…';
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Generating…';
 
   try {
     const fromDate = document.getElementById('report-date-from').value;
@@ -3605,7 +3621,152 @@ async function downloadKPIReport() {
     console.error(e);
   }
 
-  btn.disabled = false; btn.textContent = '⬇ Download PDF';
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-download"></i> Download PDF';
+}
+
+// ════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ════════════════════════════════════════════════════════
+let notifPollTimer = null;
+let notifDropdownOpen = false;
+
+const NOTIF_ICONS = {
+  comment:   '<i class="ti ti-message-circle" style="font-size:18px;color:#1D9E75;"></i>',
+  assigned:  '<i class="ti ti-clipboard-check" style="font-size:18px;color:#534AB7;"></i>',
+  completed: '<i class="ti ti-circle-check" style="font-size:18px;color:#1D9E75;"></i>',
+  overdue:   '<i class="ti ti-clock-exclamation" style="font-size:18px;color:#E24B4A;"></i>',
+};
+
+function timeAgo(isoString) {
+  const diff = Math.floor((Date.now() - new Date(isoString)) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+  return new Date(isoString).toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+}
+
+async function fetchNotifications() {
+  if (!token || !user) return;
+  const data = await api('/notifications');
+  if (!data) return;
+
+  // Update badge
+  const badge = document.getElementById('notif-badge');
+  if (badge) {
+    if (data.unreadCount > 0) {
+      badge.style.display = 'block';
+      badge.textContent = data.unreadCount > 99 ? '99+' : data.unreadCount;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  // Render dropdown list
+  renderNotifList(data.notifications || []);
+}
+
+function renderNotifList(notifications) {
+  const el = document.getElementById('notif-list');
+  if (!el) return;
+
+  if (!notifications.length) {
+    el.innerHTML = '<div style="text-align:center;padding:32px 16px;color:var(--muted);font-size:13px;">No notifications yet</div>';
+    return;
+  }
+
+  // Group by today vs earlier
+  const today = new Date().toISOString().slice(0,10);
+  const todayItems = notifications.filter(n => n.CreatedAt?.slice(0,10) === today);
+  const earlierItems = notifications.filter(n => n.CreatedAt?.slice(0,10) !== today);
+
+  let html = '';
+
+  if (todayItems.length) {
+    html += `<div style="font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:10px 16px 4px;">Today</div>`;
+    html += todayItems.map(n => renderNotifItem(n)).join('');
+  }
+
+  if (earlierItems.length) {
+    html += `<div style="font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:10px 16px 4px;">Earlier</div>`;
+    html += earlierItems.map(n => renderNotifItem(n)).join('');
+  }
+
+  el.innerHTML = html;
+}
+
+function renderNotifItem(n) {
+  const isUnread = n.IsRead === 'false';
+  const icon = NOTIF_ICONS[n.Type] || '<i class="ti ti-bell" style="font-size:18px;"></i>';
+  const ago = timeAgo(n.CreatedAt);
+  return `<div onclick="handleNotifClick('${n.ID}','${n.TaskID}')"
+    style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border2);transition:background .1s;${isUnread ? 'background:var(--teal-lt);' : ''}"
+    onmouseover="this.style.background='var(--off)'" onmouseout="this.style.background='${isUnread ? 'var(--teal-lt)' : 'transparent'}'">
+    <div style="font-size:18px;flex-shrink:0;margin-top:1px;">${icon}</div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;font-weight:${isUnread ? '600' : '400'};color:var(--navy);margin-bottom:2px;">${n.Title}</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n.Message}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;">${ago}</div>
+    </div>
+    ${isUnread ? '<div style="width:8px;height:8px;border-radius:50%;background:var(--teal);flex-shrink:0;margin-top:4px;"></div>' : ''}
+  </div>`;
+}
+
+async function handleNotifClick(notifId, taskId) {
+  // Mark as read
+  await api('/notifications/read', { method:'POST', body:JSON.stringify({ notifId }) });
+
+  // Close dropdown
+  closeNotifDropdown();
+
+  // Navigate to task if there's a taskId
+  if (taskId) {
+    navigateTo('tasks', 'Tasks');
+    // Wait for tasks to load then open comments
+    if (cache.tasks) {
+      const t = cache.tasks.find(t => t.ID === taskId);
+      if (t) openComments(taskId, t.Name, 0);
+    }
+  }
+
+  // Refresh badge
+  await fetchNotifications();
+}
+
+async function markAllRead() {
+  await api('/notifications/read', { method:'POST', body:JSON.stringify({ notifId: 'all' }) });
+  await fetchNotifications();
+}
+
+function toggleNotifDropdown() {
+  const dropdown = document.getElementById('notif-dropdown');
+  if (!dropdown) return;
+  notifDropdownOpen = !notifDropdownOpen;
+  dropdown.style.display = notifDropdownOpen ? 'block' : 'none';
+  if (notifDropdownOpen) fetchNotifications();
+}
+
+function closeNotifDropdown() {
+  notifDropdownOpen = false;
+  const dropdown = document.getElementById('notif-dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  const wrapper = document.getElementById('notif-wrapper');
+  if (wrapper && !wrapper.contains(e.target)) closeNotifDropdown();
+});
+
+function startNotifPolling() {
+  fetchNotifications(); // fetch immediately on login
+  clearInterval(notifPollTimer);
+  notifPollTimer = setInterval(fetchNotifications, 60000); // poll every 60s
+}
+
+function stopNotifPolling() {
+  clearInterval(notifPollTimer);
+  notifPollTimer = null;
 }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
