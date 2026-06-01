@@ -3654,9 +3654,12 @@ async function fetchNotifications() {
   // Update badge
   const badge = document.getElementById('notif-badge');
   if (badge) {
-    if (data.unreadCount > 0) {
-      badge.style.display = 'block';
-      badge.textContent = data.unreadCount > 99 ? '99+' : data.unreadCount;
+    const count = parseInt(data.unreadCount) || 0;
+    if (count > 0) {
+      badge.style.display = 'flex';
+      badge.style.alignItems = 'center';
+      badge.style.justifyContent = 'center';
+      badge.textContent = count > 99 ? '99+' : String(count);
     } else {
       badge.style.display = 'none';
     }
