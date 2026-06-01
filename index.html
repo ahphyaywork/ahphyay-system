@@ -284,6 +284,16 @@ tbody tr:hover td{background:#fafcfb;}
 .badge-management{background:var(--purple-lt);color:var(--purple);}
 .badge-staff{background:var(--teal-lt);color:#085041;}
 .badge-external{background:var(--off);color:var(--muted);border:1px solid var(--border2);}
+/* New role badges */
+.badge-bod{background:var(--navy);color:var(--white);}
+.badge-senior{background:var(--purple-lt);color:var(--purple);}
+.badge-coordinator{background:#E8EAF6;color:#3949AB;}
+.badge-officer{background:var(--teal-lt);color:#085041;}
+.badge-assistant{background:#E8F5E9;color:#2E7D32;}
+.badge-specialist{background:#FFF3E0;color:#E65100;}
+.badge-tailor{background:#FCE4EC;color:#880E4F;}
+.badge-advisor{background:var(--off);color:var(--muted);border:1px solid var(--border2);}
+.badge-intern{background:#F3E5F5;color:#6A1B9A;}
 
 /* ── Progress bar ── */
 .prog-wrap{display:flex;align-items:center;gap:8px;}
@@ -760,18 +770,26 @@ tbody tr:hover td{background:#fafcfb;}
         <div class="form-group">
           <label class="form-label">Role *</label>
           <select class="form-input" id="staff-role">
-            <option value="Staff">Staff</option>
-            <option value="Management">Management</option>
-            <option value="External">External</option>
-            <option value="Admin">Admin</option>
+            <option value="Officer">Officer</option>
+            <option value="Assistant">Assistant</option>
+            <option value="Specialist">Specialist</option>
+            <option value="Tailor">Tailor</option>
+            <option value="Advisor">Advisor</option>
+            <option value="Intern">Intern</option>
+            <option value="Coordinator">Coordinator</option>
+            <option value="Senior">Senior</option>
+            <option value="BOD">BOD</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">Type</label>
           <select class="form-input" id="staff-type">
-            <option value="Staff">Staff</option>
+            <option value="Full-time">Full-time</option>
+            <option value="Part-time">Part-time</option>
+            <option value="Volunteer">Volunteer</option>
             <option value="Consultant">Consultant</option>
             <option value="Contractor">Contractor</option>
+            <option value="Intern">Intern</option>
           </select>
         </div>
       </div>
@@ -1195,19 +1213,24 @@ function buildNav() {
   const role = user.role;
   const nav = document.getElementById('sidebar-nav');
 
+  // Role groups for nav
+  const allRoles = ['bod','senior','coordinator','officer','assistant','specialist','tailor','advisor','intern'];
+  const mgmtRoles = ['bod','senior','coordinator'];
+  const staffRoles = ['officer','assistant','specialist','tailor','advisor','intern'];
+
   const items = [
-    { panel:'dashboard', icon:'⊞', label:'Dashboard', roles:['admin','management','staff','external'] },
-    { sep:'Management', roles:['admin','management'] },
-    { panel:'worklog',   icon:'✎', label:'Work Log',   roles:['admin','management'] },
-    { panel:'kpi',       icon:'◎', label:'KPI Overview', roles:['admin','management'] },
-    { sep:'Organisation', roles:['admin','management'] },
-    { panel:'staff',     icon:'⚇', label:'Staff',      roles:['admin'] },
-    { panel:'projects',  icon:'◈', label:'Projects',   roles:['admin','management'] },
-    { panel:'tasks',     icon:'☑', label:'Tasks',      roles:['admin','management','staff','external'] },
-    { panel:'storage',   icon:'◫', label:'Storage',    roles:['admin','management','staff','external'] },
-    { sep:'My Account',  roles:['admin','management','staff','external'] },
-    { panel:'kpi',       icon:'◎', label:'My KPIs',    roles:['staff','external'] },
-    { panel:'profile',   icon:'◯', label:'My Profile', roles:['admin','management','staff','external'] },
+    { panel:'dashboard', icon:'⊞', label:'Dashboard',   roles: allRoles },
+    { sep:'Management',                                  roles: mgmtRoles },
+    { panel:'worklog',   icon:'✎', label:'Work Log',    roles: mgmtRoles },
+    { panel:'kpi',       icon:'◎', label:'KPI Overview',roles: mgmtRoles },
+    { sep:'Organisation',                                roles: mgmtRoles },
+    { panel:'staff',     icon:'⚇', label:'Staff',       roles: ['bod'] },
+    { panel:'projects',  icon:'◈', label:'Projects',    roles: mgmtRoles },
+    { panel:'tasks',     icon:'☑', label:'Tasks',       roles: allRoles },
+    { panel:'storage',   icon:'◫', label:'Storage',     roles: allRoles },
+    { sep:'My Account',                                  roles: allRoles },
+    { panel:'kpi',       icon:'◎', label:'My KPIs',     roles: staffRoles },
+    { panel:'profile',   icon:'◯', label:'My Profile',  roles: allRoles },
   ];
 
   nav.innerHTML = '';
@@ -1309,7 +1332,8 @@ async function loadDashboard() {
   if (!data) return;
   const el = document.getElementById('dashboard-content');
 
-  if (user.role === 'staff' || user.role === 'external') {
+  const staffRoles = ['officer','assistant','specialist','tailor','advisor','intern'];
+  if (staffRoles.includes(user.role)) {
     const done   = data.myKpis.filter(k => k.taskStatus === 'Done').length;
     const inProg = data.myKpis.filter(k => k.taskStatus === 'In Progress').length;
     const pending= data.myKpis.filter(k => k.taskStatus === 'Pending').length;
@@ -1546,7 +1570,7 @@ async function loadStaff() {
       <td>
         <div style="display:flex;gap:4px;">
           <button class="btn btn-outline btn-sm btn-icon" onclick="openEditStaff('${s.ID}')" title="Edit">✎</button>
-          ${user.role==='admin'?`<button class="btn btn-outline btn-sm btn-icon" onclick="openResetPw('${s.ID}')" title="Reset password">🔑</button>`:''}
+          ${user.role==='bod'?`<button class="btn btn-outline btn-sm btn-icon" onclick="openResetPw('${s.ID}')" title="Reset password">🔑</button>`:''}
         </div>
       </td>
     </tr>`).join('');
@@ -1776,7 +1800,7 @@ function clearTaskFilters() {
 
 function renderTaskRows(tasks, projects, staff) {
   const tbody = document.getElementById('tasks-table-body');
-  const canEdit = user.role === 'admin' || user.role === 'management';
+  const canEdit = ['bod','senior','coordinator'].includes(user.role);
 
   if (!tasks.length) {
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">☑</div>No tasks match the filters.</div></td></tr>';
@@ -1960,7 +1984,7 @@ function openAddTask() {
   const projSel = document.getElementById('task-project');
   projSel.innerHTML = projects.map(p => `<option value="${p.ID}">${p.Name}</option>`).join('');
 
-  const canAssign = user.role === 'admin' || user.role === 'management';
+  const canAssign = ['bod','senior','coordinator'].includes(user.role);
   if (canAssign) {
     initAssigneePicker(cache.staff||[], []);
   } else {
@@ -1987,7 +2011,7 @@ function openEditTask(id) {
     `<option value="${p.ID}" ${p.ID === t.ProjectID ? 'selected' : ''}>${p.Name}</option>`
   ).join('');
 
-  const canAssign = user.role === 'admin' || user.role === 'management';
+  const canAssign = ['bod','senior','coordinator'].includes(user.role);
   const selectedIds = (t.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
   if (canAssign) {
     initAssigneePicker(cache.staff||[], selectedIds);
@@ -2056,7 +2080,7 @@ async function loadWorklog() {
       <td><span class="badge ${l.Status==='Done'?'badge-done':l.Status==='In Progress'?'badge-prog':'badge-late'}">
         <span class="badge-dot"></span>${l.Status}</span></td>
       <td style="color:var(--muted);font-size:12px">${l.Note||'—'}</td>
-      <td>${user.role==='admin'?`<button class="btn btn-danger btn-sm btn-icon" onclick="deleteWorklog('${l.ID}')" title="Delete">✕</button>`:'—'}</td>
+      <td>${user.role==='bod'?`<button class="btn btn-danger btn-sm btn-icon" onclick="deleteWorklog('${l.ID}')" title="Delete">✕</button>`:'—'}</td>
     </tr>`;
   }).join('');
 }
@@ -2163,7 +2187,8 @@ async function loadKPI() {
   const getBadge = s => s==='achieved'?'badge-done':s==='on-track'?'badge-track':s==='at-risk'?'badge-risk':'badge-behind';
   const role = user.role;
 
-  if (role === 'staff' || role === 'external') {
+  const staffRolesKpi = ['officer','assistant','specialist','tailor','advisor','intern'];
+  if (staffRolesKpi.includes(role)) {
     const kpis = data.kpis || [];
     if (!kpis.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">◎</div>No tasks assigned yet.</div>'; return; }
     el.innerHTML = kpis.map(k => `
@@ -2886,7 +2911,7 @@ async function loadStorage() {
 
   // Show init button for admin
   const initBtn = document.getElementById('btn-init-folders');
-  if (initBtn) initBtn.style.display = user.role === 'admin' ? 'block' : 'none';
+  if (initBtn) initBtn.style.display = user.role === 'bod' ? 'block' : 'none';
 
   const data = await api('/storage');
   if (!data) return;
@@ -2894,7 +2919,7 @@ async function loadStorage() {
   const { staffStorage } = data;
   const LIMIT = 4 * 1024 * 1024 * 1024; // 4GB per staff
 
-  if (user.role === 'staff' || user.role === 'external') {
+  if (['officer','assistant','specialist','tailor','advisor','intern'].includes(user.role)) {
     // Staff/external: go straight to their own storage
     const mine = staffStorage.find(s => s.staffId === user.staffId);
     if (mine) {
@@ -3013,7 +3038,7 @@ function renderFileRow(f) {
   const size = f.size ? formatBytes(parseInt(f.size)) : '—';
   const date = f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('en-GB') : '—';
   const icon = fileIcon(f.mimeType, f.name);
-  const canEdit = user.role === 'admin' || user.role === 'management' || currentStorageStaffId === user.staffId;
+  const canEdit = ['bod','senior','coordinator'].includes(user.role) || currentStorageStaffId === user.staffId;
 
   return `<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border2);">
     <span style="font-size:18px;flex-shrink:0;">${icon}</span>
