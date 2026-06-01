@@ -3762,8 +3762,9 @@ document.addEventListener('click', e => {
 });
 
 function startNotifPolling() {
-  fetchNotifications(); // fetch immediately on login
   clearInterval(notifPollTimer);
+  // Small delay to ensure DOM is fully ready after login
+  setTimeout(fetchNotifications, 1000);
   notifPollTimer = setInterval(fetchNotifications, 60000); // poll every 60s
 }
 
