@@ -3699,7 +3699,7 @@ function renderNotifList(notifications) {
 }
 
 function renderNotifItem(n) {
-  const isUnread = n.IsRead === 'false';
+  const isUnread = n.IsRead?.toLowerCase() === 'false';
   const icon = NOTIF_ICONS[n.Type] || '<i class="ti ti-bell" style="font-size:18px;"></i>';
   const ago = timeAgo(n.CreatedAt);
   return `<div onclick="handleNotifClick('${n.ID}','${n.TaskID}')"
