@@ -2825,10 +2825,10 @@ function viewEvidence(taskId) {
   if (t.EvidenceFile) {
     const fileUrls = t.EvidenceFile.split(',').map(u => u.trim()).filter(Boolean);
     fileUrls.forEach((url, i) => {
-      html += `<div style="margin-bottom:4px;"><i class="ti ti-paperclip" style="font-size:12px;"></i> File ${fileUrls.length > 1 ? (i+1) + \": \" : \": \"}<a href="${url}" target="_blank" style="color:var(--teal)">View <i class="ti ti-external-link" style="font-size:11px;"></i></a></div>`;
+      html += '<div style="margin-bottom:4px;"><i class="ti ti-paperclip" style="font-size:12px;"></i> File ' + (fileUrls.length > 1 ? (i+1) + ': ' : ': ') + '<a href="' + url + '" target="_blank" style="color:var(--teal)">View <i class="ti ti-external-link" style="font-size:11px;"></i></a></div>';
     });
   }
-  if (t.EvidenceLink) html += `<div>🔗 Link: <a href="${t.EvidenceLink}" target="_blank" style="color:var(--teal)">${t.EvidenceLink}</a></div>`;
+  if (t.EvidenceLink) html += '<div><i class="ti ti-link" style="font-size:12px;"></i> Link: <a href="' + t.EvidenceLink + '" target="_blank" style="color:var(--teal)">' + t.EvidenceLink + '</a></div>';
   if (t.EvidenceNote) html += `<div style="margin-top:6px;color:var(--muted)">Note: ${t.EvidenceNote}</div>`;
   existingContent.innerHTML = html || 'No evidence details.';
   openModal('modal-evidence');
