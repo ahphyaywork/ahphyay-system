@@ -905,7 +905,7 @@ tbody tr:hover td{background:#fafcfb;}
     <div class="modal-body">
       <input type="hidden" id="evidence-task-id">
       <div class="form-group">
-        <label class="form-label">Upload file <span style="color:var(--muted);font-size:10px;">(PDF, image, doc, xlsx — max 10MB)</span></label>
+        <label class="form-label">Upload file <span style="color:var(--muted);font-size:10px;">(PDF, image, doc, xlsx — max 100MB)</span></label>
         <input type="file" id="evidence-file" style="display:none;" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls,.pptx" multiple onchange="addSelectedFiles()">
         <button type="button" onclick="document.getElementById('evidence-file').click()"
           class="btn btn-outline btn-sm" style="width:100%;justify-content:center;padding:10px;">
@@ -1027,7 +1027,7 @@ tbody tr:hover td{background:#fafcfb;}
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Files <span style="color:var(--muted);font-size:10px;">(max 50MB each)</span></label>
+        <label class="form-label">Files <span style="color:var(--muted);font-size:10px;">(up to 2GB each)</span></label>
         <input type="file" id="storage-upload-file" style="display:none;" multiple onchange="addStorageFiles()">
         <button type="button" onclick="document.getElementById('storage-upload-file').click()"
           class="btn btn-outline btn-sm" style="width:100%;justify-content:center;padding:10px;">
@@ -2758,7 +2758,7 @@ function renderFileList() {
   if (!evidenceFiles.length) { listEl.innerHTML = ''; return; }
   listEl.innerHTML = evidenceFiles.map((file, i) => {
     const size = (file.size / 1024 / 1024).toFixed(1);
-    const over = file.size > 10 * 1024 * 1024;
+    const over = file.size > 100 * 1024 * 1024;
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--off);border:1px solid var(--border2);border-radius:8px;">
       <span style="font-size:13px;">📎</span>
       <span style="font-size:12px;color:var(--text);flex:1;word-break:break-all;">${file.name}</span>
@@ -2783,9 +2783,9 @@ async function saveEvidence() {
   }
 
   // Check all files are under 10MB
-  const oversized = evidenceFiles.find(f => f.size > 10 * 1024 * 1024);
+  const oversized = evidenceFiles.find(f => f.size > 100 * 1024 * 1024);
   if (oversized) {
-    showToast(`"${oversized.name}" is over 10MB — remove it first`, 'error');
+    showToast(`"${oversized.name}" is over 100MB — remove it first`, 'error');
     return;
   }
 
@@ -2892,13 +2892,14 @@ async function loadStorage() {
   if (!data) return;
 
   const { staffStorage } = data;
-  const LIMIT = 500 * 1024 * 1024; // 500MB soft limit per staff
+  const LIMIT = 4 * 1024 * 1024 * 1024; // 4GB per staff
 
   if (user.role === 'staff' || user.role === 'external') {
-    // Staff: go straight to their own storage
-    if (staffStorage.length > 0) {
+    // Staff/external: go straight to their own storage
+    const mine = staffStorage.find(s => s.staffId === user.staffId);
+    if (mine) {
       el.innerHTML = '';
-      openStorageDetail(staffStorage[0].staffId, staffStorage[0].name);
+      openStorageDetail(mine.staffId, mine.name);
     } else {
       el.innerHTML = '<div class="empty"><div class="empty-icon">◫</div>No storage folder yet. Contact your admin.</div>';
     }
@@ -2964,7 +2965,7 @@ async function refreshStorageDetail() {
   document.getElementById('storage-usage-bar').innerHTML = `
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;">
       <span>${formatBytes(data.usedBytes)} used</span>
-      <span>${formatBytes(500*1024*1024)} limit</span>
+      <span>${formatBytes(4*1024*1024*1024)} limit</span>
     </div>
     <div class="prog-bar" style="height:8px;">
       <div class="prog-fill ${barColor}" style="width:${pct}%;height:8px;"></div>
@@ -3076,7 +3077,7 @@ function renderStorageUploadList() {
   const el = document.getElementById('storage-upload-list');
   el.innerHTML = storageUploadFiles.map((f, i) => {
     const size = formatBytes(f.size);
-    const over = f.size > 50 * 1024 * 1024;
+    const over = f.size > 2 * 1024 * 1024 * 1024;
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--off);border:1px solid var(--border2);border-radius:8px;">
       <span style="font-size:13px;">${fileIcon(f.type, f.name)}</span>
       <span style="font-size:12px;flex:1;word-break:break-all;">${f.name}</span>
@@ -3089,28 +3090,87 @@ function renderStorageUploadList() {
 
 async function submitStorageUpload() {
   if (!storageUploadFiles.length) { showToast('No files selected', 'error'); return; }
-  const oversized = storageUploadFiles.find(f => f.size > 50 * 1024 * 1024);
-  if (oversized) { showToast(`"${oversized.name}" is over 50MB`, 'error'); return; }
+
+  const LIMIT_2GB = 2 * 1024 * 1024 * 1024;
+  const oversized = storageUploadFiles.find(f => f.size > LIMIT_2GB);
+  if (oversized) { showToast(`"${oversized.name}" is over 2GB`, 'error'); return; }
 
   const subfolder = document.getElementById('storage-upload-folder').value;
   const btn = document.querySelector('[onclick="submitStorageUpload()"]');
   btn.disabled = true;
 
   for (let i = 0; i < storageUploadFiles.length; i++) {
-    btn.textContent = `Uploading ${i+1} of ${storageUploadFiles.length}…`;
-    const formData = new FormData();
-    formData.append('file', storageUploadFiles[i]);
-    formData.append('subfolder', subfolder);
-    const res = await fetch(`${API}/storage/${currentStorageStaffId}/upload`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
-    const data = await res.json();
-    if (!data.success) {
-      showToast(`Failed: ${storageUploadFiles[i].name}`, 'error');
-      btn.disabled = false; btn.textContent = 'Upload';
-      return;
+    const file = storageUploadFiles[i];
+    btn.textContent = storageUploadFiles.length > 1
+      ? `Uploading ${i+1} of ${storageUploadFiles.length}…`
+      : 'Uploading…';
+
+    const SMALL = 100 * 1024 * 1024; // files under 100MB go through worker
+    if (file.size <= SMALL) {
+      // Small file — direct worker upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('subfolder', subfolder);
+      const res = await fetch(`${API}/storage/${currentStorageStaffId}/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!data.success) {
+        showToast(`Failed: ${file.name}`, 'error');
+        btn.disabled = false; btn.textContent = 'Upload';
+        return;
+      }
+    } else {
+      // Large file — resumable upload directly to Drive
+      try {
+        // Step 1: Get resumable upload URL from worker
+        const initRes = await api(`/storage/${currentStorageStaffId}/resumable`, {
+          method: 'POST',
+          body: JSON.stringify({
+            fileName: file.name,
+            fileType: file.type || 'application/octet-stream',
+            fileSize: file.size,
+            subfolder,
+          }),
+        });
+        if (!initRes?.uploadUrl) {
+          showToast(`Failed to start upload: ${file.name}`, 'error');
+          btn.disabled = false; btn.textContent = 'Upload';
+          return;
+        }
+
+        // Step 2: Upload directly to Drive using the resumable URL
+        // Show progress using XMLHttpRequest so we can track progress
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('PUT', initRes.uploadUrl);
+          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const pct = Math.round((e.loaded / e.total) * 100);
+              btn.textContent = `Uploading ${file.name} — ${pct}%`;
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status === 200 || xhr.status === 201) {
+              resolve();
+            } else {
+              reject(new Error(`Upload failed: ${xhr.status}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.send(file);
+        });
+
+      } catch (e) {
+        showToast(`Failed: ${file.name} — ${e.message}`, 'error');
+        btn.disabled = false; btn.textContent = 'Upload';
+        return;
+      }
     }
   }
 
