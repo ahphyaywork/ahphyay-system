@@ -710,6 +710,29 @@ tbody tr:hover td{background:#fafcfb;}
         </div>
       </div>
 
+      <!-- ── REQUESTS PANEL ── -->
+      <div class="panel" id="panel-requests">
+        <div class="section-hd">
+          <div class="section-title">Requests</div>
+          <button class="btn btn-primary btn-sm" onclick="openNewRequest()">
+            <i class="ti ti-send"></i> New Request
+          </button>
+        </div>
+        <!-- Tabs -->
+        <div style="display:flex;gap:0;border-bottom:2px solid var(--border2);margin-bottom:18px;">
+          <button id="req-tab-received" onclick="switchRequestTab('received')"
+            style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--teal);border-bottom:2px solid var(--teal);margin-bottom:-2px;cursor:pointer;">
+            Received <span id="req-pending-badge" style="display:none;background:var(--red);color:white;border-radius:99px;font-size:10px;padding:1px 6px;margin-left:4px;"></span>
+          </button>
+          <button id="req-tab-sent" onclick="switchRequestTab('sent')"
+            style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;">
+            Sent
+          </button>
+        </div>
+        <div id="requests-received-list"></div>
+        <div id="requests-sent-list" style="display:none;"></div>
+      </div>
+
       <!-- ── MY PROFILE PANEL ── -->
       <div class="panel" id="panel-profile">
         <div class="section-title" style="margin-bottom:16px;">My Profile</div>
@@ -1104,6 +1127,63 @@ tbody tr:hover td{background:#fafcfb;}
   </div>
 </div>
 
+<!-- New Request Modal -->
+<div class="modal-overlay" id="modal-new-request">
+  <div class="modal" style="width:min(520px,92vw);">
+    <div class="modal-header">
+      <div class="modal-title">New Request</div>
+      <button class="modal-close" onclick="closeModal('modal-new-request')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Request from <span style="color:var(--red)">*</span></label>
+        <select class="form-input" id="request-assignee">
+          <option value="">Select staff member…</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Title <span style="color:var(--red)">*</span></label>
+        <input class="form-input" id="request-title" placeholder="What do you need help with?">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-input" id="request-description" rows="4" placeholder="Provide details about what you need…" style="resize:vertical;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-new-request')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitRequest()"><i class="ti ti-send"></i> Send Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- Respond to Request Modal -->
+<div class="modal-overlay" id="modal-respond-request">
+  <div class="modal" style="width:min(480px,92vw);">
+    <div class="modal-header">
+      <div class="modal-title" id="respond-modal-title">Respond to Request</div>
+      <button class="modal-close" onclick="closeModal('modal-respond-request')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="respond-request-id">
+      <div id="respond-request-details" style="background:var(--off);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;"></div>
+      <div class="form-group" id="respond-project-group" style="display:none;">
+        <label class="form-label">Add to project <span style="color:var(--muted);font-size:10px;">(optional)</span></label>
+        <select class="form-input" id="respond-project"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Response message <span style="color:var(--muted);font-size:10px;">(optional)</span></label>
+        <textarea class="form-input" id="respond-message" rows="3" placeholder="Add a note to the requester…" style="resize:vertical;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-respond-request')">Cancel</button>
+      <button class="btn btn-danger" onclick="submitResponse('decline')"><i class="ti ti-x"></i> Decline</button>
+      <button class="btn btn-primary" onclick="submitResponse('accept')"><i class="ti ti-circle-check"></i> Accept</button>
+    </div>
+  </div>
+</div>
+
 <!-- Task Comments Modal -->
 <div class="modal-overlay" id="modal-comments">
   <div class="modal" style="width:min(540px,92vw);">
@@ -1273,6 +1353,7 @@ function buildNav() {
     { panel:'projects',  icon:'<i class="ti ti-folder"></i>', label:'Projects',    roles: mgmtRoles },
     { panel:'tasks',     icon:'<i class="ti ti-checklist"></i>', label:'Tasks',       roles: allRoles },
     { panel:'storage',   icon:'<i class="ti ti-database"></i>', label:'Storage',     roles: allRoles },
+    { panel:'requests',  icon:'<i class="ti ti-send"></i>', label:'Requests',    roles: allRoles },
     { sep:'My Account',                                  roles: allRoles },
     { panel:'kpi',       icon:'<i class="ti ti-chart-line"></i>', label:'My KPIs',     roles: staffRoles },
     { panel:'profile',   icon:'<i class="ti ti-user-circle"></i>', label:'My Profile',  roles: allRoles },
@@ -1328,6 +1409,7 @@ function navigateTo(panelId, label) {
   else if (panelId === 'tasks') loadTasks();
   else if (panelId === 'worklog') loadWorklog();
   else if (panelId === 'kpi') { loadKPI(); initReportDates(); }
+  else if (panelId === 'requests') loadRequests();
   else if (panelId === 'storage') loadStorage();
   else if (panelId === 'profile') loadProfile();
 
@@ -3771,6 +3853,202 @@ function startNotifPolling() {
 function stopNotifPolling() {
   clearInterval(notifPollTimer);
   notifPollTimer = null;
+}
+
+// ════════════════════════════════════════════════════════
+// REQUESTS
+// ════════════════════════════════════════════════════════
+let currentRequestTab = 'received';
+
+const STATUS_COLORS = {
+  'Pending':  { bg: '#FFF3E0', color: '#E65100', icon: 'ti-clock' },
+  'Accepted': { bg: '#E8F5E9', color: '#2E7D32', icon: 'ti-circle-check' },
+  'Declined': { bg: '#FFEBEE', color: '#C62828', icon: 'ti-circle-x' },
+};
+
+async function loadRequests() {
+  const el1 = document.getElementById('requests-received-list');
+  const el2 = document.getElementById('requests-sent-list');
+  if (el1) el1.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  if (el2) el2.innerHTML = '';
+
+  const data = await api('/requests');
+  if (!data) return;
+
+  // Update pending badge
+  const badge = document.getElementById('req-pending-badge');
+  if (badge) {
+    if (data.pendingCount > 0) {
+      badge.style.display = 'inline';
+      badge.textContent = data.pendingCount;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  if (el1) el1.innerHTML = renderRequestList(data.received, 'received');
+  if (el2) el2.innerHTML = renderRequestList(data.sent, 'sent');
+}
+
+function renderRequestList(requests, type) {
+  if (!requests.length) {
+    return `<div class="empty"><div class="empty-icon"><i class="ti ti-send"></i></div>${type === 'received' ? 'No requests received yet' : 'No requests sent yet'}</div>`;
+  }
+
+  return requests.map(r => {
+    const sc = STATUS_COLORS[r.Status] || STATUS_COLORS['Pending'];
+    const date = new Date(r.CreatedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+    const isReceived = type === 'received';
+
+    return `<div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;padding:16px;margin-bottom:12px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:600;color:var(--navy);margin-bottom:4px;">${r.Title}</div>
+          <div style="font-size:12px;color:var(--muted);">
+            ${isReceived
+              ? `<i class="ti ti-user" style="font-size:11px;"></i> From: <strong>${r.RequesterName}</strong>`
+              : `<i class="ti ti-user" style="font-size:11px;"></i> To: <strong>${r.assigneeName}</strong>`
+            } · ${date}
+          </div>
+        </div>
+        <span style="background:${sc.bg};color:${sc.color};font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;white-space:nowrap;flex-shrink:0;">
+          <i class="ti ${sc.icon}" style="font-size:11px;"></i> ${r.Status}
+        </span>
+      </div>
+      ${r.Description ? `<div style="font-size:13px;color:var(--text);background:var(--off);border-radius:8px;padding:10px 12px;margin-bottom:10px;line-height:1.5;">${r.Description}</div>` : ''}
+      ${r.Response ? `<div style="font-size:12px;color:var(--muted);padding:8px 12px;border-left:3px solid ${sc.color};margin-bottom:10px;">
+        <strong>Response:</strong> ${r.Response}
+      </div>` : ''}
+      ${isReceived && r.Status === 'Pending'
+        ? `<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+            <button class="btn btn-outline btn-sm" onclick="openRespond('${r.ID}','${r.Title.replace(/'/g,"\'")}','${r.RequesterName}','${r.Description?.replace(/'/g,"\'")||''}')">
+              <i class="ti ti-message"></i> Respond
+            </button>
+          </div>`
+        : ''
+      }
+    </div>`;
+  }).join('');
+}
+
+function switchRequestTab(tab) {
+  currentRequestTab = tab;
+  const receivedEl = document.getElementById('requests-received-list');
+  const sentEl = document.getElementById('requests-sent-list');
+  const tabReceived = document.getElementById('req-tab-received');
+  const tabSent = document.getElementById('req-tab-sent');
+
+  if (tab === 'received') {
+    receivedEl.style.display = 'block';
+    sentEl.style.display = 'none';
+    tabReceived.style.color = 'var(--teal)';
+    tabReceived.style.borderBottom = '2px solid var(--teal)';
+    tabReceived.style.fontWeight = '600';
+    tabSent.style.color = 'var(--muted)';
+    tabSent.style.borderBottom = 'none';
+    tabSent.style.fontWeight = '500';
+  } else {
+    receivedEl.style.display = 'none';
+    sentEl.style.display = 'block';
+    tabSent.style.color = 'var(--teal)';
+    tabSent.style.borderBottom = '2px solid var(--teal)';
+    tabSent.style.fontWeight = '600';
+    tabReceived.style.color = 'var(--muted)';
+    tabReceived.style.borderBottom = 'none';
+    tabReceived.style.fontWeight = '500';
+  }
+}
+
+async function openNewRequest() {
+  // Populate assignee dropdown with all staff except self
+  const staffNames = cache.staffNames || await api('/staff/names');
+  if (staffNames) cache.staffNames = staffNames;
+
+  const sel = document.getElementById('request-assignee');
+  sel.innerHTML = '<option value="">Select staff member…</option>' +
+    (staffNames || [])
+      .filter(s => s.ID !== user.staffId)
+      .map(s => `<option value="${s.ID}">${s.Name}</option>`)
+      .join('');
+
+  document.getElementById('request-title').value = '';
+  document.getElementById('request-description').value = '';
+  openModal('modal-new-request');
+}
+
+async function submitRequest() {
+  const assigneeId = document.getElementById('request-assignee').value;
+  const title = document.getElementById('request-title').value.trim();
+  const description = document.getElementById('request-description').value.trim();
+  const btn = document.querySelector('[onclick="submitRequest()"]');
+
+  if (!assigneeId) { showToast('Please select who to send the request to', 'error'); return; }
+  if (!title) { showToast('Please enter a title', 'error'); return; }
+
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Sending…';
+
+  const res = await api('/requests', {
+    method: 'POST',
+    body: JSON.stringify({ assigneeId, title, description }),
+  });
+
+  if (res?.success) {
+    closeModal('modal-new-request');
+    showToast('Request sent ✓', 'success');
+    loadRequests();
+  } else {
+    showToast(res?.error || 'Failed to send request', 'error');
+  }
+
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Send Request';
+}
+
+function openRespond(requestId, title, requesterName, description) {
+  document.getElementById('respond-request-id').value = requestId;
+  document.getElementById('respond-modal-title').textContent = 'Respond to Request';
+  document.getElementById('respond-message').value = '';
+
+  document.getElementById('respond-request-details').innerHTML = `
+    <div style="font-weight:600;color:var(--navy);margin-bottom:6px;">${title}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Requested by <strong>${requesterName}</strong></div>
+    ${description ? `<div style="color:var(--text);line-height:1.5;">${description}</div>` : ''}
+  `;
+
+  // Populate projects for accepted task
+  const projGroup = document.getElementById('respond-project-group');
+  const projSel = document.getElementById('respond-project');
+  if (cache.projects?.length) {
+    projGroup.style.display = 'block';
+    projSel.innerHTML = '<option value="">No project</option>' +
+      cache.projects.map(p => `<option value="${p.ID}">${p.Name}</option>`).join('');
+  }
+
+  openModal('modal-respond-request');
+}
+
+async function submitResponse(action) {
+  const requestId = document.getElementById('respond-request-id').value;
+  const response = document.getElementById('respond-message').value.trim();
+  const projectId = document.getElementById('respond-project').value;
+  const btn = document.querySelector(`[onclick="submitResponse('${action}')"]`);
+
+  btn.disabled = true;
+
+  const res = await api(`/requests/${requestId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ action, response, projectId }),
+  });
+
+  if (res?.success) {
+    closeModal('modal-respond-request');
+    showToast(action === 'accept' ? 'Request accepted — task created ✓' : 'Request declined', 'success');
+    cache.tasks = null;
+    loadRequests();
+  } else {
+    showToast(res?.error || 'Failed to respond', 'error');
+  }
+
+  btn.disabled = false;
 }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
