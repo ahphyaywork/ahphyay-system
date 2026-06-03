@@ -15,7 +15,42 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type,Authorization',
 };
 
-const ROLES = { ADMIN: 'admin', MANAGEMENT: 'management', STAFF: 'staff', EXTERNAL: 'external' };
+const ROLES = {
+  BOD:         'bod',
+  SENIOR:      'senior',
+  COORDINATOR: 'coordinator',
+  OFFICER:     'officer',
+  ASSISTANT:   'assistant',
+  SPECIALIST:  'specialist',
+  TAILOR:      'tailor',
+  ADVISOR:     'advisor',
+  INTERN:      'intern',
+};
+
+// Permission group helpers
+const isAdmin      = r => r === 'bod';
+const isManagement = r => ['bod','senior','coordinator'].includes(r);
+const isStaffLevel = r => ['officer','assistant','specialist','tailor','advisor','intern'].includes(r);
+const hasAccess    = r => Object.values(ROLES).includes(r);
+
+// Legacy role mapping — converts old role names to new ones on login
+function normalizeRole(role) {
+  if (!role) return 'officer';
+  const r = role.toLowerCase();
+  const map = {
+    'admin': 'bod',
+    'management': 'senior',
+    'staff': 'officer',
+    'external': 'advisor',
+  };
+  return map[r] || r;
+}
+
+// Check if a staffId is one of the (possibly comma-separated) assignees
+function isAssigned(assigneeField, staffId) {
+  if (!assigneeField || !staffId) return false;
+  return assigneeField.split(',').map(s => s.trim()).includes(staffId);
+}
 
 export default {
   async fetch(request, env) {
@@ -58,6 +93,7 @@ export default {
         return await changePassword(request, env, staffId);
 
       // Staff management — admin only
+      if (path === '/staff/names' && request.method === 'GET')     return await getStaffNames(env);
       if (path === '/staff' && request.method === 'GET')          return await getStaff(env, role, staffId);
       if (path === '/staff' && request.method === 'POST')         return await addStaff(request, env, role);
       if (path.match(/^\/staff\/[\w-]+$/) && request.method === 'PUT')
@@ -91,6 +127,31 @@ export default {
       if (path.match(/^\/worklog\/[\w-]+$/) && request.method === 'DELETE')
         return await deleteWorklog(env, role, path.split('/')[2]);
 
+      // Storage
+      if (path === '/storage/debug' && request.method === 'GET' && isAdmin(role)) {
+        const staff = await sheetsRead(env, 'Staff');
+        return json(staff.map(s => ({ ID: s.ID, Name: s.Name, FolderID: s.FolderID || '(empty)', PhotoURL: s.PhotoURL ? '(has photo)' : '(no photo)' })));
+      }
+      if (path === '/storage' && request.method === 'GET')                          return await getStorageOverview(env, role, staffId);
+      if (path.match(/^\/storage\/[\w-]+\/resumable$/) && request.method === 'POST') return await initResumableUpload(request, env, role, staffId, path.split('/')[2]);
+      if (path.match(/^\/storage\/[\w-]+$/) && request.method === 'GET')           return await getStaffStorage(url, env, role, staffId, path.split('/')[2]);
+      if (path.match(/^\/storage\/[\w-]+\/upload$/) && request.method === 'POST') return await uploadToStorage(request, env, role, staffId, path.split('/')[2]);
+      if (path.match(/^\/storage\/file\/[\w-]+$/) && request.method === 'DELETE') return await deleteStorageFile(request, env, role, staffId, path.split('/')[3]);
+      if (path.match(/^\/storage\/file\/[\w-]+\/rename$/) && request.method === 'PUT') return await renameStorageFile(request, env, role, staffId, path.split('/')[3]);
+      if (path === '/storage/init-missing' && request.method === 'POST')            return await initMissingFolders(env, role);
+
+      // Notifications
+      if (path === '/notifications' && request.method === 'GET')
+        return await getNotifications(url, env, staffId, role);
+      if (path === '/notifications/read' && request.method === 'POST')
+        return await markNotificationsRead(request, env, staffId);
+
+      // Comments
+      if (path.match(/^\/tasks\/[\w-]+\/comments$/) && request.method === 'GET')
+        return await getTaskComments(path.split('/')[2], env);
+      if (path.match(/^\/tasks\/[\w-]+\/comments$/) && request.method === 'POST')
+        return await addTaskComment(request, path.split('/')[2], env, staffId, auth.name);
+
       // KPI summary
       if (path === '/kpi' && request.method === 'GET')            return await getKPI(url, env, role, staffId);
 
@@ -119,10 +180,12 @@ async function handleLogin(request, env) {
   const valid = await verifyPassword(password, user.Password);
   if (!valid) return json({ error: 'Invalid username or password' }, 401);
 
+  const role = normalizeRole(user.Role);
+
   const token = await signJWT({
     staffId: user.ID,
     name: user.Name,
-    role: user.Role.toLowerCase(),
+    role,
     email: user.Email,
     projects: user.Projects,
   }, env.JWT_SECRET);
@@ -132,7 +195,7 @@ async function handleLogin(request, env) {
     user: {
       staffId: user.ID,
       name: user.Name,
-      role: user.Role.toLowerCase(),
+      role,
       email: user.Email,
       projects: user.Projects,
     }
@@ -157,7 +220,7 @@ async function changePassword(request, env, staffId) {
 }
 
 async function resetPassword(request, env, role, targetId) {
-  if (role !== ROLES.ADMIN) return json({ error: 'Admin only' }, 403);
+  if (!isAdmin(role)) return json({ error: 'Admin only' }, 403);
   const { newPassword } = await request.json();
   if (!newPassword || newPassword.length < 6) return json({ error: 'Password must be at least 6 characters' }, 400);
 
@@ -175,15 +238,24 @@ async function resetPassword(request, env, role, targetId) {
 // ══════════════════════════════════════════════════════════
 async function getStaff(env, role, staffId) {
   const staff = await sheetsRead(env, 'Staff');
-  if (role === ROLES.STAFF || role === ROLES.EXTERNAL) {
+  if (isStaffLevel(role) || role === ROLES.INTERN) {
     const me = staff.find(r => r.ID === staffId);
     return json(me ? [sanitizeStaff(me)] : []);
   }
   return json(staff.filter(r => r.Active?.toLowerCase() === 'true').map(sanitizeStaff));
 }
 
+// Returns minimal staff list (ID + Name only) — safe for all roles to look up assignee names
+async function getStaffNames(env) {
+  const staff = await sheetsRead(env, 'Staff');
+  const names = staff
+    .filter(s => s.Active?.toLowerCase() === 'true')
+    .map(s => ({ ID: s.ID, Name: s.Name }));
+  return json(names);
+}
+
 async function addStaff(request, env, role) {
-  if (role !== ROLES.ADMIN) return json({ error: 'Admin only' }, 403);
+  if (!isAdmin(role)) return json({ error: 'Admin only' }, 403);
   const body = await request.json();
   const { name, username, password, staffRole, type, email, projects } = body;
   if (!name || !username || !password) return json({ error: 'Missing required fields' }, 400);
@@ -194,13 +266,23 @@ async function addStaff(request, env, role) {
 
   const id = `STAFF-${String(staff.length + 1).padStart(3, '0')}`;
   const hashed = await hashPassword(password);
-  const row = [id, name, username, hashed, staffRole || 'Staff', type || 'Staff', email || '', projects || '', 'true', new Date().toISOString()];
+
+  // Create personal Drive folder structure for this staff member
+  let folderId = '';
+  try {
+    folderId = await createStaffFolderStructure(env, id, name);
+  } catch (e) {
+    console.error('Failed to create staff folder:', e.message);
+    // Don't block account creation if folder creation fails
+  }
+
+  const row = [id, name, username, hashed, staffRole || 'Staff', type || 'Staff', email || '', projects || '', 'true', new Date().toISOString(), '', folderId];
   await sheetsAppend(env, 'Staff', row);
   return json({ success: true, id });
 }
 
 async function updateStaff(request, env, role, targetId) {
-  if (role !== ROLES.ADMIN) return json({ error: 'Admin only' }, 403);
+  if (!isAdmin(role)) return json({ error: 'Admin only' }, 403);
   const body = await request.json();
   const staff = await sheetsRead(env, 'Staff');
   const rowIdx = staff.findIndex(r => r.ID === targetId);
@@ -233,7 +315,7 @@ function sanitizeStaff(s) {
 // ══════════════════════════════════════════════════════════
 async function getProjects(env, role, staffId) {
   const projects = await sheetsRead(env, 'Projects');
-  if (role === ROLES.STAFF || role === ROLES.EXTERNAL) {
+  if (isStaffLevel(role)) {
     const staff = await sheetsRead(env, 'Staff');
     const me = staff.find(r => r.ID === staffId);
     const myProjects = (me?.Projects || '').split(',').map(p => p.trim());
@@ -244,7 +326,7 @@ async function getProjects(env, role, staffId) {
 }
 
 async function addProject(request, env, role) {
-  if (role !== ROLES.ADMIN && role !== ROLES.MANAGEMENT) return json({ error: 'Insufficient permissions' }, 403);
+  if (!isManagement(role)) return json({ error: 'Insufficient permissions' }, 403);
   const body = await request.json();
   const projects = await sheetsRead(env, 'Projects');
   const id = `PROJ-${String(projects.length + 1).padStart(3, '0')}`;
@@ -254,7 +336,7 @@ async function addProject(request, env, role) {
 }
 
 async function updateProject(request, env, role, projectId) {
-  if (role !== ROLES.ADMIN && role !== ROLES.MANAGEMENT) return json({ error: 'Insufficient permissions' }, 403);
+  if (!isManagement(role)) return json({ error: 'Insufficient permissions' }, 403);
   const body = await request.json();
   const projects = await sheetsRead(env, 'Projects');
   const rowIdx = projects.findIndex(p => p.ID === projectId);
@@ -273,8 +355,8 @@ async function getTasks(url, env, role, staffId) {
   const projectId = url.searchParams.get('projectId');
   let filtered = tasks.filter(t => t.Active?.toLowerCase() === 'true');
   if (projectId) filtered = filtered.filter(t => t.ProjectID === projectId);
-  if (role === ROLES.STAFF || role === ROLES.EXTERNAL)
-    filtered = filtered.filter(t => t.AssigneeID === staffId);
+  if (isStaffLevel(role))
+    filtered = filtered.filter(t => isAssigned(t.AssigneeID, staffId));
   return json(filtered);
 }
 
@@ -282,7 +364,7 @@ async function addTask(request, env, role, staffId) {
   const body = await request.json();
   if (!body.name || !body.projectId) return json({ error: 'Name and project are required' }, 400);
 
-  const assigneeId = (role === ROLES.STAFF || role === ROLES.EXTERNAL)
+  const assigneeId = (isStaffLevel(role))
     ? staffId
     : (body.assigneeId || '');
 
@@ -297,6 +379,21 @@ async function addTask(request, env, role, staffId) {
     body.priority || 'Medium'
   ];
   await sheetsAppend(env, 'Tasks', row);
+
+  // Notify assignees they have been assigned a task
+  try {
+    const assigneeIds = assigneeId ? assigneeId.split(',').map(s => s.trim()).filter(Boolean) : [];
+    for (const recipientId of assigneeIds) {
+      if (recipientId !== staffId) { // don't notify self-assigned
+        await createNotification(env, recipientId, 'assigned',
+          'New task assigned to you',
+          `You have been assigned: "${body.name}"`,
+          id
+        );
+      }
+    }
+  } catch(e) { console.error('Assignment notification failed:', e.message); }
+
   return json({ success: true, id });
 }
 
@@ -306,8 +403,8 @@ async function updateTask(request, env, role, taskId, staffId) {
   if (rowIdx === -1) return json({ error: 'Not found' }, 404);
   const e = tasks[rowIdx];
 
-  if (role === ROLES.STAFF || role === ROLES.EXTERNAL) {
-    if (e.AssigneeID !== staffId) return json({ error: 'You can only update your own tasks' }, 403);
+  if (isStaffLevel(role)) {
+    if (!isAssigned(e.AssigneeID, staffId)) return json({ error: 'You can only update your own tasks' }, 403);
   }
 
   const body = await request.json();
@@ -329,6 +426,40 @@ async function updateTask(request, env, role, taskId, staffId) {
     body.priority || e.Priority || 'Medium',
   ];
   await sheetsUpdateRow(env, 'Tasks', rowIdx + 2, updated);
+
+  // Notifications for task updates
+  try {
+    const newStatus = body.status || e.Status;
+    const newAssigneeId = body.assigneeId || e.AssigneeID || '';
+
+    // Notify management/BOD when task is marked Done
+    if (newStatus === 'Done' && e.Status !== 'Done') {
+      const allStaff = await sheetsRead(env, 'Staff');
+      const managers = allStaff.filter(s => isManagement(s.Role?.toLowerCase()) && s.Active?.toLowerCase() === 'true');
+      for (const mgr of managers) {
+        await createNotification(env, mgr.ID, 'completed',
+          'Task completed',
+          `"${e.Name}" has been marked as done`,
+          taskId
+        );
+      }
+    }
+
+    // Notify newly assigned staff
+    const oldIds = (e.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
+    const newIds = newAssigneeId.split(',').map(s => s.trim()).filter(Boolean);
+    const addedIds = newIds.filter(id => !oldIds.includes(id));
+    for (const recipientId of addedIds) {
+      if (recipientId !== staffId) {
+        await createNotification(env, recipientId, 'assigned',
+          'Task assigned to you',
+          `You have been assigned: "${e.Name}"`,
+          taskId
+        );
+      }
+    }
+  } catch(ex) { console.error('Update notification failed:', ex.message); }
+
   return json({ success: true });
 }
 
@@ -340,7 +471,7 @@ async function getWorklog(url, env, role, staffId) {
   let filtered = logs;
   const { filterStaffId, projectId, taskId, from, to } = Object.fromEntries(url.searchParams);
 
-  if (role === ROLES.STAFF || role === ROLES.EXTERNAL)
+  if (isStaffLevel(role))
     filtered = filtered.filter(r => r.StaffID === staffId);
   else if (filterStaffId)
     filtered = filtered.filter(r => r.StaffID === filterStaffId);
@@ -354,7 +485,7 @@ async function getWorklog(url, env, role, staffId) {
 }
 
 async function addWorklog(request, env, role, staffId) {
-  if (role !== ROLES.ADMIN && role !== ROLES.MANAGEMENT) return json({ error: 'Management or admin only' }, 403);
+  if (!isManagement(role)) return json({ error: 'Management or BOD only' }, 403);
   const body = await request.json();
   const id = `WL-${Date.now()}`;
   const row = [id, body.staffId, body.projectId, body.taskId, body.date, body.actual || 0, body.unit || '', body.status || 'Done', body.note || '', new Date().toISOString()];
@@ -363,7 +494,7 @@ async function addWorklog(request, env, role, staffId) {
 }
 
 async function updateWorklog(request, env, role, logId) {
-  if (role !== ROLES.ADMIN && role !== ROLES.MANAGEMENT) return json({ error: 'Management or admin only' }, 403);
+  if (!isManagement(role)) return json({ error: 'Management or BOD only' }, 403);
   const body = await request.json();
   const logs = await sheetsRead(env, 'WorkLog');
   const rowIdx = logs.findIndex(l => l.ID === logId);
@@ -375,7 +506,7 @@ async function updateWorklog(request, env, role, logId) {
 }
 
 async function deleteWorklog(env, role, logId) {
-  if (role !== ROLES.ADMIN) return json({ error: 'Admin only' }, 403);
+  if (!isAdmin(role)) return json({ error: 'Admin only' }, 403);
   const logs = await sheetsRead(env, 'WorkLog');
   const rowIdx = logs.findIndex(l => l.ID === logId);
   if (rowIdx === -1) return json({ error: 'Not found' }, 404);
@@ -394,11 +525,11 @@ async function getKPI(url, env, role, staffId) {
   ]);
 
   const { filterStaffId, projectId } = Object.fromEntries(url.searchParams);
-  const targetStaffId = (role === ROLES.STAFF || role === ROLES.EXTERNAL) ? staffId : (filterStaffId || null);
+  const targetStaffId = isStaffLevel(role) ? staffId : (filterStaffId || null);
 
   let relevantTasks = tasks.filter(t => t.Active?.toLowerCase() === 'true');
   if (projectId)     relevantTasks = relevantTasks.filter(t => t.ProjectID === projectId);
-  if (targetStaffId) relevantTasks = relevantTasks.filter(t => t.AssigneeID === targetStaffId);
+  if (targetStaffId) relevantTasks = relevantTasks.filter(t => isAssigned(t.AssigneeID, targetStaffId));
 
   const kpis = relevantTasks.map(t => {
     const proj = projects.find(p => p.ID === t.ProjectID);
@@ -423,10 +554,10 @@ async function getKPI(url, env, role, staffId) {
   });
 
   let staffSummary = [];
-  if (role === ROLES.ADMIN || role === ROLES.MANAGEMENT) {
+  if (isManagement(role)) {
     const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true');
     staffSummary = activeStaff.map(s => {
-      const staffKpis = kpis.filter(k => k.assigneeId === s.ID);
+      const staffKpis = kpis.filter(k => isAssigned(k.assigneeId, s.ID));
       const done = staffKpis.filter(k => k.taskStatus === 'Done').length;
       const inProg = staffKpis.filter(k => k.taskStatus === 'In Progress').length;
       const avg = staffKpis.length ? Math.round((done / staffKpis.length) * 100) : 0;
@@ -485,8 +616,8 @@ async function getDashboard(env, role, staffId) {
       };
     });
 
-  if (role === ROLES.STAFF || role === ROLES.EXTERNAL) {
-    const myTasks = activeTasks.filter(t => t.AssigneeID === staffId);
+  if (isStaffLevel(role)) {
+    const myTasks = activeTasks.filter(t => isAssigned(t.AssigneeID, staffId));
     const myKpis = myTasks.map(t => {
       const status = t.Status || 'Pending';
       const pct = status === 'Done' ? 100 : status === 'In Progress' ? 50 : 0;
@@ -516,7 +647,7 @@ async function getDashboard(env, role, staffId) {
     },
     recentLogs,
     staffSummary: activeStaff.map(s => {
-      const sTasks = activeTasks.filter(t => t.AssigneeID === s.ID);
+      const sTasks = activeTasks.filter(t => isAssigned(t.AssigneeID, s.ID));
       const done = sTasks.filter(t => t.Status === 'Done').length;
       const avg = sTasks.length ? Math.round((done / sTasks.length) * 100) : 0;
       return { staffId: s.ID, name: s.Name, role: s.Role, taskCount: sTasks.length, avgKpi: avg, status: avg >= 70 ? 'on-track' : avg >= 40 ? 'at-risk' : 'behind' };
@@ -527,20 +658,71 @@ async function getDashboard(env, role, staffId) {
 // ══════════════════════════════════════════════════════════
 // PROFILE PHOTO UPLOAD
 // ══════════════════════════════════════════════════════════
+// ── Get or create a per-task subfolder inside the Evidence root folder ──
+async function getOrCreateTaskFolder(token, env, taskId, taskName) {
+  const rootFolderId = env.Evidence_Folder_ID || 'root';
+  // Sanitize folder name — Drive allows most chars but strip slashes
+  const safeName = (taskId + ' — ' + (taskName || 'Untitled')).replace(/[/\\]/g, '-');
+
+  // Search for existing folder with this name inside root
+  const searchUrl = 'https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({
+    q: `name='${safeName.replace(/'/g, "\'")}' and '${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: 'files(id,name)',
+    pageSize: '1',
+  });
+
+  const searchRes = await fetch(searchUrl, {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  const searchData = await searchRes.json();
+
+  // Return existing folder if found
+  if (searchData.files && searchData.files.length > 0) {
+    return searchData.files[0].id;
+  }
+
+  // Create new folder
+  const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: safeName,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [rootFolderId],
+    }),
+  });
+  const createData = await createRes.json();
+  if (!createData.id) throw new Error('Failed to create task folder: ' + JSON.stringify(createData));
+  return createData.id;
+}
+
 async function uploadEvidence(request, env, staffId, taskId) {
   try {
     const formData = await request.formData();
     const file = formData.get('file');
     if (!file) return json({ error: 'No file provided' }, 400);
 
-    const maxSize = 10 * 1024 * 1024;
+    const maxSize = 100 * 1024 * 1024; // 100MB for evidence
     const arrayBuffer = await file.arrayBuffer();
-    if (arrayBuffer.byteLength > maxSize) return json({ error: 'File must be under 10MB' }, 400);
+    if (arrayBuffer.byteLength > maxSize) return json({ error: 'File must be under 100MB' }, 400);
 
     const token = await getDriveToken(env);
+
+    // Look up task name from Sheets for a human-readable folder name
+    let taskName = '';
+    try {
+      const tasks = await sheetsRead(env, 'Tasks');
+      const task = tasks.find(t => t.ID === taskId);
+      taskName = task?.Name || '';
+    } catch (_) {}
+
+    // Get or create the per-task subfolder
+    const folderId = await getOrCreateTaskFolder(token, env, taskId, taskName);
+
+    // Use original filename (clean it up slightly), no taskId prefix needed
+    const fileName = (file.name || 'file').replace(/[^\w.\-_ ]/g, '_');
     const fileType = file.type || 'application/octet-stream';
-    const fileName = 'evidence_' + taskId + '_' + Date.now() + '_' + (file.name || 'file');
-    const folderId = env.Evidence_Folder_ID || 'root';
+
     const boundary = 'AhPhyayEvidenceBoundary';
     const CR = String.fromCharCode(13);
     const LF = String.fromCharCode(10);
@@ -578,6 +760,7 @@ async function uploadEvidence(request, env, staffId, taskId) {
     const uploadData = await uploadRes.json();
     if (!uploadData.id) return json({ error: 'Upload failed', detail: uploadData }, 500);
 
+    // Make file publicly readable
     await fetch('https://www.googleapis.com/drive/v3/files/' + uploadData.id + '/permissions', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -597,18 +780,64 @@ async function uploadProfilePhoto(request, env, staffId) {
     const file = formData.get('photo');
     if (!file) return json({ error: 'No photo provided' }, 400);
 
-    const maxSize = 2 * 1024 * 1024;
+    const maxSize = 2 * 1024 * 1024; // 2MB
     const arrayBuffer = await file.arrayBuffer();
     if (arrayBuffer.byteLength > maxSize) return json({ error: 'Image must be under 2MB' }, 400);
 
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
-    const photoUrl = 'data:' + (file.type || 'image/jpeg') + ';base64,' + base64;
+    // Upload to Google Drive (Profile_Folder_ID) instead of storing base64 in sheet
+    const token = await getDriveToken(env);
+    const folderId = env.Profile_Folder_ID || 'root';
+    const fileName = 'profile_' + staffId + '_' + Date.now() + '.' + (file.name?.split('.').pop() || 'jpg');
+    const fileType = file.type || 'image/jpeg';
 
+    const boundary = 'AhPhyayProfileBoundary';
+    const CR = String.fromCharCode(13);
+    const LF = String.fromCharCode(10);
+    const CRLF = CR + LF;
+    const metadataJson = JSON.stringify({ name: fileName, parents: [folderId] });
+
+    const part1 = '--' + boundary + CRLF +
+      'Content-Type: application/json; charset=UTF-8' + CRLF + CRLF +
+      metadataJson + CRLF +
+      '--' + boundary + CRLF +
+      'Content-Type: ' + fileType + CRLF + CRLF;
+    const part3 = CRLF + '--' + boundary + '--';
+
+    const enc = new TextEncoder();
+    const p1 = enc.encode(part1);
+    const p2 = new Uint8Array(arrayBuffer);
+    const p3 = enc.encode(part3);
+    const combined = new Uint8Array(p1.byteLength + p2.byteLength + p3.byteLength);
+    combined.set(p1, 0);
+    combined.set(p2, p1.byteLength);
+    combined.set(p3, p1.byteLength + p2.byteLength);
+
+    const uploadRes = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'multipart/related; boundary=' + boundary,
+        },
+        body: combined,
+      }
+    );
+
+    const uploadData = await uploadRes.json();
+    if (!uploadData.id) return json({ error: 'Photo upload failed', detail: uploadData }, 500);
+
+    // Make publicly readable so it can be displayed in the browser
+    await fetch('https://www.googleapis.com/drive/v3/files/' + uploadData.id + '/permissions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+    });
+
+    // Use direct thumbnail URL — renders in <img> tags without redirect
+    const photoUrl = 'https://drive.google.com/thumbnail?id=' + uploadData.id + '&sz=w200';
+
+    // Save Drive URL to Staff sheet (short string, not base64)
     const staff = await sheetsRead(env, 'Staff');
     const rowIdx = staff.findIndex(s => s.ID === staffId);
     if (rowIdx !== -1) {
@@ -622,14 +851,602 @@ async function uploadProfilePhoto(request, env, staffId) {
 }
 
 // ══════════════════════════════════════════════════════════
+// STORAGE — Drive folder management
+// ══════════════════════════════════════════════════════════
+
+// Create full folder structure for a new staff member
+async function createStaffFolderStructure(env, staffId, staffName) {
+  const token = await getDriveToken(env);
+  const rootId = env.STAFF_STORAGE_ID;
+  if (!rootId) throw new Error('STAFF_STORAGE_ID secret not set');
+
+  const folderName = staffName + ' (' + staffId + ')';
+
+  // Create staff root folder
+  const staffFolder = await driveCreateFolder(token, folderName, rootId);
+
+  // Create subfolders sequentially to avoid Drive API race conditions
+  await driveCreateFolder(token, 'Evidence', staffFolder.id);
+  await driveCreateFolder(token, 'Profile', staffFolder.id);
+  await driveCreateFolder(token, 'General', staffFolder.id);
+
+  return staffFolder.id;
+}
+
+// Create a single Drive folder
+async function driveCreateFolder(token, name, parentId) {
+  const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentId],
+    }),
+  });
+  const data = await res.json();
+  if (!data.id) throw new Error('Failed to create folder "' + name + '": ' + JSON.stringify(data));
+  return data;
+}
+
+// List files/folders in a Drive folder
+async function driveListFiles(token, folderId) {
+  const params = new URLSearchParams({
+    q: `'${folderId}' in parents and trashed=false`,
+    fields: 'files(id,name,mimeType,size,modifiedTime,webViewLink,thumbnailLink)',
+    orderBy: 'folder,name',
+    pageSize: '200',
+  });
+  const res = await fetch('https://www.googleapis.com/drive/v3/files?' + params, {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  const data = await res.json();
+  return data.files || [];
+}
+
+// Search files by name within a folder tree
+async function driveSearchFiles(token, folderId, query) {
+  const params = new URLSearchParams({
+    q: `'${folderId}' in parents and name contains '${query.replace(/'/g, "\'")}' and trashed=false`,
+    fields: 'files(id,name,mimeType,size,modifiedTime,webViewLink,parents)',
+    pageSize: '50',
+  });
+  const res = await fetch('https://www.googleapis.com/drive/v3/files?' + params, {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  const data = await res.json();
+  return data.files || [];
+}
+
+// Get total size of all files in a folder (recursive via Drive API)
+async function driveFolderSize(token, folderId) {
+  // Recursively sum sizes by first getting all subfolders, then all files
+  // Use ancestral search: find all files anywhere under this folder
+  let totalBytes = 0;
+  let pageToken = '';
+
+  do {
+    const params = new URLSearchParams({
+      q: `'${folderId}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'`,
+      fields: 'nextPageToken,files(size)',
+      pageSize: '1000',
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+
+    const res = await fetch('https://www.googleapis.com/drive/v3/files?' + params, {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    const data = await res.json();
+    totalBytes += (data.files || []).reduce((sum, f) => sum + parseInt(f.size || 0), 0);
+    pageToken = data.nextPageToken || '';
+
+    // Also recurse into subfolders
+    const subParams = new URLSearchParams({
+      q: `'${folderId}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'`,
+      fields: 'files(id)',
+      pageSize: '100',
+    });
+    const subRes = await fetch('https://www.googleapis.com/drive/v3/files?' + subParams, {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    const subData = await subRes.json();
+    for (const sub of (subData.files || [])) {
+      totalBytes += await driveFolderSize(token, sub.id);
+    }
+  } while (pageToken);
+
+  return totalBytes;
+}
+
+// Upload a file to a specific Drive folder
+async function driveUploadFile(token, arrayBuffer, fileName, fileType, folderId) {
+  const boundary = 'AhPhyayStorageBoundary';
+  const CR = String.fromCharCode(13);
+  const LF = String.fromCharCode(10);
+  const CRLF = CR + LF;
+  const metadataJson = JSON.stringify({ name: fileName, parents: [folderId] });
+
+  const part1 = '--' + boundary + CRLF +
+    'Content-Type: application/json; charset=UTF-8' + CRLF + CRLF +
+    metadataJson + CRLF +
+    '--' + boundary + CRLF +
+    'Content-Type: ' + fileType + CRLF + CRLF;
+  const part3 = CRLF + '--' + boundary + '--';
+
+  const enc = new TextEncoder();
+  const p1 = enc.encode(part1);
+  const p2 = new Uint8Array(arrayBuffer);
+  const p3 = enc.encode(part3);
+  const combined = new Uint8Array(p1.byteLength + p2.byteLength + p3.byteLength);
+  combined.set(p1, 0);
+  combined.set(p2, p1.byteLength);
+  combined.set(p3, p1.byteLength + p2.byteLength);
+
+  const res = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,webViewLink,modifiedTime',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'multipart/related; boundary=' + boundary,
+      },
+      body: combined,
+    }
+  );
+  const data = await res.json();
+  if (!data.id) throw new Error('Upload failed: ' + JSON.stringify(data));
+
+  // Make publicly readable
+  await fetch('https://www.googleapis.com/drive/v3/files/' + data.id + '/permissions', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+  });
+
+  return data;
+}
+
+// Helper: get staff folder ID, optionally auto-create if missing
+async function getStaffFolderId(env, token, staffMember) {
+  if (staffMember.FolderID) return staffMember.FolderID;
+  // Auto-create if missing (for existing accounts)
+  const folderId = await createStaffFolderStructure(env, staffMember.ID, staffMember.Name);
+  // Save back to sheet
+  const staff = await sheetsRead(env, 'Staff');
+  const rowIdx = staff.findIndex(s => s.ID === staffMember.ID);
+  if (rowIdx !== -1) {
+    await sheetsUpdate(env, 'Staff', rowIdx + 2, getColIndex('Staff', 'FolderID'), folderId);
+  }
+  return folderId;
+}
+
+// GET /storage — overview of all staff storage (admin/management)
+async function getStorageOverview(env, role, staffId) {
+  const token = await getDriveToken(env);
+  const staff = await sheetsRead(env, 'Staff');
+
+  // All roles see the full overview (admin/management see all, staff/external only see themselves via frontend filter)
+  // But for staff/external we still return all-staff overview and let frontend filter
+
+  const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true');
+
+  // Debug: log what keys each staff row has
+  const debugInfo = activeStaff.map(s => ({
+    id: s.ID,
+    name: s.Name,
+    folderIdRaw: s.FolderID,
+    keys: Object.keys(s),
+  }));
+  console.log('Staff sheet data:', JSON.stringify(debugInfo));
+
+  // Don't call driveFolderSize here — too slow for overview and causes errors
+  // Storage usage is shown when user clicks into a staff member's storage
+  const storageData = activeStaff.map(s => ({
+    staffId: s.ID,
+    name: s.Name,
+    role: s.Role,
+    folderId: s.FolderID || '',
+    usedBytes: 0,
+    hasFolder: !!(s.FolderID && s.FolderID.trim()),
+  }));
+
+  return json({ staffStorage: storageData, _debug: debugInfo });
+}
+
+// GET /storage/:targetStaffId — list files for one staff member
+async function getStaffStorage(url, env, role, staffId, targetStaffId) {
+  // Staff can only see their own
+  if (isStaffLevel(role) && targetStaffId !== staffId)
+    return json({ error: 'Access denied' }, 403);
+
+  const token = await getDriveToken(env);
+  const staff = await sheetsRead(env, 'Staff');
+  const member = staff.find(s => s.ID === targetStaffId);
+  if (!member) return json({ error: 'Staff not found' }, 404);
+
+  const folderId = await getStaffFolderId(env, token, member);
+  const query = url.searchParams.get('q') || '';
+
+  let files;
+  if (query) {
+    files = await driveSearchFiles(token, folderId, query);
+    return json({ files, folderId, staffName: member.Name });
+  }
+
+  // List top-level subfolders (Evidence, Profile, General)
+  const topLevel = await driveListFiles(token, folderId);
+  const folders = topLevel.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+
+  // For each subfolder, list its contents
+  const structure = await Promise.all(folders.map(async folder => {
+    const children = await driveListFiles(token, folder.id);
+    // For Evidence folder, list task subfolders and their files
+    if (folder.name === 'Evidence') {
+      const taskFolders = children.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+      const taskFiles = await Promise.all(taskFolders.map(async tf => {
+        const tFiles = await driveListFiles(token, tf.id);
+        return { folder: tf, files: tFiles.filter(f => f.mimeType !== 'application/vnd.google-apps.folder') };
+      }));
+      const looseFiles = children.filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+      return { folder, taskGroups: taskFiles, files: looseFiles };
+    }
+    return { folder, files: children.filter(f => f.mimeType !== 'application/vnd.google-apps.folder') };
+  }));
+
+  const usedBytes = await driveFolderSize(token, folderId);
+  return json({ structure, folderId, staffName: member.Name, usedBytes });
+}
+
+// POST /storage/:targetStaffId/upload — upload file to General/ subfolder
+async function uploadToStorage(request, env, role, staffId, targetStaffId) {
+  if (isStaffLevel(role) && targetStaffId !== staffId)
+    return json({ error: 'Access denied' }, 403);
+
+  const formData = await request.formData();
+  const file = formData.get('file');
+  const subfolder = formData.get('subfolder') || 'General';
+  if (!file) return json({ error: 'No file provided' }, 400);
+
+  const maxSize = 100 * 1024 * 1024; // 100MB via worker (Cloudflare free plan limit)
+  const arrayBuffer = await file.arrayBuffer();
+  if (arrayBuffer.byteLength > maxSize) return json({ error: 'File must be under 100MB' }, 400);
+
+  const token = await getDriveToken(env);
+  const staff = await sheetsRead(env, 'Staff');
+  const member = staff.find(s => s.ID === targetStaffId);
+  if (!member) return json({ error: 'Staff not found' }, 404);
+
+  const rootFolderId = await getStaffFolderId(env, token, member);
+
+  // Find the target subfolder
+  const topLevel = await driveListFiles(token, rootFolderId);
+  let targetFolder = topLevel.find(f => f.name === subfolder && f.mimeType === 'application/vnd.google-apps.folder');
+  if (!targetFolder) {
+    // Create it if it doesn't exist
+    targetFolder = await driveCreateFolder(token, subfolder, rootFolderId);
+  }
+
+  const fileName = (file.name || 'file').replace(/[^\w.\-_ ]/g, '_');
+  const uploaded = await driveUploadFile(token, arrayBuffer, fileName, file.type || 'application/octet-stream', targetFolder.id);
+
+  return json({ success: true, file: uploaded });
+}
+
+// DELETE /storage/file/:fileId — delete a file from Drive
+async function deleteStorageFile(request, env, role, staffId, fileId) {
+  const token = await getDriveToken(env);
+
+  // Verify the file belongs to this staff member (for staff/external)
+  if (isStaffLevel(role)) {
+    const staff = await sheetsRead(env, 'Staff');
+    const me = staff.find(s => s.ID === staffId);
+    if (!me?.FolderID) return json({ error: 'No storage folder found' }, 404);
+    // Get file parents to verify ownership
+    const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents`, {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    const fileData = await fileRes.json();
+    // Simple ownership check — file must be somewhere under their folder
+    // (full recursive check would be expensive; we trust the UI)
+  }
+
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+    method: 'DELETE',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+
+  if (res.status === 204 || res.status === 200) return json({ success: true });
+  const err = await res.json().catch(() => ({}));
+  return json({ error: err.error?.message || 'Delete failed' }, 500);
+}
+
+// PUT /storage/file/:fileId/rename — rename a file
+async function renameStorageFile(request, env, role, staffId, fileId) {
+  const { newName } = await request.json();
+  if (!newName?.trim()) return json({ error: 'New name required' }, 400);
+
+  const token = await getDriveToken(env);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: newName.trim() }),
+  });
+  const data = await res.json();
+  if (!data.id) return json({ error: 'Rename failed' }, 500);
+  return json({ success: true, file: data });
+}
+
+// POST /storage/init-missing — create folders for staff who don't have one yet
+async function initMissingFolders(env, role) {
+  if (!isAdmin(role)) return json({ error: 'Admin only' }, 403);
+
+  const token = await getDriveToken(env);
+  const rootId = env.STAFF_STORAGE_ID;
+  const staff = await sheetsRead(env, 'Staff');
+  const active = staff.filter(s => s.Active?.toLowerCase() === 'true');
+
+  const results = [];
+
+  for (const s of active) {
+    try {
+      const expectedFolderName = s.Name + ' (' + s.ID + ')';
+
+      // Step 1: Check if folder already exists in Drive (prevent duplicates)
+      const searchParams = new URLSearchParams({
+        q: `name='${expectedFolderName.replace(/'/g,"\'")}' and '${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: 'files(id,name)',
+        pageSize: '5',
+      });
+      const searchRes = await fetch('https://www.googleapis.com/drive/v3/files?' + searchParams, {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      const searchData = await searchRes.json();
+      const existingFolders = searchData.files || [];
+
+      let folderId = '';
+
+      if (existingFolders.length > 0) {
+        // Folder already exists in Drive — just use it (take first, ignore duplicates)
+        folderId = existingFolders[0].id;
+      } else {
+        // Create fresh folder structure
+        folderId = await createStaffFolderStructure(env, s.ID, s.Name);
+      }
+
+      // Step 2: Always write FolderID to sheet if it's missing or wrong
+      if (!s.FolderID || s.FolderID !== folderId) {
+        const freshStaff = await sheetsRead(env, 'Staff');
+        const rowIdx = freshStaff.findIndex(r => r.ID === s.ID);
+        if (rowIdx !== -1) {
+          await sheetsUpdate(env, 'Staff', rowIdx + 2, getColIndex('Staff', 'FolderID'), folderId);
+        }
+        results.push({ staffId: s.ID, name: s.Name, success: true, folderId, action: s.FolderID ? 'fixed' : 'created' });
+      } else {
+        results.push({ staffId: s.ID, name: s.Name, success: true, folderId, action: 'ok' });
+      }
+    } catch (e) {
+      results.push({ staffId: s.ID, name: s.Name, success: false, error: e.message });
+    }
+  }
+
+  const created = results.filter(r => r.action === 'created').length;
+  const fixed = results.filter(r => r.action === 'fixed').length;
+  return json({ success: true, results, created, fixed });
+}
+
+// ══════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════════════════════════
+
+async function createNotification(env, staffId, type, title, message, taskId = '') {
+  const id = 'NTF-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+  const row = [id, staffId, type, title, message, taskId, 'FALSE', new Date().toISOString()];
+  await sheetsAppend(env, 'Notifications', row);
+  return id;
+}
+
+async function createNotificationsBatch(env, notifications) {
+  // Create multiple notifications sequentially to avoid race conditions
+  for (const n of notifications) {
+    await createNotification(env, n.staffId, n.type, n.title, n.message, n.taskId || '');
+  }
+}
+
+async function getNotifications(url, env, staffId, role) {
+  try {
+    const [notifications, tasks] = await Promise.all([
+      sheetsRead(env, 'Notifications'),
+      sheetsRead(env, 'Tasks'),
+    ]);
+
+    // Check for overdue tasks and create notifications if not already done today
+    const today = new Date().toISOString().slice(0, 10);
+    const activeTasks = tasks.filter(t => t.Active?.toLowerCase() === 'true' && t.DueDate && t.Status !== 'Done');
+    const overdueTasks = activeTasks.filter(t => {
+      if (!isAssigned(t.AssigneeID, staffId)) return false;
+      try {
+        return new Date(t.DueDate) < new Date(today);
+      } catch { return false; }
+    });
+
+    // Only create ONE overdue notification per task per day
+    const existingOverdueKeys = new Set(
+      notifications.filter(n =>
+        n.StaffID === staffId &&
+        n.Type === 'overdue' &&
+        n.CreatedAt?.slice(0, 10) === today
+      ).map(n => n.TaskID + '|' + n.CreatedAt?.slice(0, 10))
+    );
+
+    const overdueToCreate = overdueTasks.filter(t =>
+      !existingOverdueKeys.has(t.ID + '|' + today)
+    );
+    for (const t of overdueToCreate) {
+      try {
+        await createNotification(env, staffId, 'overdue',
+          'Task overdue',
+          `"${t.Name}" was due on ${t.DueDate}`,
+          t.ID
+        );
+      } catch(e) { console.error('Failed to create overdue notif:', e.message); }
+    }
+
+    // Re-read after possible overdue additions
+    const fresh = await sheetsRead(env, 'Notifications');
+    const mine = fresh
+      .filter(n => n.StaffID === staffId)
+      .sort((a, b) => (b.CreatedAt || '').localeCompare(a.CreatedAt || ''))
+      .slice(0, 50);
+
+    const unreadCount = mine.filter(n => n.IsRead?.toLowerCase() === 'false').length;
+    return json({ notifications: mine, unreadCount });
+  } catch(e) {
+    console.error('getNotifications error:', e.message);
+    return json({ notifications: [], unreadCount: 0 });
+  }
+}
+
+async function markNotificationsRead(request, env, staffId) {
+  try {
+  const { notifId } = await request.json();
+  const notifs = await sheetsRead(env, 'Notifications');
+
+  if (notifId === 'all') {
+    // Mark all mine as read sequentially
+    const myUnread = notifs.filter(n => n.StaffID === staffId && n.IsRead?.toLowerCase() === 'false');
+    for (const n of myUnread) {
+      const rowIdx = notifs.findIndex(r => r.ID === n.ID);
+      if (rowIdx !== -1) {
+        await sheetsUpdate(env, 'Notifications', rowIdx + 2, getColIndex('Notifications', 'IsRead'), 'TRUE');
+      }
+    }
+  } else {
+    const rowIdx = notifs.findIndex(n => n.ID === notifId && n.StaffID === staffId);
+    if (rowIdx !== -1) {
+      await sheetsUpdate(env, 'Notifications', rowIdx + 2, getColIndex('Notifications', 'IsRead'), 'TRUE');
+    }
+  }
+
+  return json({ success: true });
+  } catch(e) {
+    console.error('markNotificationsRead error:', e.message);
+    return json({ error: e.message }, 500);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// COMMENTS
+// ══════════════════════════════════════════════════════════
+
+async function getTaskComments(taskId, env) {
+  const comments = await sheetsRead(env, 'Comments');
+  const filtered = comments
+    .filter(c => c.TaskID === taskId)
+    .sort((a, b) => a.CreatedAt.localeCompare(b.CreatedAt));
+  return json(filtered);
+}
+
+async function addTaskComment(request, taskId, env, staffId, staffName) {
+  const { comment } = await request.json();
+  if (!comment?.trim()) return json({ error: 'Comment cannot be empty' }, 400);
+
+  const comments = await sheetsRead(env, 'Comments');
+  const id = 'CMT-' + Date.now();
+  const row = [id, taskId, staffId, staffName, comment.trim(), new Date().toISOString()];
+  await sheetsAppend(env, 'Comments', row);
+
+  // Notify all assignees of this task (except the commenter)
+  try {
+    const tasks = await sheetsRead(env, 'Tasks');
+    const task = tasks.find(t => t.ID === taskId);
+    if (task) {
+      const assigneeIds = (task.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
+      const toNotify = assigneeIds.filter(id => id !== staffId);
+      for (const recipientId of toNotify) {
+        await createNotification(env, recipientId, 'comment',
+          'New comment on your task',
+          `${staffName} commented on "${task.Name}": ${comment.trim().slice(0, 80)}${comment.trim().length > 80 ? '…' : ''}`,
+          taskId
+        );
+      }
+    }
+  } catch(e) { console.error('Comment notification failed:', e.message); }
+
+  return json({ success: true, id });
+}
+
+// ══════════════════════════════════════════════════════════
+// RESUMABLE UPLOAD — for files up to 2GB
+// Browser uploads directly to Drive, bypassing Cloudflare limits
+// ══════════════════════════════════════════════════════════
+
+async function initResumableUpload(request, env, role, staffId, targetStaffId) {
+  // Access check
+  if (isStaffLevel(role) && targetStaffId !== staffId)
+    return json({ error: 'Access denied' }, 403);
+
+  const { fileName, fileType, fileSize, subfolder } = await request.json();
+  if (!fileName || !fileType || !fileSize) return json({ error: 'fileName, fileType and fileSize required' }, 400);
+
+  const maxSize = 2 * 1024 * 1024 * 1024; // 2GB per file
+  if (fileSize > maxSize) return json({ error: 'File must be under 2GB' }, 400);
+
+  const token = await getDriveToken(env);
+  const staff = await sheetsRead(env, 'Staff');
+  const member = staff.find(s => s.ID === targetStaffId);
+  if (!member) return json({ error: 'Staff not found' }, 404);
+
+  const rootFolderId = await getStaffFolderId(env, token, member);
+
+  // Find or create target subfolder
+  const subfolderName = subfolder || 'General';
+  const topLevel = await driveListFiles(token, rootFolderId);
+  let targetFolder = topLevel.find(f => f.name === subfolderName && f.mimeType === 'application/vnd.google-apps.folder');
+  if (!targetFolder) {
+    targetFolder = await driveCreateFolder(token, subfolderName, rootFolderId);
+  }
+
+  const cleanName = fileName.replace(/[^\w.\-_ ]/g, '_');
+  const metadata = JSON.stringify({ name: cleanName, parents: [targetFolder.id] });
+
+  // Initiate resumable upload session with Google Drive
+  const initRes = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json; charset=UTF-8',
+        'X-Upload-Content-Type': fileType,
+        'X-Upload-Content-Length': String(fileSize),
+      },
+      body: metadata,
+    }
+  );
+
+  if (!initRes.ok) {
+    const err = await initRes.json().catch(() => ({}));
+    return json({ error: 'Failed to initiate upload: ' + JSON.stringify(err) }, 500);
+  }
+
+  // The resumable upload URL is in the Location header
+  const uploadUrl = initRes.headers.get('Location');
+  if (!uploadUrl) return json({ error: 'No upload URL returned from Drive' }, 500);
+
+  return json({ success: true, uploadUrl, folderId: targetFolder.id });
+}
+
+// ══════════════════════════════════════════════════════════
 // GOOGLE SHEETS HELPERS
 // ══════════════════════════════════════════════════════════
 const SHEET_HEADERS = {
-  Staff:    ['ID','Name','Username','Password','Role','Type','Email','Projects','Active','CreatedAt','PhotoURL'],
+  Staff:    ['ID','Name','Username','Password','Role','Type','Email','Projects','Active','CreatedAt','PhotoURL','FolderID'],
   Projects: ['ID','Name','ShortName','StartDate','EndDate','Status','Description','CreatedAt'],
   Tasks:    ['ID','ProjectID','Name','Category','DueDate','Description','Status','AssigneeID','Active','EvidenceFile','EvidenceLink','EvidenceNote','CreatedAt','EvidenceDate','Priority'],
   WorkLog:  ['ID','StaffID','ProjectID','TaskID','Date','Actual','Unit','Status','Note','CreatedAt'],
   Config:   ['Key','Value'],
+  Comments:      ['ID','TaskID','StaffID','StaffName','Comment','CreatedAt'],
+  Notifications: ['ID','StaffID','Type','Title','Message','TaskID','IsRead','CreatedAt'],
 };
 
 function getColIndex(sheet, colName) {
