@@ -540,7 +540,7 @@ tbody tr:hover td{background:#fafcfb;}
           <table>
             <thead>
               <tr>
-                <th>Name</th><th>Username</th><th>Role</th><th>Type</th>
+                <th>Name</th><th>Username</th><th>Role</th><th>Team</th><th>Type</th>
                 <th>Email</th><th>Projects</th><th>Status</th><th>Actions</th>
               </tr>
             </thead>
@@ -839,6 +839,14 @@ tbody tr:hover td{background:#fafcfb;}
             <option value="Part-time">Part-time</option>
           </select>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Team</label>
+        <select class="form-input" id="staff-team">
+          <option value="Support Team">Support Team</option>
+          <option value="Program Team">Program Team</option>
+          <option value="Management">Management</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">Assigned projects</label>
@@ -1740,7 +1748,8 @@ async function loadStaff() {
     <tr>
       <td><strong>${s.Name}</strong></td>
       <td style="color:var(--muted)">${s.Username}</td>
-      <td><span class="badge badge-${s.Role.toLowerCase()}">${s.Role}</span></td>
+      <td><span class="badge badge-${normalizeRoleKey(s.Role)}">${roleLabel(s.Role)}</span></td>
+      <td style="font-size:11px;">${s.Team ? `<span style="background:${s.Team==='Support Team'?'#E3F2FD':s.Team==='Management'?'#F3E5F5':'#E8F5E9'};color:${s.Team==='Support Team'?'#1565C0':s.Team==='Management'?'#6A1B9A':'#2E7D32'};padding:2px 8px;border-radius:99px;">${s.Team}</span>` : '—'}</td>
       <td style="color:var(--muted)">${s.Type}</td>
       <td style="color:var(--muted)">${s.Email||'—'}</td>
       <td style="color:var(--muted);font-size:11px">${s.Projects||'—'}</td>
@@ -1758,8 +1767,9 @@ function openAddStaff() {
   document.getElementById('modal-staff-title').textContent = 'Add staff member';
   document.getElementById('edit-staff-id').value = '';
   ['staff-name','staff-username','staff-password','staff-email','staff-projects'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('staff-role').value = 'Staff';
-  document.getElementById('staff-type').value = 'Staff';
+  document.getElementById('staff-role').value = 'project-officer';
+  document.getElementById('staff-type').value = 'Full-time';
+  document.getElementById('staff-team').value = 'Program Team';
   openModal('modal-add-staff');
 }
 
@@ -1774,6 +1784,7 @@ function openEditStaff(id) {
   document.getElementById('staff-email').value = s.Email || '';
   document.getElementById('staff-role').value = s.Role;
   document.getElementById('staff-type').value = s.Type;
+  document.getElementById('staff-team').value = s.Team || 'Program Team';
   document.getElementById('staff-projects').value = s.Projects || '';
   openModal('modal-add-staff');
 }
@@ -1786,6 +1797,7 @@ async function saveStaff() {
     password: document.getElementById('staff-password').value,
     staffRole: document.getElementById('staff-role').value,
     type: document.getElementById('staff-type').value,
+    team: document.getElementById('staff-team').value,
     email: document.getElementById('staff-email').value.trim(),
     projects: document.getElementById('staff-projects').value.trim(),
   };
