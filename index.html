@@ -992,6 +992,12 @@ tbody tr:hover td{background:#fafcfb;}
         </select>
       </div>
       <div class="form-group">
+        <label class="form-label">Depends on document <span style="color:var(--muted);font-size:10px;">(task auto-completes when this document is verified)</span></label>
+        <select class="form-input" id="task-linked-doc">
+          <option value="">No document dependency</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label class="form-label">Description / Required documents <span style="color:var(--muted);font-size:10px;">(what needs to be submitted as evidence)</span></label>
         <textarea class="form-input" id="task-desc" rows="2" placeholder="e.g. Attendance list, activity report, photos, signed contract..."></textarea>
       </div>
@@ -2281,6 +2287,10 @@ function renderTaskRows(tasks, projects, staff) {
           if (diff <= 3) return `<span class="badge badge-prog" style="margin-left:4px;">Due in ${diff}d</span>`;
           return '';
         })() : ''}
+        ${t.LinkedDocID && t.Status !== 'Done' ? (() => {
+          const verified = t.linkedDocStatus === 'Verified';
+          return `<br><span style="display:inline-block;margin-top:4px;font-size:10px;padding:2px 7px;border-radius:99px;background:${verified ? '#E8F5E9' : '#FFF3E0'};color:${verified ? '#2E7D32' : '#E65100'};" title="Linked to: ${t.linkedDocTitle || 'document'}"><i class="ti ti-link" style="font-size:10px;"></i> ${verified ? 'Document verified' : 'Waiting on document'}</span>`;
+        })() : ''}
       </td>
       <td>
         ${hasEvidence
@@ -2435,6 +2445,21 @@ function getSelectedAssignees() {
   return selectedAssigneeIds.join(',');
 }
 
+async function populateLinkedDocDropdown(selectedDocId) {
+  const sel = document.getElementById('task-linked-doc');
+  if (!sel) return;
+  // Only management/support see docs; if no access the call returns error → just show none
+  let docs = cache._allDocs;
+  if (!docs) {
+    const data = await api('/docs');
+    docs = data?.docs || [];
+    cache._allDocs = docs;
+  }
+  // Only show non-verified docs as linkable options (plus the currently linked one)
+  sel.innerHTML = '<option value="">No document dependency</option>' +
+    docs.map(d => `<option value="${d.ID}" ${d.ID === selectedDocId ? 'selected' : ''}>${d.Title} — ${d.Status}</option>`).join('');
+}
+
 function openAddTask() {
   document.getElementById('modal-task-title').textContent = 'Add task';
   document.getElementById('edit-task-id').value = '';
@@ -2444,6 +2469,7 @@ function openAddTask() {
   document.getElementById('task-desc').value = '';
   document.getElementById('task-status').value = 'Pending';
   document.getElementById('task-priority').value = 'Medium';
+  populateLinkedDocDropdown('');
 
   const projects = cache.projects || [];
   const projSel = document.getElementById('task-project');
@@ -2470,6 +2496,7 @@ function openEditTask(id) {
   document.getElementById('task-desc').value = t.Description || '';
   document.getElementById('task-status').value = t.Status || 'Pending';
   document.getElementById('task-priority').value = t.Priority || 'Medium';
+  populateLinkedDocDropdown(t.LinkedDocID || '');
 
   const projSel = document.getElementById('task-project');
   projSel.innerHTML = (cache.projects||[]).map(p =>
@@ -2498,8 +2525,19 @@ async function saveTask() {
     status: document.getElementById('task-status').value,
     priority: document.getElementById('task-priority').value,
     assigneeId: getSelectedAssignees() || user.staffId,
+    linkedDocId: document.getElementById('task-linked-doc').value,
   };
   if (!body.name || !body.projectId) { showToast('Name and project are required', 'error'); return; }
+
+  // Warn if marking Done while linked document is not yet verified
+  if (body.status === 'Done' && body.linkedDocId) {
+    const linkedDoc = (cache._allDocs || []).find(d => d.ID === body.linkedDocId);
+    if (linkedDoc && linkedDoc.Status !== 'Verified') {
+      if (!confirm(`The linked document "${linkedDoc.Title}" has not been verified yet (currently: ${linkedDoc.Status}).\n\nThis task is supposed to complete only when its document is verified. Mark it Done anyway?`)) {
+        return;
+      }
+    }
+  }
 
   let res;
   if (editId) {
@@ -4413,6 +4451,7 @@ async function loadDocs() {
 
   cache._docs = data.docs;
   cache._docsFullAccess = data.fullAccess;
+  cache._allDocs = data.docs; // keep linked-doc dropdown fresh
 
   // Adapt header + counters for project members (limited view)
   const counters = document.getElementById('doc-counters');
@@ -4583,7 +4622,9 @@ async function saveDoc() {
 async function updateDocStatus(id, status) {
   const res = await api(`/docs/${id}`, { method:'PUT', body: JSON.stringify({ status }) });
   if (res?.success) {
-    showToast('Status updated ✓', 'success');
+    showToast(status === 'Verified' ? 'Verified ✓ — any linked tasks auto-completed' : 'Status updated ✓', 'success');
+    cache.tasks = null; // linked tasks may have auto-completed
+    cache._allDocs = null;
     loadDocs();
   } else {
     showToast(res?.error || 'Failed', 'error');
