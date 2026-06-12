@@ -16,32 +16,59 @@ const CORS = {
 };
 
 const ROLES = {
-  BOD:         'bod',
-  SENIOR:      'senior',
-  COORDINATOR: 'coordinator',
-  OFFICER:     'officer',
-  ASSISTANT:   'assistant',
-  SPECIALIST:  'specialist',
-  TAILOR:      'tailor',
-  ADVISOR:     'advisor',
-  INTERN:      'intern',
+  BOD:               'bod',
+  SENIOR_IMPACT:     'senior-impact',
+  SENIOR_BIZ:        'senior-biz',
+  PROJECT_COORD:     'project-coordinator',
+  PRODUCTION_LEAD:   'production-lead',
+  SENIOR_ADMIN:      'senior-admin',
+  PROJECT_OFFICER:   'project-officer',
+  NETWORK_CATALYST:  'network-catalyst',
+  PAGE_ADMIN:        'page-admin',
+  ADMIN_ASSISTANT:   'admin-assistant',
+  PRODUCTION_INTERN: 'production-intern',
 };
 
 // Permission group helpers
 const isAdmin      = r => r === 'bod';
-const isManagement = r => ['bod','senior','coordinator'].includes(r);
-const isStaffLevel = r => ['officer','assistant','specialist','tailor','advisor','intern'].includes(r);
+const isManagement = r => ['bod','senior-impact','senior-biz','project-coordinator'].includes(r);
+const isStaffLevel = r => ['production-lead','senior-admin','project-officer','network-catalyst','page-admin','admin-assistant','production-intern'].includes(r);
 const hasAccess    = r => Object.values(ROLES).includes(r);
+
+// Role display labels
+const ROLE_LABELS = {
+  'bod':                  'BOD',
+  'senior-impact':        'Senior Impact Coordinator',
+  'senior-biz':           'Senior Business Development Coordinator',
+  'project-coordinator':  'Project Coordinator',
+  'production-lead':      'Production Lead',
+  'senior-admin':         'Senior Admin & Finance Assistant',
+  'project-officer':      'Project Officer',
+  'network-catalyst':     'Network Catalyst',
+  'page-admin':           'Page Admin',
+  'admin-assistant':      'Admin & Finance Assistant',
+  'production-intern':    'Production Intern',
+};
 
 // Legacy role mapping — converts old role names to new ones on login
 function normalizeRole(role) {
-  if (!role) return 'officer';
-  const r = role.toLowerCase();
+  if (!role) return 'project-officer';
+  const r = role.toLowerCase().trim();
   const map = {
-    'admin': 'bod',
-    'management': 'senior',
-    'staff': 'officer',
-    'external': 'advisor',
+    // old generic names
+    'admin':         'bod',
+    'management':    'senior-impact',
+    'staff':         'project-officer',
+    'external':      'network-catalyst',
+    // old specific names
+    'senior':        'senior-impact',
+    'coordinator':   'project-coordinator',
+    'officer':       'project-officer',
+    'assistant':     'admin-assistant',
+    'specialist':    'production-lead',
+    'tailor':        'production-lead',
+    'advisor':       'network-catalyst',
+    'intern':        'production-intern',
   };
   return map[r] || r;
 }
@@ -139,6 +166,14 @@ export default {
       if (path.match(/^\/storage\/file\/[\w-]+$/) && request.method === 'DELETE') return await deleteStorageFile(request, env, role, staffId, path.split('/')[3]);
       if (path.match(/^\/storage\/file\/[\w-]+\/rename$/) && request.method === 'PUT') return await renameStorageFile(request, env, role, staffId, path.split('/')[3]);
       if (path === '/storage/init-missing' && request.method === 'POST')            return await initMissingFolders(env, role);
+
+      // Requests
+      if (path === '/requests' && request.method === 'GET')
+        return await getRequests(env, staffId, auth.name);
+      if (path === '/requests' && request.method === 'POST')
+        return await createRequest(request, env, staffId, auth.name);
+      if (path.match(/^\/requests\/[\w-]+$/) && request.method === 'PUT')
+        return await respondToRequest(request, env, staffId, auth.name, path.split('/')[2]);
 
       // Notifications
       if (path === '/notifications' && request.method === 'GET')
@@ -238,7 +273,7 @@ async function resetPassword(request, env, role, targetId) {
 // ══════════════════════════════════════════════════════════
 async function getStaff(env, role, staffId) {
   const staff = await sheetsRead(env, 'Staff');
-  if (isStaffLevel(role) || role === ROLES.INTERN) {
+  if (isStaffLevel(role)) {
     const me = staff.find(r => r.ID === staffId);
     return json(me ? [sanitizeStaff(me)] : []);
   }
@@ -1235,6 +1270,128 @@ async function initMissingFolders(env, role) {
 }
 
 // ══════════════════════════════════════════════════════════
+// REQUESTS
+// ══════════════════════════════════════════════════════════
+
+async function getRequests(env, staffId, staffName) {
+  try {
+    const requests = await sheetsRead(env, 'Requests');
+    const staff = await sheetsRead(env, 'Staff');
+
+    // Enrich with names
+    const enriched = requests.map(r => ({
+      ...r,
+      assigneeName: staff.find(s => s.ID === r.AssigneeID)?.Name || '—',
+    }));
+
+    const received = enriched.filter(r => r.AssigneeID === staffId)
+      .sort((a, b) => b.CreatedAt.localeCompare(a.CreatedAt));
+    const sent = enriched.filter(r => r.RequesterID === staffId)
+      .sort((a, b) => b.CreatedAt.localeCompare(a.CreatedAt));
+
+    const pendingCount = received.filter(r => r.Status === 'Pending').length;
+    return json({ received, sent, pendingCount });
+  } catch(e) {
+    return json({ error: e.message }, 500);
+  }
+}
+
+async function createRequest(request, env, staffId, staffName) {
+  try {
+    const { assigneeId, title, description } = await request.json();
+    if (!assigneeId || !title?.trim()) return json({ error: 'Assignee and title required' }, 400);
+
+    const id = 'REQ-' + Date.now();
+    const row = [id, staffId, staffName, assigneeId, title.trim(), description?.trim() || '', 'Pending', '', new Date().toISOString()];
+    await sheetsAppend(env, 'Requests', row);
+
+    // Notify the assignee
+    try {
+      await createNotification(env, assigneeId, 'assigned',
+        'New task request from ' + staffName,
+        `"${title.trim()}" — tap to view and respond`,
+        id
+      );
+    } catch(e) { console.error('Request notification failed:', e.message); }
+
+    return json({ success: true, id });
+  } catch(e) {
+    return json({ error: e.message }, 500);
+  }
+}
+
+async function respondToRequest(request, env, staffId, staffName, requestId) {
+  try {
+    const { action, response, projectId } = await request.json();
+    if (!['accept','decline'].includes(action)) return json({ error: 'Action must be accept or decline' }, 400);
+
+    const requests = await sheetsRead(env, 'Requests');
+    const rowIdx = requests.findIndex(r => r.ID === requestId);
+    if (rowIdx === -1) return json({ error: 'Request not found' }, 404);
+
+    const req = requests[rowIdx];
+    if (req.AssigneeID !== staffId) return json({ error: 'You can only respond to requests assigned to you' }, 403);
+    if (req.Status !== 'Pending') return json({ error: 'Request already responded to' }, 400);
+
+    const newStatus = action === 'accept' ? 'Accepted' : 'Declined';
+
+    // Update Status and Response columns
+    await sheetsUpdate(env, 'Requests', rowIdx + 2, getColIndex('Requests', 'Status'), newStatus);
+    await sheetsUpdate(env, 'Requests', rowIdx + 2, getColIndex('Requests', 'Response'), response?.trim() || '');
+
+    let taskId = '';
+
+    // If accepted — create a real task
+    if (action === 'accept') {
+      try {
+        const tasks = await sheetsRead(env, 'Tasks');
+        taskId = 'TASK-' + String(tasks.length + 1).padStart(3, '0');
+        const taskRow = [
+          taskId,
+          projectId || '',
+          req.Title,
+          'Request',
+          '',
+          req.Description,
+          'Pending',
+          staffId,
+          'true',
+          '',
+          '',
+          '',
+          '',
+          new Date().toISOString(),
+          'Medium',
+        ];
+        await sheetsAppend(env, 'Tasks', taskRow);
+
+        // Save task ID back to request
+        await sheetsUpdate(env, 'Requests', rowIdx + 2, getColIndex('Requests', 'Response'),
+          (response?.trim() || '') + (taskId ? ' [' + taskId + ']' : '')
+        );
+      } catch(e) { console.error('Task creation from request failed:', e.message); }
+    }
+
+    // Notify the requester
+    try {
+      const notifTitle = action === 'accept'
+        ? staffName + ' accepted your request'
+        : staffName + ' declined your request';
+      const notifMsg = action === 'accept'
+        ? `"${req.Title}" has been accepted and added as a task`
+        : `"${req.Title}" was declined${response ? ': ' + response.trim() : ''}`;
+      await createNotification(env, req.RequesterID, action === 'accept' ? 'completed' : 'comment',
+        notifTitle, notifMsg, taskId || requestId
+      );
+    } catch(e) { console.error('Response notification failed:', e.message); }
+
+    return json({ success: true, status: newStatus, taskId });
+  } catch(e) {
+    return json({ error: e.message }, 500);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
 // NOTIFICATIONS
 // ══════════════════════════════════════════════════════════
 
@@ -1447,6 +1604,7 @@ const SHEET_HEADERS = {
   Config:   ['Key','Value'],
   Comments:      ['ID','TaskID','StaffID','StaffName','Comment','CreatedAt'],
   Notifications: ['ID','StaffID','Type','Title','Message','TaskID','IsRead','CreatedAt'],
+  Requests:      ['ID','RequesterID','RequesterName','AssigneeID','Title','Description','Status','Response','CreatedAt'],
 };
 
 function getColIndex(sheet, colName) {

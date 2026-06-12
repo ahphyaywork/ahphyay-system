@@ -1222,6 +1222,54 @@ let token = localStorage.getItem('ahphyay_token');
 let user  = JSON.parse(localStorage.getItem('ahphyay_user') || 'null');
 let cache = { staff: null, staffNames: null, projects: null, tasks: null };
 
+// Role display labels — maps role key to readable job title
+const ROLE_LABELS = {
+  'bod':                  'BOD',
+  'senior-impact':        'Senior Impact Coordinator',
+  'senior-biz':           'Senior Business Development Coordinator',
+  'project-coordinator':  'Project Coordinator',
+  'production-lead':      'Production Lead',
+  'senior-admin':         'Senior Admin & Finance Assistant',
+  'project-officer':      'Project Officer',
+  'network-catalyst':     'Network Catalyst',
+  'page-admin':           'Page Admin',
+  'admin-assistant':      'Admin & Finance Assistant',
+  'production-intern':    'Production Intern',
+};
+
+// Normalize old role names to new keys (mirrors worker normalizeRole)
+function normalizeRoleKey(role) {
+  if (!role) return 'project-officer';
+  const r = role.toLowerCase().trim();
+  const map = {
+    'admin':'bod','management':'senior-impact','staff':'project-officer','external':'network-catalyst',
+    'senior':'senior-impact','coordinator':'project-coordinator','officer':'project-officer',
+    'assistant':'admin-assistant','specialist':'production-lead','tailor':'production-lead',
+    'advisor':'network-catalyst','intern':'production-intern',
+  };
+  return map[r] || r;
+}
+
+// Convert a role key to its display label
+function roleLabel(roleKey) {
+  if (!roleKey) return '—';
+  const normalized = normalizeRoleKey(roleKey);
+  return ROLE_LABELS[normalized] || roleKey;
+}
+
+// Get the role label for a staff ID (looks up in staffNames cache)
+function staffRoleLabel(staffId) {
+  const src = cache.staffNames || cache.staff || [];
+  const s = src.find(x => x.ID === staffId);
+  return s ? roleLabel(s.Role) : '—';
+}
+
+// Get role labels for multiple comma-separated staff IDs
+function assigneeRoleLabels(assigneeField) {
+  const ids = (assigneeField || '').split(',').map(s => s.trim()).filter(Boolean);
+  return ids.map(id => staffRoleLabel(id)).filter(Boolean);
+}
+
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
@@ -1582,8 +1630,8 @@ async function loadDashboard() {
                   </svg>
                 </div>
                 <div style="flex:1;">
-                  <div class="s-name">${s.name}</div>
-                  <div class="s-role">${s.role} · ${s.taskCount} tasks</div>
+                  <div class="s-name">${roleLabel(s.role)}</div>
+                  <div class="s-role">${s.taskCount} tasks</div>
                 </div>
                 <span class="badge badge-${s.status==='on-track'?'track':s.status==='at-risk'?'risk':'behind'}">
                   <span class="badge-dot"></span>${s.status}
@@ -1858,8 +1906,18 @@ async function loadTasks() {
   const assignSel = document.getElementById('filter-task-assignee');
   if (assignSel) {
     const current = assignSel.value;
-    assignSel.innerHTML = '<option value="">All assignees</option>' +
-      (staff||[]).map(s => `<option value="${s.ID}" ${s.ID===current?'selected':''}>${s.Name}</option>`).join('');
+    // Build unique role list for filtering
+    const src = cache.staffNames || staff || [];
+    const roleMap = {};
+    src.forEach(s => {
+      const label = roleLabel(s.Role);
+      if (!roleMap[label]) roleMap[label] = [];
+      roleMap[label].push(s.ID);
+    });
+    const roleOptions = Object.keys(roleMap).sort().map(label =>
+      `<option value="role:${label}" ${current==='role:'+label?'selected':''}>${label}</option>`
+    ).join('');
+    assignSel.innerHTML = '<option value="">All roles</option>' + roleOptions;
   }
 
   const categories = [...new Set(tasks.map(t => t.Category).filter(Boolean))].sort();
@@ -1889,7 +1947,17 @@ function applyTaskFilters() {
   let filtered = tasks;
   if (filterProject)  filtered = filtered.filter(t => t.ProjectID === filterProject);
   if (filterStatus)   filtered = filtered.filter(t => (t.Status || 'Pending') === filterStatus);
-  if (filterAssignee) filtered = filtered.filter(t => (t.AssigneeID||'').split(',').map(s=>s.trim()).includes(filterAssignee));
+  if (filterAssignee) {
+    if (filterAssignee.startsWith('role:')) {
+      const targetRole = filterAssignee.slice(5);
+      filtered = filtered.filter(t => {
+        const roles = assigneeRoleLabels(t.AssigneeID);
+        return roles.includes(targetRole);
+      });
+    } else {
+      filtered = filtered.filter(t => (t.AssigneeID||'').split(',').map(s=>s.trim()).includes(filterAssignee));
+    }
+  }
   if (filterCategory) filtered = filtered.filter(t => t.Category === filterCategory);
   if (filterPriority)  filtered = filtered.filter(t => (t.Priority || 'Medium') === filterPriority);
   if (filterFrom)     filtered = filtered.filter(t => t.DueDate >= filterFrom);
@@ -1958,9 +2026,8 @@ function renderTaskRows(tasks, projects, staff) {
   tbody.innerHTML = tasks.map(t => {
     const proj = projects?.find(p => p.ID === t.ProjectID);
     const assigneeIds = (t.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
-    // Use staffNames (all staff) for display so shared assignees always resolve
-    const nameSource = cache.staffNames || staff || [];
-    const assigneeNames = assigneeIds.map(id => nameSource.find(s => s.ID === id)?.Name).filter(Boolean);
+    // Show ROLES instead of names — dedupe so the same role isn't repeated
+    const assigneeRoles = [...new Set(assigneeRoleLabels(t.AssigneeID))];
     const isMyTask = assigneeIds.includes(user.staffId);
     const statusBadge = t.Status === 'Done' ? 'badge-done' : t.Status === 'In Progress' ? 'badge-prog' : 'badge-late';
     const hasEvidence = t.EvidenceLink || t.EvidenceFile;
@@ -1973,7 +2040,7 @@ function renderTaskRows(tasks, projects, staff) {
       </td>
       <td><span class="badge badge-done">${proj?.ShortName || t.ProjectID}</span></td>
       <td style="color:var(--muted)">${t.Category || '—'}</td>
-      <td>${assigneeNames.length ? assigneeNames.map(n => `<span style="display:inline-block;background:var(--teal-lt);color:#085041;font-size:10px;padding:2px 7px;border-radius:99px;margin:1px;">${n}</span>`).join(' ') : '<span style="color:var(--muted)">Unassigned</span>'}</td>
+      <td>${assigneeRoles.length ? assigneeRoles.map(r => `<span style="display:inline-block;background:var(--teal-lt);color:#085041;font-size:10px;padding:2px 7px;border-radius:99px;margin:1px;">${r}</span>`).join(' ') : '<span style="color:var(--muted)">Unassigned</span>'}</td>
       <td>
         <span class="badge ${t.Priority==='High'?'badge-late':t.Priority==='Low'?'badge-staff':'badge-prog'}">
           ${t.Priority || 'Medium'}
@@ -2472,7 +2539,7 @@ async function loadKPI() {
           <tr>
             <td><strong>${k.taskName}</strong>${k.category?`<br><span style="font-size:10px;color:var(--muted)">${k.category}</span>`:''}</td>
             <td><span class="badge badge-done">${k.projectName}</span></td>
-            <td style="font-size:12px">${(k.assigneeId||'').split(',').map(id=>(cache.staff||[]).find(s=>s.ID===id.trim())?.Name).filter(Boolean).join(', ')||'—'}</td>
+            <td style="font-size:12px">${[...new Set(assigneeRoleLabels(k.assigneeId))].join(', ')||'—'}</td>
             <td><span class="badge ${k.priority==='High'?'badge-late':k.priority==='Low'?'badge-staff':'badge-prog'}">${k.priority||'Medium'}</span></td>
             <td style="color:var(--muted);font-size:11px">${k.dueDate||'—'}</td>
             <td>
@@ -3573,18 +3640,18 @@ async function downloadKPIReport() {
       const sTasks = activeTasks.filter(t => (t.AssigneeID||'').split(',').map(x=>x.trim()).includes(s.ID));
       const sDone = sTasks.filter(t => t.Status === 'Done').length;
       const pct = sTasks.length ? Math.round((sDone / sTasks.length) * 100) : 0;
-      return { name: s.Name, role: s.Role, tasks: sTasks.length, done: sDone, inProg: sTasks.filter(t=>t.Status==='In Progress').length, pending: sTasks.filter(t=>!t.Status||t.Status==='Pending').length, pct };
+      return { name: s.Name, role: roleLabel(normalizeRoleKey(s.Role)), staffId: s.ID, tasks: sTasks.length, done: sDone, inProg: sTasks.filter(t=>t.Status==='In Progress').length, pending: sTasks.filter(t=>!t.Status||t.Status==='Pending').length, pct };
     }).sort((a,b) => b.pct - a.pct);
 
     doc.autoTable({
       startY: 24,
-      head: [['Staff Member', 'Role', 'Tasks', 'Done', 'In Progress', 'Pending', 'KPI Score']],
-      body: summaryData.map(s => [s.name, s.role, s.tasks, s.done, s.inProg, s.pending, s.pct + '%']),
+      head: [['Role', 'Tasks', 'Done', 'In Progress', 'Pending', 'KPI Score']],
+      body: summaryData.map(s => [s.role, s.tasks, s.done, s.inProg, s.pending, s.pct + '%']),
       styles: { fontSize: 9, cellPadding: 3 },
       headStyles: { fillColor: navy, textColor: [255,255,255], fontStyle: 'bold' },
-      columnStyles: { 6: { halign: 'center', fontStyle: 'bold' } },
+      columnStyles: { 5: { halign: 'center', fontStyle: 'bold' } },
       didParseCell: (data) => {
-        if (data.column.index === 6 && data.section === 'body') {
+        if (data.column.index === 5 && data.section === 'body') {
           const pct = parseInt(data.cell.raw);
           data.cell.styles.textColor = getColor(pct);
         }
@@ -3598,18 +3665,16 @@ async function downloadKPIReport() {
     doc.setTextColor(...navy);
     doc.text(`Team average KPI: ${avgPct}%`, M, y);
 
-    // ── Section 2: Per Staff Member ───────────────────────
+    // ── Section 2: Per Staff Member (shown by role) ───────
     for (const s of summaryData) {
       doc.addPage();
       doc.setFillColor(...navy); doc.rect(0, 0, W, 18, 'F');
       doc.setTextColor(255,255,255); doc.setFontSize(13); doc.setFont('helvetica','bold');
-      doc.text(s.name, M, 12);
+      doc.text(s.role, M, 12);
       doc.setFontSize(9); doc.setFont('helvetica','normal');
-      doc.text(`${s.role}  |  KPI: ${s.pct}%  |  ${s.tasks} tasks`, W - M, 12, { align: 'right' });
+      doc.text(`KPI: ${s.pct}%  |  ${s.tasks} tasks`, W - M, 12, { align: 'right' });
 
-      const myTasks = activeTasks.filter(t => (t.AssigneeID||'').split(',').map(x=>x.trim()).includes(
-        staffList.find(sf => sf.Name === s.name)?.ID || ''
-      ));
+      const myTasks = activeTasks.filter(t => (t.AssigneeID||'').split(',').map(x=>x.trim()).includes(s.staffId));
 
       if (!myTasks.length) {
         doc.setFontSize(10); doc.setTextColor(...muted);
@@ -3665,11 +3730,11 @@ async function downloadKPIReport() {
 
       doc.autoTable({
         startY: 24,
-        head: [['Task', 'Assignee(s)', 'Category', 'Due date', 'Priority', 'Status']],
+        head: [['Task', 'Role(s)', 'Category', 'Due date', 'Priority', 'Status']],
         body: projTasks.map(t => {
           const ids = (t.AssigneeID||'').split(',').map(x=>x.trim()).filter(Boolean);
-          const names = ids.map(id => staffList.find(s=>s.ID===id)?.Name || '—').join(', ');
-          return [t.Name, names, t.Category||'—', t.DueDate||'—', t.Priority||'Medium', t.Status||'Pending'];
+          const roles = [...new Set(ids.map(id => roleLabel(normalizeRoleKey(staffList.find(s=>s.ID===id)?.Role))))].join(', ');
+          return [t.Name, roles||'—', t.Category||'—', t.DueDate||'—', t.Priority||'Medium', t.Status||'Pending'];
         }),
         styles: { fontSize: 8, cellPadding: 2.5 },
         headStyles: { fillColor: [15,110,86], textColor: [255,255,255], fontStyle: 'bold' },
