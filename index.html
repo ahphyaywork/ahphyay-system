@@ -270,6 +270,9 @@ tbody tr:last-child td{border-bottom:none;}
 tbody tr:hover td{background:#fafcfb;}
 
 /* ── Status badges ── */
+.task-tab{padding:7px 16px;border:1px solid var(--border2);background:var(--white);border-radius:99px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:inherit;transition:all .12s;}
+.task-tab:hover{border-color:var(--teal);color:var(--teal);}
+.task-tab.active{background:var(--navy);border-color:var(--navy);color:var(--white);}
 .badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:500;padding:3px 9px;border-radius:99px;}
 .badge-dot{width:5px;height:5px;border-radius:50%;}
 .badge-done{background:var(--teal-lt);color:#085041;}
@@ -577,32 +580,18 @@ tbody tr:hover td{background:#fafcfb;}
         </div>
         <div id="task-overdue-warning" style="display:none;background:var(--red-lt);border:1px solid var(--red);border-radius:10px;padding:10px 14px;font-size:13px;color:#791F1F;margin-bottom:12px;"></div>
 
-        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
-          <select class="form-input" id="filter-task-project" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()">
-            <option value="">All projects</option>
-          </select>
-          <select class="form-input" id="filter-task-status" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()">
-            <option value="">All statuses</option>
-            <option value="Pending">Pending</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Done">Done</option>
-          </select>
-          <select class="form-input" id="filter-task-assignee" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()">
-            <option value="">All assignees</option>
-          </select>
-          <select class="form-input" id="filter-task-category" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()">
-            <option value="">All categories</option>
-          </select>
-          <input class="form-input" type="date" id="filter-task-from" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()" title="Due date from">
-          <input class="form-input" type="date" id="filter-task-to" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()" title="Due date to">
-          <select class="form-input" id="filter-task-priority" style="width:auto;padding:6px 10px;font-size:12px;" onchange="applyTaskFilters()">
-            <option value="">All priorities</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
-          </select>
-          <button class="btn btn-outline btn-sm" onclick="clearTaskFilters()" style="font-size:12px;"><i class="ti ti-x"></i> Clear</button>
-          <span id="filter-task-count" style="font-size:11px;color:var(--muted);margin-left:4px;"></span>
+        <!-- Quick filter tabs -->
+        <div id="task-tabs" style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+          <button class="task-tab" data-tab="all" onclick="setTaskTab('all')">All</button>
+          <button class="task-tab" data-tab="mine" onclick="setTaskTab('mine')">My Tasks</button>
+          <button class="task-tab" data-tab="Pending" onclick="setTaskTab('Pending')">Pending</button>
+          <button class="task-tab" data-tab="overdue" onclick="setTaskTab('overdue')">Overdue</button>
+          <button class="task-tab" data-tab="Done" onclick="setTaskTab('Done')">Done</button>
+          <div style="position:relative;flex:1;min-width:180px;max-width:280px;margin-left:auto;">
+            <i class="ti ti-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;"></i>
+            <input id="task-search" placeholder="Search tasks…" oninput="applyTaskFilters()" style="width:100%;padding:7px 12px 7px 32px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit;outline:none;">
+          </div>
+          <span id="filter-task-count" style="font-size:11px;color:var(--muted);"></span>
         </div>
 
         <div class="table-wrap">
@@ -2184,6 +2173,8 @@ async function saveProject() {
 // ════════════════════════════════════════════════════════
 // TASKS
 // ════════════════════════════════════════════════════════
+let currentTaskTab = 'all';
+
 async function loadTasks() {
   const [tasks, projects, staff, staffNames] = await Promise.all([
     api('/tasks'),
@@ -2193,41 +2184,17 @@ async function loadTasks() {
   ]);
   if (!tasks) return;
   cache.tasks = tasks; cache.projects = projects; cache.staff = staff;
-  // staffNames has all active staff ID+Name for resolving assignees regardless of role
   if (staffNames) cache.staffNames = staffNames;
 
-  const projSel = document.getElementById('filter-task-project');
-  if (projSel) {
-    const current = projSel.value;
-    projSel.innerHTML = '<option value="">All projects</option>' +
-      (projects||[]).map(p => `<option value="${p.ID}" ${p.ID===current?'selected':''}>${p.Name}</option>`).join('');
-  }
+  // Set default active tab
+  setTaskTab(currentTaskTab, true);
+}
 
-  const assignSel = document.getElementById('filter-task-assignee');
-  if (assignSel) {
-    const current = assignSel.value;
-    // Build unique role list for filtering
-    const src = cache.staffNames || staff || [];
-    const roleMap = {};
-    src.forEach(s => {
-      const label = roleLabel(s.Role);
-      if (!roleMap[label]) roleMap[label] = [];
-      roleMap[label].push(s.ID);
-    });
-    const roleOptions = Object.keys(roleMap).sort().map(label =>
-      `<option value="role:${label}" ${current==='role:'+label?'selected':''}>${label}</option>`
-    ).join('');
-    assignSel.innerHTML = '<option value="">All roles</option>' + roleOptions;
-  }
-
-  const categories = [...new Set(tasks.map(t => t.Category).filter(Boolean))].sort();
-  const catSel = document.getElementById('filter-task-category');
-  if (catSel) {
-    const current = catSel.value;
-    catSel.innerHTML = '<option value="">All categories</option>' +
-      categories.map(c => `<option value="${c}" ${c===current?'selected':''}>${c}</option>`).join('');
-  }
-
+function setTaskTab(tab, skipReapply) {
+  currentTaskTab = tab;
+  document.querySelectorAll('.task-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
   applyTaskFilters();
 }
 
@@ -2235,83 +2202,64 @@ function applyTaskFilters() {
   const tasks    = cache.tasks || [];
   const projects = cache.projects || [];
   const staff    = cache.staff || [];
+  const today = new Date(); today.setHours(0,0,0,0);
 
-  const filterProject  = document.getElementById('filter-task-project')?.value || '';
-  const filterStatus   = document.getElementById('filter-task-status')?.value || '';
-  const filterAssignee = document.getElementById('filter-task-assignee')?.value || '';
-  const filterCategory = document.getElementById('filter-task-category')?.value || '';
-  const filterPriority  = document.getElementById('filter-task-priority')?.value || '';
-  const filterFrom     = document.getElementById('filter-task-from')?.value || '';
-  const filterTo       = document.getElementById('filter-task-to')?.value || '';
+  const search = (document.getElementById('task-search')?.value || '').toLowerCase().trim();
 
   let filtered = tasks;
-  if (filterProject)  filtered = filtered.filter(t => t.ProjectID === filterProject);
-  if (filterStatus)   filtered = filtered.filter(t => (t.Status || 'Pending') === filterStatus);
-  if (filterAssignee) {
-    if (filterAssignee.startsWith('role:')) {
-      const targetRole = filterAssignee.slice(5);
-      filtered = filtered.filter(t => {
-        const roles = assigneeRoleLabels(t.AssigneeID);
-        return roles.includes(targetRole);
-      });
-    } else {
-      filtered = filtered.filter(t => (t.AssigneeID||'').split(',').map(s=>s.trim()).includes(filterAssignee));
-    }
+
+  // Apply the active tab filter
+  if (currentTaskTab === 'mine') {
+    filtered = filtered.filter(t => (t.AssigneeID||'').split(',').map(s=>s.trim()).includes(user.staffId));
+  } else if (currentTaskTab === 'Pending') {
+    filtered = filtered.filter(t => (t.Status || 'Pending') === 'Pending');
+  } else if (currentTaskTab === 'Done') {
+    filtered = filtered.filter(t => t.Status === 'Done');
+  } else if (currentTaskTab === 'overdue') {
+    filtered = filtered.filter(t => t.Status !== 'Done' && t.DueDate && new Date(t.DueDate) < today);
   }
-  if (filterCategory) filtered = filtered.filter(t => t.Category === filterCategory);
-  if (filterPriority)  filtered = filtered.filter(t => (t.Priority || 'Medium') === filterPriority);
-  if (filterFrom)     filtered = filtered.filter(t => t.DueDate >= filterFrom);
-  if (filterTo)       filtered = filtered.filter(t => t.DueDate <= filterTo);
+  // 'all' → no extra filter
+
+  // Search by task name
+  if (search) {
+    filtered = filtered.filter(t => (t.Name||'').toLowerCase().includes(search));
+  }
 
   const countEl = document.getElementById('filter-task-count');
   if (countEl) {
     const total = tasks.length;
     const shown = filtered.length;
-    countEl.textContent = shown < total ? `${shown} of ${total} tasks` : `${total} tasks`;
+    countEl.textContent = shown < total ? `${shown} of ${total}` : `${total} task${total!==1?'s':''}`;
   }
 
-  // Sort: Overdue first → Pending → In Progress → Done
-  const today = new Date(); today.setHours(0,0,0,0);
+  // Sort: Overdue first → Due soon → Pending → In Progress → Done
   const getSort = t => {
     if (t.Status === 'Done') return 10;
     if (t.DueDate) {
       const diff = Math.ceil((new Date(t.DueDate) - today) / (1000*60*60*24));
-      if (diff < 0) return 0;   // overdue
-      if (diff <= 3) return 1;  // due soon
+      if (diff < 0) return 0;
+      if (diff <= 3) return 1;
     }
     if (t.Status === 'In Progress') return 3;
-    return 2; // Pending
+    return 2;
   };
   filtered = [...filtered].sort((a, b) => getSort(a) - getSort(b));
 
-  // Show overdue warning banner
-  const overdue = filtered.filter(t => {
-    if (t.Status === 'Done' || !t.DueDate) return false;
-    return new Date(t.DueDate) < today;
-  });
+  // Overdue warning banner (only when not already on overdue tab)
+  const overdue = tasks.filter(t => t.Status !== 'Done' && t.DueDate && new Date(t.DueDate) < today);
   const warningEl = document.getElementById('task-overdue-warning');
   if (warningEl) {
-    if (overdue.length > 0) {
+    if (overdue.length > 0 && currentTaskTab !== 'overdue') {
       warningEl.style.display = 'block';
-      warningEl.innerHTML = `⚠ ${overdue.length} overdue task${overdue.length>1?'s':''}: ${overdue.map(t=>t.Name).slice(0,3).join(', ')}${overdue.length>3?' …':''}`;
+      warningEl.style.cursor = 'pointer';
+      warningEl.onclick = () => setTaskTab('overdue');
+      warningEl.innerHTML = `⚠ ${overdue.length} overdue task${overdue.length>1?'s':''} — click to view`;
     } else {
       warningEl.style.display = 'none';
     }
   }
 
   renderTaskRows(filtered, projects, staff);
-}
-
-function clearTaskFilters() {
-  ['filter-task-project','filter-task-status','filter-task-assignee','filter-task-category','filter-task-priority'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  ['filter-task-from','filter-task-to'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  applyTaskFilters();
 }
 
 function renderTaskRows(tasks, projects, staff) {
