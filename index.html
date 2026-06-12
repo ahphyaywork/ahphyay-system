@@ -1172,6 +1172,29 @@ tbody tr:hover td{background:#fafcfb;}
   </div>
 </div>
 
+<!-- Flag Incomplete Modal -->
+<div class="modal-overlay" id="modal-flag-incomplete">
+  <div class="modal" style="width:min(480px,92vw);">
+    <div class="modal-header">
+      <div class="modal-title">Flag as Incomplete</div>
+      <button class="modal-close" onclick="closeModal('modal-flag-incomplete')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="flag-doc-id">
+      <div id="flag-doc-title" style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:14px;"></div>
+      <div class="form-group">
+        <label class="form-label">What is missing or wrong? <span style="color:var(--red)">*</span></label>
+        <textarea class="form-input" id="flag-reason" rows="4" placeholder="e.g. Missing the receipt for the venue payment, and the GRN is not signed…" style="resize:vertical;"></textarea>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">The staff member who submitted will be notified with this message so they know exactly what to fix.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-flag-incomplete')">Cancel</button>
+      <button class="btn btn-danger" onclick="submitFlagIncomplete()"><i class="ti ti-alert-circle"></i> Flag Incomplete</button>
+    </div>
+  </div>
+</div>
+
 <!-- Submit Documents Modal -->
 <div class="modal-overlay" id="modal-submit-doc">
   <div class="modal" style="width:min(520px,92vw);">
@@ -4477,12 +4500,12 @@ function renderDocCard(d, fullAccess) {
       ${actFmt ? `<span>Activity: ${actFmt}</span>` : ''}
       <span style="${d.isOverdue ? 'color:#C62828;font-weight:600;' : ''}">Due: ${dueFmt}</span>
     </div>
-    ${d.Notes ? `<div style="font-size:12px;color:var(--text);background:var(--off);border-radius:8px;padding:8px 12px;margin-bottom:12px;">${d.Notes}</div>` : ''}
+    ${d.Notes ? `<div style="font-size:12px;color:var(--text);background:${d.Notes.includes('[Incomplete') ? '#FFF4F4' : 'var(--off)'};border-radius:8px;padding:8px 12px;margin-bottom:12px;white-space:pre-wrap;${d.Notes.includes('[Incomplete') ? 'border-left:3px solid #E24B4A;' : ''}">${d.Notes}</div>` : ''}
     ${attachmentsHtml}
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
       ${canSubmit && d.Status !== 'Verified' ? `<button class="btn btn-primary btn-sm" onclick="openSubmitDoc('${d.ID}')"><i class="ti ti-upload"></i> ${hasSubmissions ? 'Add more' : 'Submit documents'}</button>` : ''}
       ${canVerify && d.Status === 'Submitted' ? `<button class="btn btn-primary btn-sm" onclick="updateDocStatus('${d.ID}','Verified')"><i class="ti ti-circle-check"></i> Verify</button>` : ''}
-      ${canVerify && d.Status !== 'Verified' && d.Status !== 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Incomplete')"><i class="ti ti-alert-circle"></i> Flag Incomplete</button>` : ''}
+      ${canVerify && d.Status !== 'Verified' && d.Status !== 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="openFlagIncomplete('${d.ID}','${d.Title.replace(/'/g,"\'")}')"><i class="ti ti-alert-circle"></i> Flag Incomplete</button>` : ''}
       ${canVerify && d.Status === 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Pending')"><i class="ti ti-refresh"></i> Reopen</button>` : ''}
       ${fullAccess ? `<button class="btn btn-outline btn-sm btn-icon" onclick="openEditDoc('${d.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>` : ''}
       ${['bod','developer','senior-impact','senior-biz','project-coordinator'].includes(user.role) ? `<button class="btn btn-danger btn-sm btn-icon" onclick="deleteDoc('${d.ID}','${d.Title.replace(/'/g,"\'")}')" title="Delete"><i class="ti ti-trash"></i></button>` : ''}
@@ -4561,6 +4584,31 @@ async function updateDocStatus(id, status) {
   const res = await api(`/docs/${id}`, { method:'PUT', body: JSON.stringify({ status }) });
   if (res?.success) {
     showToast('Status updated ✓', 'success');
+    loadDocs();
+  } else {
+    showToast(res?.error || 'Failed', 'error');
+  }
+}
+
+function openFlagIncomplete(id, title) {
+  document.getElementById('flag-doc-id').value = id;
+  document.getElementById('flag-doc-title').textContent = title;
+  document.getElementById('flag-reason').value = '';
+  openModal('modal-flag-incomplete');
+}
+
+async function submitFlagIncomplete() {
+  const id = document.getElementById('flag-doc-id').value;
+  const reason = document.getElementById('flag-reason').value.trim();
+  if (!reason) { showToast('Please describe what is missing or wrong', 'error'); return; }
+
+  const res = await api(`/docs/${id}`, {
+    method:'PUT',
+    body: JSON.stringify({ status: 'Incomplete', incompleteReason: reason }),
+  });
+  if (res?.success) {
+    closeModal('modal-flag-incomplete');
+    showToast('Flagged as incomplete — staff notified', 'success');
     loadDocs();
   } else {
     showToast(res?.error || 'Failed', 'error');
