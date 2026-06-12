@@ -1172,6 +1172,37 @@ tbody tr:hover td{background:#fafcfb;}
   </div>
 </div>
 
+<!-- Submit Documents Modal -->
+<div class="modal-overlay" id="modal-submit-doc">
+  <div class="modal" style="width:min(520px,92vw);">
+    <div class="modal-header">
+      <div class="modal-title">Submit Documents</div>
+      <button class="modal-close" onclick="closeModal('modal-submit-doc')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="submit-doc-id">
+      <div id="submit-doc-details" style="background:var(--off);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;"></div>
+
+      <div class="form-group">
+        <label class="form-label">Upload files</label>
+        <div id="submit-doc-filelist" style="margin-bottom:8px;"></div>
+        <input type="file" id="submit-doc-files" multiple style="display:none;" onchange="handleDocFilesPicked(event)">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('submit-doc-files').click()"><i class="ti ti-plus"></i> Choose files</button>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">Receipts, invoices, GRN, POs — up to 100MB each</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Or paste a link <span style="color:var(--muted);font-size:10px;">(Drive folder, etc.)</span></label>
+        <input class="form-input" id="submit-doc-link" placeholder="https://drive.google.com/…">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-submit-doc')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitDocFiles()" id="btn-submit-docs"><i class="ti ti-upload"></i> Submit</button>
+    </div>
+  </div>
+</div>
+
 <!-- Document Submission Modal -->
 <div class="modal-overlay" id="modal-doc">
   <div class="modal" style="width:min(560px,92vw);">
@@ -1559,7 +1590,7 @@ function buildNav() {
     { panel:'tasks',     icon:'<i class="ti ti-checklist"></i>', label:'Tasks',       roles: allRoles },
     { panel:'storage',   icon:'<i class="ti ti-database"></i>', label:'Storage',     roles: allRoles },
     { panel:'requests',  icon:'<i class="ti ti-send"></i>', label:'Requests',    roles: allRoles },
-    { panel:'docs',      icon:'<i class="ti ti-file-text"></i>', label:'Documents',   roles: mgmtRoles, supportTeam: true },
+    { panel:'docs',      icon:'<i class="ti ti-file-text"></i>', label:'Documents',   roles: allRoles },
     { sep:'My Account',                                  roles: allRoles },
     { panel:'kpi',       icon:'<i class="ti ti-chart-line"></i>', label:'My KPIs',     roles: staffRoles },
     { panel:'profile',   icon:'<i class="ti ti-user-circle"></i>', label:'My Profile',  roles: allRoles },
@@ -4357,22 +4388,37 @@ async function loadDocs() {
   if (data.error) { list.innerHTML = `<div class="empty">${data.error}</div>`; return; }
 
   cache._docs = data.docs;
+  cache._docsFullAccess = data.fullAccess;
 
-  // Counters
-  const c = data.counts;
-  document.getElementById('doc-counters').innerHTML = `
-    ${docCounter('Pending', c.pending, '#E65100', '#FFF3E0')}
-    ${docCounter('Overdue', c.overdue, '#C62828', '#FFEBEE')}
-    ${docCounter('Verified', c.verified, '#2E7D32', '#E8F5E9')}
-    ${docCounter('Incomplete', c.incomplete, '#6A1B9A', '#F3E5F5')}
-  `;
+  // Adapt header + counters for project members (limited view)
+  const counters = document.getElementById('doc-counters');
+  const sectionTitle = document.querySelector('#panel-docs .section-title');
+  const newBtn = document.querySelector('#panel-docs .section-hd .btn-primary');
+
+  if (data.fullAccess) {
+    if (sectionTitle) sectionTitle.textContent = 'Document Submission Tracker';
+    if (newBtn) newBtn.style.display = '';
+    const c = data.counts;
+    counters.style.display = 'grid';
+    counters.innerHTML = `
+      ${docCounter('Pending', c.pending, '#E65100', '#FFF3E0')}
+      ${docCounter('Overdue', c.overdue, '#C62828', '#FFEBEE')}
+      ${docCounter('Verified', c.verified, '#2E7D32', '#E8F5E9')}
+      ${docCounter('Incomplete', c.incomplete, '#6A1B9A', '#F3E5F5')}
+    `;
+  } else {
+    // Project member — simplified "My Documents" view
+    if (sectionTitle) sectionTitle.textContent = 'My Documents to Submit';
+    if (newBtn) newBtn.style.display = 'none';
+    counters.style.display = 'none';
+  }
 
   if (!data.docs.length) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-file-text"></i></div>No document requests yet</div>';
+    list.innerHTML = `<div class="empty"><div class="empty-icon"><i class="ti ti-file-text"></i></div>${data.fullAccess ? 'No document requests yet' : 'You have no documents to submit'}</div>`;
     return;
   }
 
-  list.innerHTML = data.docs.map(d => renderDocCard(d)).join('');
+  list.innerHTML = data.docs.map(d => renderDocCard(d, data.fullAccess)).join('');
 }
 
 function docCounter(label, count, color, bg) {
@@ -4382,10 +4428,25 @@ function docCounter(label, count, color, bg) {
   </div>`;
 }
 
-function renderDocCard(d) {
+function renderDocCard(d, fullAccess) {
   const sc = DOC_STATUS[d.Status] || DOC_STATUS['Pending'];
   const dueFmt = d.DueDate ? new Date(d.DueDate).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) : '—';
   const actFmt = d.ActivityDate ? new Date(d.ActivityDate).toLocaleDateString('en-GB', {day:'numeric',month:'short'}) : '';
+
+  // Build the attached files / link display
+  const files = (d.Files || '').split(',').map(s => s.trim()).filter(Boolean);
+  let attachmentsHtml = '';
+  if (files.length || d.SubmitLink) {
+    attachmentsHtml = `<div style="background:#F0F9F4;border-radius:8px;padding:8px 12px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:600;color:#085041;margin-bottom:4px;"><i class="ti ti-paperclip" style="font-size:11px;"></i> Submitted documents</div>
+      ${files.map((f,i) => `<div style="font-size:12px;margin-bottom:2px;"><a href="${f}" target="_blank" style="color:var(--teal);">File ${i+1} <i class="ti ti-external-link" style="font-size:10px;"></i></a></div>`).join('')}
+      ${d.SubmitLink ? `<div style="font-size:12px;"><a href="${d.SubmitLink}" target="_blank" style="color:var(--teal);"><i class="ti ti-link" style="font-size:11px;"></i> ${d.SubmitLink}</a></div>` : ''}
+    </div>`;
+  }
+
+  // Can this person submit? (the owner, or support/management)
+  const canSubmit = fullAccess || d.RequestedFromID === user.staffId;
+  const canVerify = fullAccess;
 
   return `<div style="background:var(--white);border:1px solid ${d.isOverdue ? '#E24B4A' : 'var(--border2)'};border-radius:12px;padding:16px;margin-bottom:12px;${d.isOverdue ? 'box-shadow:0 0 0 1px #E24B4A;' : ''}">
     ${d.isOverdue ? `<div style="background:#FFEBEE;color:#C62828;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;margin-bottom:10px;display:inline-block;"><i class="ti ti-alert-triangle"></i> Blocking reporting — overdue</div>` : ''}
@@ -4395,24 +4456,25 @@ function renderDocCard(d) {
         <div style="font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;">
           <span><i class="ti ti-file" style="font-size:11px;"></i> ${d.DocumentType}</span>
           ${d.projectName ? `<span><i class="ti ti-folder" style="font-size:11px;"></i> ${d.projectName}</span>` : ''}
-          <span><i class="ti ti-user" style="font-size:11px;"></i> From: <strong>${d.requestedFromName}</strong></span>
+          ${fullAccess ? `<span><i class="ti ti-user" style="font-size:11px;"></i> From: <strong>${d.requestedFromName}</strong></span>` : ''}
         </div>
       </div>
       <span style="background:${sc.bg};color:${sc.color};font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;white-space:nowrap;flex-shrink:0;">
         <i class="ti ${sc.icon}" style="font-size:11px;"></i> ${d.Status}
       </span>
     </div>
-    <div style="font-size:11px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-bottom:${d.Notes ? '8px' : '12px'};">
+    <div style="font-size:11px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-bottom:${(d.Notes || attachmentsHtml) ? '8px' : '12px'};">
       ${actFmt ? `<span>Activity: ${actFmt}</span>` : ''}
       <span style="${d.isOverdue ? 'color:#C62828;font-weight:600;' : ''}">Due: ${dueFmt}</span>
     </div>
     ${d.Notes ? `<div style="font-size:12px;color:var(--text);background:var(--off);border-radius:8px;padding:8px 12px;margin-bottom:12px;">${d.Notes}</div>` : ''}
+    ${attachmentsHtml}
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-      ${d.Status === 'Pending' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Submitted')"><i class="ti ti-upload"></i> Mark Submitted</button>` : ''}
-      ${d.Status === 'Submitted' ? `<button class="btn btn-primary btn-sm" onclick="updateDocStatus('${d.ID}','Verified')"><i class="ti ti-circle-check"></i> Verify</button>` : ''}
-      ${d.Status !== 'Verified' && d.Status !== 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Incomplete')"><i class="ti ti-alert-circle"></i> Flag Incomplete</button>` : ''}
-      ${d.Status === 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Pending')"><i class="ti ti-refresh"></i> Reopen</button>` : ''}
-      <button class="btn btn-outline btn-sm btn-icon" onclick="openEditDoc('${d.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>
+      ${canSubmit && d.Status !== 'Verified' ? `<button class="btn btn-primary btn-sm" onclick="openSubmitDoc('${d.ID}')"><i class="ti ti-upload"></i> ${files.length || d.SubmitLink ? 'Add more' : 'Submit documents'}</button>` : ''}
+      ${canVerify && d.Status === 'Submitted' ? `<button class="btn btn-primary btn-sm" onclick="updateDocStatus('${d.ID}','Verified')"><i class="ti ti-circle-check"></i> Verify</button>` : ''}
+      ${canVerify && d.Status !== 'Verified' && d.Status !== 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Incomplete')"><i class="ti ti-alert-circle"></i> Flag Incomplete</button>` : ''}
+      ${canVerify && d.Status === 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Pending')"><i class="ti ti-refresh"></i> Reopen</button>` : ''}
+      ${fullAccess ? `<button class="btn btn-outline btn-sm btn-icon" onclick="openEditDoc('${d.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>` : ''}
       ${['bod','developer','senior-impact','senior-biz','project-coordinator'].includes(user.role) ? `<button class="btn btn-danger btn-sm btn-icon" onclick="deleteDoc('${d.ID}','${d.Title.replace(/'/g,"\'")}')" title="Delete"><i class="ti ti-trash"></i></button>` : ''}
     </div>
   </div>`;
@@ -4504,6 +4566,100 @@ async function deleteDoc(id, title) {
   } else {
     showToast(res?.error || 'Failed to delete', 'error');
   }
+}
+
+// ── Document submission (upload files + link) ──
+let docFilesToUpload = [];
+
+function openSubmitDoc(id) {
+  const d = cache._docs?.find(x => x.ID === id);
+  if (!d) return;
+  document.getElementById('submit-doc-id').value = id;
+  document.getElementById('submit-doc-link').value = d.SubmitLink || '';
+  docFilesToUpload = [];
+  renderDocFileList();
+  document.getElementById('submit-doc-details').innerHTML = `
+    <div style="font-weight:600;color:var(--navy);margin-bottom:4px;">${d.Title}</div>
+    <div style="font-size:11px;color:var(--muted);">${d.DocumentType}${d.projectName ? ' · ' + d.projectName : ''} · Due ${d.DueDate ? new Date(d.DueDate).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—'}</div>
+  `;
+  openModal('modal-submit-doc');
+}
+
+function handleDocFilesPicked(event) {
+  const newFiles = Array.from(event.target.files || []);
+  for (const f of newFiles) {
+    if (!docFilesToUpload.some(x => x.name === f.name && x.size === f.size)) {
+      docFilesToUpload.push(f);
+    }
+  }
+  event.target.value = '';
+  renderDocFileList();
+}
+
+function renderDocFileList() {
+  const el = document.getElementById('submit-doc-filelist');
+  if (!docFilesToUpload.length) { el.innerHTML = ''; return; }
+  el.innerHTML = docFilesToUpload.map((f, i) =>
+    `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--off);border-radius:8px;padding:6px 10px;margin-bottom:4px;font-size:12px;">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="ti ti-file" style="font-size:13px;color:var(--muted);"></i> ${f.name}</span>
+      <button onclick="removeDocFile(${i})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;"><i class="ti ti-x"></i></button>
+    </div>`
+  ).join('');
+}
+
+function removeDocFile(i) {
+  docFilesToUpload.splice(i, 1);
+  renderDocFileList();
+}
+
+async function submitDocFiles() {
+  const id = document.getElementById('submit-doc-id').value;
+  const link = document.getElementById('submit-doc-link').value.trim();
+  const btn = document.getElementById('btn-submit-docs');
+
+  if (!docFilesToUpload.length && !link) {
+    showToast('Add at least one file or a link', 'error');
+    return;
+  }
+
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Uploading…';
+
+  // Upload each file
+  const uploadedUrls = [];
+  for (let i = 0; i < docFilesToUpload.length; i++) {
+    btn.innerHTML = `<i class="ti ti-loader"></i> Uploading ${i+1}/${docFilesToUpload.length}…`;
+    const fd = new FormData();
+    fd.append('file', docFilesToUpload[i]);
+    try {
+      const res = await fetch(`${API}/docs/${id}/upload`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: fd,
+      });
+      const data = await res.json();
+      if (data.fileUrl) uploadedUrls.push(data.fileUrl);
+    } catch(e) {
+      showToast('Upload failed for ' + docFilesToUpload[i].name, 'error');
+    }
+  }
+
+  // Record the submission (files + link, sets status to Submitted)
+  btn.innerHTML = '<i class="ti ti-loader"></i> Finalizing…';
+  const res = await api(`/docs/${id}/submit`, {
+    method: 'POST',
+    body: JSON.stringify({ fileUrls: uploadedUrls, link }),
+  });
+
+  if (res?.success) {
+    closeModal('modal-submit-doc');
+    showToast('Documents submitted ✓', 'success');
+    docFilesToUpload = [];
+    loadDocs();
+  } else {
+    showToast(res?.error || 'Failed to submit', 'error');
+  }
+
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-upload"></i> Submit';
 }
 
 // ════════════════════════════════════════════════════════
