@@ -1192,8 +1192,9 @@ tbody tr:hover td{background:#fafcfb;}
       </div>
 
       <div class="form-group">
-        <label class="form-label">Or paste a link <span style="color:var(--muted);font-size:10px;">(Drive folder, etc.)</span></label>
-        <input class="form-input" id="submit-doc-link" placeholder="https://drive.google.com/…">
+        <label class="form-label">Or paste links <span style="color:var(--muted);font-size:10px;">(Drive folders, etc.)</span></label>
+        <div id="submit-doc-links"></div>
+        <button class="btn btn-outline btn-sm" onclick="addDocLinkField()" style="margin-top:6px;"><i class="ti ti-plus"></i> Add link</button>
       </div>
     </div>
     <div class="modal-footer">
@@ -4433,16 +4434,25 @@ function renderDocCard(d, fullAccess) {
   const dueFmt = d.DueDate ? new Date(d.DueDate).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) : '—';
   const actFmt = d.ActivityDate ? new Date(d.ActivityDate).toLocaleDateString('en-GB', {day:'numeric',month:'short'}) : '';
 
-  // Build the attached files / link display
-  const files = (d.Files || '').split(',').map(s => s.trim()).filter(Boolean);
+  // Build the attached files / links display with per-entry timestamps
+  const entries = d.entries || [];
   let attachmentsHtml = '';
-  if (files.length || d.SubmitLink) {
-    attachmentsHtml = `<div style="background:#F0F9F4;border-radius:8px;padding:8px 12px;margin-bottom:12px;">
-      <div style="font-size:11px;font-weight:600;color:#085041;margin-bottom:4px;"><i class="ti ti-paperclip" style="font-size:11px;"></i> Submitted documents</div>
-      ${files.map((f,i) => `<div style="font-size:12px;margin-bottom:2px;"><a href="${f}" target="_blank" style="color:var(--teal);">File ${i+1} <i class="ti ti-external-link" style="font-size:10px;"></i></a></div>`).join('')}
-      ${d.SubmitLink ? `<div style="font-size:12px;"><a href="${d.SubmitLink}" target="_blank" style="color:var(--teal);"><i class="ti ti-link" style="font-size:11px;"></i> ${d.SubmitLink}</a></div>` : ''}
+  if (entries.length) {
+    attachmentsHtml = `<div style="background:#F0F9F4;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:600;color:#085041;margin-bottom:6px;"><i class="ti ti-paperclip" style="font-size:11px;"></i> Submitted documents (${entries.length})</div>
+      ${entries.map((en, i) => {
+        const t = en.time ? new Date(en.time) : null;
+        const timeStr = t ? t.toLocaleString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+        const icon = en.type === 'link' ? 'ti-link' : 'ti-file';
+        const label = en.type === 'link' ? (en.url.length > 40 ? en.url.slice(0,40)+'…' : en.url) : (en.name || ('File ' + (i+1)));
+        return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:5px 0;border-top:${i>0?'1px solid #DCEEE4':'none'};">
+          <a href="${en.url}" target="_blank" style="color:var(--teal);font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="ti ${icon}" style="font-size:11px;"></i> ${label} <i class="ti ti-external-link" style="font-size:10px;"></i></a>
+          ${timeStr ? `<span style="font-size:10px;color:var(--muted);white-space:nowrap;flex-shrink:0;">${timeStr}${en.by ? ' · ' + en.by : ''}</span>` : ''}
+        </div>`;
+      }).join('')}
     </div>`;
   }
+  const hasSubmissions = entries.length > 0;
 
   // Can this person submit? (the owner, or support/management)
   const canSubmit = fullAccess || d.RequestedFromID === user.staffId;
@@ -4470,7 +4480,7 @@ function renderDocCard(d, fullAccess) {
     ${d.Notes ? `<div style="font-size:12px;color:var(--text);background:var(--off);border-radius:8px;padding:8px 12px;margin-bottom:12px;">${d.Notes}</div>` : ''}
     ${attachmentsHtml}
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-      ${canSubmit && d.Status !== 'Verified' ? `<button class="btn btn-primary btn-sm" onclick="openSubmitDoc('${d.ID}')"><i class="ti ti-upload"></i> ${files.length || d.SubmitLink ? 'Add more' : 'Submit documents'}</button>` : ''}
+      ${canSubmit && d.Status !== 'Verified' ? `<button class="btn btn-primary btn-sm" onclick="openSubmitDoc('${d.ID}')"><i class="ti ti-upload"></i> ${hasSubmissions ? 'Add more' : 'Submit documents'}</button>` : ''}
       ${canVerify && d.Status === 'Submitted' ? `<button class="btn btn-primary btn-sm" onclick="updateDocStatus('${d.ID}','Verified')"><i class="ti ti-circle-check"></i> Verify</button>` : ''}
       ${canVerify && d.Status !== 'Verified' && d.Status !== 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Incomplete')"><i class="ti ti-alert-circle"></i> Flag Incomplete</button>` : ''}
       ${canVerify && d.Status === 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Pending')"><i class="ti ti-refresh"></i> Reopen</button>` : ''}
@@ -4575,14 +4585,27 @@ function openSubmitDoc(id) {
   const d = cache._docs?.find(x => x.ID === id);
   if (!d) return;
   document.getElementById('submit-doc-id').value = id;
-  document.getElementById('submit-doc-link').value = d.SubmitLink || '';
   docFilesToUpload = [];
   renderDocFileList();
+  // Reset links to a single empty field
+  document.getElementById('submit-doc-links').innerHTML = '';
+  addDocLinkField();
   document.getElementById('submit-doc-details').innerHTML = `
     <div style="font-weight:600;color:var(--navy);margin-bottom:4px;">${d.Title}</div>
     <div style="font-size:11px;color:var(--muted);">${d.DocumentType}${d.projectName ? ' · ' + d.projectName : ''} · Due ${d.DueDate ? new Date(d.DueDate).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—'}</div>
   `;
   openModal('modal-submit-doc');
+}
+
+function addDocLinkField() {
+  const container = document.getElementById('submit-doc-links');
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;';
+  row.innerHTML = `
+    <input class="form-input doc-link-input" placeholder="https://drive.google.com/…" style="flex:1;">
+    <button onclick="this.parentElement.remove()" class="btn btn-outline btn-sm btn-icon" title="Remove"><i class="ti ti-x"></i></button>
+  `;
+  container.appendChild(row);
 }
 
 function handleDocFilesPicked(event) {
@@ -4614,18 +4637,21 @@ function removeDocFile(i) {
 
 async function submitDocFiles() {
   const id = document.getElementById('submit-doc-id').value;
-  const link = document.getElementById('submit-doc-link').value.trim();
   const btn = document.getElementById('btn-submit-docs');
 
-  if (!docFilesToUpload.length && !link) {
+  // Collect all non-empty links
+  const links = Array.from(document.querySelectorAll('.doc-link-input'))
+    .map(el => el.value.trim()).filter(Boolean);
+
+  if (!docFilesToUpload.length && !links.length) {
     showToast('Add at least one file or a link', 'error');
     return;
   }
 
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Uploading…';
 
-  // Upload each file
-  const uploadedUrls = [];
+  // Upload each file, keeping its name
+  const uploadedFiles = [];
   for (let i = 0; i < docFilesToUpload.length; i++) {
     btn.innerHTML = `<i class="ti ti-loader"></i> Uploading ${i+1}/${docFilesToUpload.length}…`;
     const fd = new FormData();
@@ -4637,17 +4663,17 @@ async function submitDocFiles() {
         body: fd,
       });
       const data = await res.json();
-      if (data.fileUrl) uploadedUrls.push(data.fileUrl);
+      if (data.fileUrl) uploadedFiles.push({ url: data.fileUrl, name: data.fileName || docFilesToUpload[i].name });
     } catch(e) {
       showToast('Upload failed for ' + docFilesToUpload[i].name, 'error');
     }
   }
 
-  // Record the submission (files + link, sets status to Submitted)
+  // Record the submission (files + links with timestamps, sets status to Submitted)
   btn.innerHTML = '<i class="ti ti-loader"></i> Finalizing…';
   const res = await api(`/docs/${id}/submit`, {
     method: 'POST',
-    body: JSON.stringify({ fileUrls: uploadedUrls, link }),
+    body: JSON.stringify({ files: uploadedFiles, links }),
   });
 
   if (res?.success) {
