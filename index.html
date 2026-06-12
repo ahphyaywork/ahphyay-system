@@ -4616,8 +4616,14 @@ async function loadDocs() {
     `;
     if (filterBar) filterBar.style.display = data.docs.length ? 'flex' : 'none';
   } else {
-    // Project member — simplified "My Documents" view
-    if (sectionTitle) sectionTitle.textContent = 'My Documents to Submit';
+    // Non-full-access user — they may have documents to SUBMIT and/or to VERIFY
+    const toVerify = (data.docs || []).filter(d => d.canVerify && !d.isOwner).length;
+    const toSubmit = (data.docs || []).filter(d => d.isOwner).length;
+    let title = 'My Documents';
+    if (toVerify && !toSubmit) title = 'Documents to Verify';
+    else if (toSubmit && !toVerify) title = 'My Documents to Submit';
+    else if (toSubmit && toVerify) title = 'My Documents';
+    if (sectionTitle) sectionTitle.textContent = title;
     if (newBtn) newBtn.style.display = 'none';
     counters.style.display = 'none';
     if (filterBar) filterBar.style.display = 'none';
@@ -4720,6 +4726,11 @@ function renderDocCard(d, fullAccess) {
 
   return `<div style="background:var(--white);border:1px solid ${d.isOverdue ? '#E24B4A' : 'var(--border2)'};border-radius:12px;padding:16px;margin-bottom:12px;${d.isOverdue ? 'box-shadow:0 0 0 1px #E24B4A;' : ''}">
     ${d.isOverdue ? `<div style="background:#FFEBEE;color:#C62828;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;margin-bottom:10px;display:inline-block;"><i class="ti ti-alert-triangle"></i> Blocking reporting — overdue</div>` : ''}
+    ${!fullAccess ? (() => {
+      if (d.isOwner) return `<div style="display:inline-block;background:#E3F2FD;color:#1565C0;font-size:10px;font-weight:600;padding:3px 9px;border-radius:99px;margin-bottom:10px;"><i class="ti ti-upload" style="font-size:10px;"></i> You submit this</div>`;
+      if (d.canVerify) return `<div style="display:inline-block;background:#F3E5F5;color:#6A1B9A;font-size:10px;font-weight:600;padding:3px 9px;border-radius:99px;margin-bottom:10px;"><i class="ti ti-circle-check" style="font-size:10px;"></i> You verify this</div>`;
+      return '';
+    })() : ''}
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
       <div style="flex:1;min-width:0;">
         <div style="font-size:14px;font-weight:600;color:var(--navy);margin-bottom:4px;">${d.Title}</div>
@@ -4743,7 +4754,7 @@ function renderDocCard(d, fullAccess) {
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
       ${canSubmit && d.Status !== 'Verified' ? `<button class="btn btn-primary btn-sm" onclick="openSubmitDoc('${d.ID}')"><i class="ti ti-upload"></i> ${hasSubmissions ? 'Add more' : 'Submit documents'}</button>` : ''}
       ${canVerify && d.Status === 'Submitted' ? `<button class="btn btn-primary btn-sm" onclick="updateDocStatus('${d.ID}','Verified')"><i class="ti ti-circle-check"></i> Verify</button>` : ''}
-      ${canVerify && d.Status !== 'Verified' && d.Status !== 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="openFlagIncomplete('${d.ID}','${d.Title.replace(/'/g,"\'")}')"><i class="ti ti-alert-circle"></i> Flag Incomplete</button>` : ''}
+      ${canVerify && d.Status === 'Submitted' ? `<button class="btn btn-outline btn-sm" onclick="openFlagIncomplete('${d.ID}','${d.Title.replace(/'/g,"\'")}')"><i class="ti ti-alert-circle"></i> Flag Incomplete</button>` : ''}
       ${canVerify && d.Status === 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Pending')"><i class="ti ti-refresh"></i> Reopen</button>` : ''}
       ${fullAccess ? `<button class="btn btn-outline btn-sm btn-icon" onclick="openEditDoc('${d.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>` : ''}
       ${['bod','developer','senior-impact','senior-biz','project-coordinator'].includes(user.role) ? `<button class="btn btn-danger btn-sm btn-icon" onclick="deleteDoc('${d.ID}','${d.Title.replace(/'/g,"\'")}')" title="Delete"><i class="ti ti-trash"></i></button>` : ''}
