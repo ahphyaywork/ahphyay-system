@@ -286,6 +286,7 @@ tbody tr:hover td{background:#fafcfb;}
 .badge-staff{background:var(--teal-lt);color:#085041;}
 .badge-external{background:var(--off);color:var(--muted);border:1px solid var(--border2);}
 /* Role badges */
+.badge-developer{background:#1a1a2e;color:#00d9ff;}
 .badge-bod{background:var(--navy);color:var(--white);}
 .badge-senior-impact{background:var(--purple-lt);color:var(--purple);}
 .badge-senior-biz{background:#EDE7F6;color:#4527A0;}
@@ -828,6 +829,7 @@ tbody tr:hover td{background:#fafcfb;}
             <option value="senior-impact">Senior Impact Coordinator</option>
             <option value="senior-biz">Senior Business Development Coordinator</option>
             <option value="bod">BOD</option>
+            <option value="developer">Developer</option>
           </select>
         </div>
         <div class="form-group">
@@ -1224,6 +1226,7 @@ let cache = { staff: null, staffNames: null, projects: null, tasks: null };
 
 // Role display labels — maps role key to readable job title
 const ROLE_LABELS = {
+  'developer':            'Developer',
   'bod':                  'BOD',
   'senior-impact':        'Senior Impact Coordinator',
   'senior-biz':           'Senior Business Development Coordinator',
@@ -1387,7 +1390,7 @@ function buildNav() {
   const nav = document.getElementById('sidebar-nav');
 
   // Role groups for nav
-  const mgmtRoles = ['bod','senior-impact','senior-biz','project-coordinator'];
+  const mgmtRoles = ['developer','bod','senior-impact','senior-biz','project-coordinator'];
   const staffRoles = ['production-lead','senior-admin','project-officer','network-catalyst','page-admin','admin-assistant','production-intern'];
   const allRoles = [...mgmtRoles, ...staffRoles];
 
@@ -1397,7 +1400,7 @@ function buildNav() {
     { panel:'worklog',   icon:'<i class="ti ti-clipboard-list"></i>', label:'Work Log',    roles: mgmtRoles },
     { panel:'kpi',       icon:'<i class="ti ti-chart-bar"></i>', label:'KPI Overview',roles: mgmtRoles },
     { sep:'Organisation',                                roles: mgmtRoles },
-    { panel:'staff',     icon:'<i class="ti ti-users"></i>', label:'Staff',       roles: ['bod'] },
+    { panel:'staff',     icon:'<i class="ti ti-users"></i>', label:'Staff',       roles: ['bod','developer'] },
     { panel:'projects',  icon:'<i class="ti ti-folder"></i>', label:'Projects',    roles: mgmtRoles },
     { panel:'tasks',     icon:'<i class="ti ti-checklist"></i>', label:'Tasks',       roles: allRoles },
     { panel:'storage',   icon:'<i class="ti ti-database"></i>', label:'Storage',     roles: allRoles },
@@ -1745,7 +1748,7 @@ async function loadStaff() {
       <td>
         <div style="display:flex;gap:4px;">
           <button class="btn btn-outline btn-sm btn-icon" onclick="openEditStaff('${s.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>
-          ${user.role==='bod'?`<button class="btn btn-outline btn-sm btn-icon" onclick="openResetPw('${s.ID}')" title="Reset password">🔑</button>`:''}
+          ${['bod','developer'].includes(user.role)?`<button class="btn btn-outline btn-sm btn-icon" onclick="openResetPw('${s.ID}')" title="Reset password">🔑</button>`:''}
         </div>
       </td>
     </tr>`).join('');
@@ -2016,7 +2019,7 @@ function clearTaskFilters() {
 
 function renderTaskRows(tasks, projects, staff) {
   const tbody = document.getElementById('tasks-table-body');
-  const canEdit = ['bod','senior-impact','senior-biz','project-coordinator'].includes(user.role);
+  const canEdit = ['developer','bod','senior-impact','senior-biz','project-coordinator'].includes(user.role);
 
   if (!tasks.length) {
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon"><i class="ti ti-checklist"></i></div>No tasks match the filters.</div></td></tr>';
@@ -2214,7 +2217,7 @@ function openAddTask() {
   const projSel = document.getElementById('task-project');
   projSel.innerHTML = projects.map(p => `<option value="${p.ID}">${p.Name}</option>`).join('');
 
-  const canAssign = ['bod','senior-impact','senior-biz','project-coordinator'].includes(user.role);
+  const canAssign = ['developer','bod','senior-impact','senior-biz','project-coordinator'].includes(user.role);
   if (canAssign) {
     initAssigneePicker(cache.staff||[], []);
   } else {
@@ -2241,7 +2244,7 @@ function openEditTask(id) {
     `<option value="${p.ID}" ${p.ID === t.ProjectID ? 'selected' : ''}>${p.Name}</option>`
   ).join('');
 
-  const canAssign = ['bod','senior-impact','senior-biz','project-coordinator'].includes(user.role);
+  const canAssign = ['developer','bod','senior-impact','senior-biz','project-coordinator'].includes(user.role);
   const selectedIds = (t.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
   if (canAssign) {
     initAssigneePicker(cache.staff||[], selectedIds);
@@ -2310,7 +2313,7 @@ async function loadWorklog() {
       <td><span class="badge ${l.Status==='Done'?'badge-done':l.Status==='In Progress'?'badge-prog':'badge-late'}">
         <span class="badge-dot"></span>${l.Status}</span></td>
       <td style="color:var(--muted);font-size:12px">${l.Note||'—'}</td>
-      <td>${user.role==='bod'?`<button class="btn btn-danger btn-sm btn-icon" onclick="deleteWorklog('${l.ID}')" title="Delete"><i class="ti ti-x"></i></button>`:'—'}</td>
+      <td>${['bod','developer'].includes(user.role)?`<button class="btn btn-danger btn-sm btn-icon" onclick="deleteWorklog('${l.ID}')" title="Delete"><i class="ti ti-x"></i></button>`:'—'}</td>
     </tr>`;
   }).join('');
 }
@@ -3142,7 +3145,7 @@ async function loadStorage() {
 
   // Show init button for admin
   const initBtn = document.getElementById('btn-init-folders');
-  if (initBtn) initBtn.style.display = user.role === 'bod' ? 'block' : 'none';
+  if (initBtn) initBtn.style.display = ['bod','developer'].includes(user.role) ? 'block' : 'none';
 
   const data = await api('/storage');
   if (!data) return;
@@ -3269,7 +3272,7 @@ function renderFileRow(f) {
   const size = f.size ? formatBytes(parseInt(f.size)) : '—';
   const date = f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('en-GB') : '—';
   const icon = fileIcon(f.mimeType, f.name);
-  const canEdit = ['bod','senior-impact','senior-biz','project-coordinator'].includes(user.role) || currentStorageStaffId === user.staffId;
+  const canEdit = ['developer','bod','senior-impact','senior-biz','project-coordinator'].includes(user.role) || currentStorageStaffId === user.staffId;
 
   return `<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border2);">
     <span style="font-size:18px;flex-shrink:0;">${icon}</span>
@@ -3561,7 +3564,7 @@ function initReportDates() {
   // Only show download button for management/admin
   const actionsEl = document.getElementById('kpi-report-actions');
   if (actionsEl) {
-    const canDownload = ['bod','senior-impact','senior-biz','project-coordinator'].includes(user.role);
+    const canDownload = ['developer','bod','senior-impact','senior-biz','project-coordinator'].includes(user.role);
     actionsEl.style.display = canDownload ? 'flex' : 'none';
   }
   const to = new Date();
@@ -3635,7 +3638,7 @@ async function downloadKPIReport() {
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...muted);
     doc.text(`${fromDate} — ${toDate}`, W - M, 12, { align: 'right' });
 
-    const activeStaff = staffList.filter(s => s.Active?.toLowerCase() === 'true');
+    const activeStaff = staffList.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRoleKey(s.Role) !== 'developer');
     const summaryData = activeStaff.map(s => {
       const sTasks = activeTasks.filter(t => (t.AssigneeID||'').split(',').map(x=>x.trim()).includes(s.ID));
       const sDone = sTasks.filter(t => t.Status === 'Done').length;
