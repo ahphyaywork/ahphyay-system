@@ -720,8 +720,28 @@ tbody tr:hover td{background:#fafcfb;}
         <div style="background:#FFF8E1;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#8D6E00;">
           <i class="ti ti-alert-triangle"></i> Track supporting documents owed by project teams. Overdue submissions block finance reporting — these are flagged in red. Submit within 3–5 days post-activity to keep monthly closing on schedule.
         </div>
-        <!-- Counters -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;" id="doc-counters"></div>
+        <!-- Counters (clickable to filter) -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;" id="doc-counters"></div>
+        <!-- Search + filter bar -->
+        <div id="doc-filter-bar" style="display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap;">
+          <div style="position:relative;flex:1;min-width:200px;">
+            <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;"></i>
+            <input id="doc-search" placeholder="Search by title or person…" oninput="renderFilteredDocs()" style="width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;outline:none;">
+          </div>
+          <select id="doc-status-filter" onchange="renderFilteredDocs()" style="padding:9px 12px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;outline:none;">
+            <option value="">All statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="overdue">Overdue</option>
+            <option value="Submitted">Submitted</option>
+            <option value="Verified">Verified</option>
+            <option value="Incomplete">Incomplete</option>
+          </select>
+          <select id="doc-sort" onchange="renderFilteredDocs()" style="padding:9px 12px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;outline:none;">
+            <option value="overdue">Most overdue first</option>
+            <option value="newest">Newest first</option>
+            <option value="due">By due date</option>
+          </select>
+        </div>
         <!-- List -->
         <div id="docs-list"></div>
       </div>
@@ -4605,22 +4625,26 @@ async function loadDocs() {
   const sectionTitle = document.querySelector('#panel-docs .section-title');
   const newBtn = document.querySelector('#panel-docs .section-hd .btn-primary');
 
+  const filterBar = document.getElementById('doc-filter-bar');
+
   if (data.fullAccess) {
     if (sectionTitle) sectionTitle.textContent = 'Document Submission Tracker';
     if (newBtn) newBtn.style.display = '';
     const c = data.counts;
     counters.style.display = 'grid';
     counters.innerHTML = `
-      ${docCounter('Pending', c.pending, '#E65100', '#FFF3E0')}
-      ${docCounter('Overdue', c.overdue, '#C62828', '#FFEBEE')}
-      ${docCounter('Verified', c.verified, '#2E7D32', '#E8F5E9')}
-      ${docCounter('Incomplete', c.incomplete, '#6A1B9A', '#F3E5F5')}
+      ${docCounter('Pending', c.pending, '#E65100', '#FFF3E0', 'Pending')}
+      ${docCounter('Overdue', c.overdue, '#C62828', '#FFEBEE', 'overdue')}
+      ${docCounter('Verified', c.verified, '#2E7D32', '#E8F5E9', 'Verified')}
+      ${docCounter('Incomplete', c.incomplete, '#6A1B9A', '#F3E5F5', 'Incomplete')}
     `;
+    if (filterBar) filterBar.style.display = data.docs.length ? 'flex' : 'none';
   } else {
     // Project member — simplified "My Documents" view
     if (sectionTitle) sectionTitle.textContent = 'My Documents to Submit';
     if (newBtn) newBtn.style.display = 'none';
     counters.style.display = 'none';
+    if (filterBar) filterBar.style.display = 'none';
   }
 
   if (!data.docs.length) {
@@ -4628,11 +4652,62 @@ async function loadDocs() {
     return;
   }
 
-  list.innerHTML = data.docs.map(d => renderDocCard(d, data.fullAccess)).join('');
+  renderFilteredDocs();
 }
 
-function docCounter(label, count, color, bg) {
-  return `<div style="background:${bg};border-radius:12px;padding:14px 16px;text-align:center;">
+// Clicking a counter card sets the status filter
+function filterDocsByStatus(status) {
+  const sel = document.getElementById('doc-status-filter');
+  if (sel) { sel.value = status; renderFilteredDocs(); }
+}
+
+function renderFilteredDocs() {
+  const list = document.getElementById('docs-list');
+  let docs = (cache._docs || []).slice();
+  const fullAccess = cache._docsFullAccess;
+
+  const search = (document.getElementById('doc-search')?.value || '').toLowerCase().trim();
+  const statusFilter = document.getElementById('doc-status-filter')?.value || '';
+  const sort = document.getElementById('doc-sort')?.value || 'overdue';
+
+  // Search by title or person
+  if (search) {
+    docs = docs.filter(d =>
+      (d.Title || '').toLowerCase().includes(search) ||
+      (d.requestedFromName || '').toLowerCase().includes(search) ||
+      (d.projectName || '').toLowerCase().includes(search)
+    );
+  }
+
+  // Status filter
+  if (statusFilter === 'overdue') {
+    docs = docs.filter(d => d.isOverdue);
+  } else if (statusFilter) {
+    docs = docs.filter(d => d.Status === statusFilter);
+  }
+
+  // Sort
+  if (sort === 'overdue') {
+    docs.sort((a, b) => {
+      if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+      return (a.DueDate || '').localeCompare(b.DueDate || '');
+    });
+  } else if (sort === 'newest') {
+    docs.sort((a, b) => (b.CreatedAt || '').localeCompare(a.CreatedAt || ''));
+  } else if (sort === 'due') {
+    docs.sort((a, b) => (a.DueDate || '').localeCompare(b.DueDate || ''));
+  }
+
+  if (!docs.length) {
+    list.innerHTML = `<div class="empty" style="padding:32px 16px;"><div class="empty-icon"><i class="ti ti-search"></i></div>No documents match your filters</div>`;
+    return;
+  }
+
+  list.innerHTML = docs.map(d => renderDocCard(d, fullAccess)).join('');
+}
+
+function docCounter(label, count, color, bg, filterVal) {
+  return `<div onclick="filterDocsByStatus('${filterVal}')" style="background:${bg};border-radius:12px;padding:14px 16px;text-align:center;cursor:pointer;transition:transform .1s;border:2px solid transparent;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='${color}33'" onmouseout="this.style.transform='none';this.style.borderColor='transparent'">
     <div style="font-size:24px;font-weight:700;color:${color};">${count}</div>
     <div style="font-size:11px;color:${color};font-weight:500;margin-top:2px;">${label}</div>
   </div>`;
