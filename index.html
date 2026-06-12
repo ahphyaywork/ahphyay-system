@@ -2505,10 +2505,9 @@ async function populateLinkedDocDropdown(selectedDocId) {
     docs = data?.docs || [];
     cache._allDocs = docs;
   }
-  // Can this user create documents? (support team or management)
-  const canCreateDocs = cache._docsFullAccess !== false; // true unless explicitly limited
+  // Everyone can create — but program team can only create docs they themselves owe
   sel.innerHTML = '<option value="">No document dependency</option>' +
-    (canCreateDocs ? '<option value="__new__">+ Create new document request…</option>' : '') +
+    '<option value="__new__">+ Create new document request…</option>' +
     docs.map(d => `<option value="${d.ID}" ${d.ID === selectedDocId ? 'selected' : ''}>${d.Title} — ${d.Status}</option>`).join('');
 }
 
@@ -2522,6 +2521,12 @@ function handleLinkedDocChange() {
   }
 }
 
+// Does the current user have full document access? (support team or management)
+function hasFullDocsAccess() {
+  const mgmtRoles = ['developer','bod','senior-impact','senior-biz','project-coordinator'];
+  return mgmtRoles.includes(user.role) || user.team === 'Support Team';
+}
+
 async function openQuickDoc() {
   // Pre-fill title + due date from the task being created/edited
   const taskName = document.getElementById('task-name').value.trim();
@@ -2531,12 +2536,23 @@ async function openQuickDoc() {
   document.getElementById('quick-doc-type').value = 'Receipts';
   document.getElementById('quick-doc-notes').value = '';
 
-  // Populate "requested from" with all staff
-  const staffNames = cache.staffNames || await api('/staff/names');
-  if (staffNames) cache.staffNames = staffNames;
   const fromSel = document.getElementById('quick-doc-from');
-  fromSel.innerHTML = '<option value="">Select staff member…</option>' +
-    (staffNames || []).map(s => `<option value="${s.ID}">${s.Name} — ${roleLabel(s.Role)}</option>`).join('');
+  const fromGroup = fromSel.closest('.form-group');
+
+  if (hasFullDocsAccess()) {
+    // Support/management — can request from anyone
+    const staffNames = cache.staffNames || await api('/staff/names');
+    if (staffNames) cache.staffNames = staffNames;
+    fromSel.innerHTML = '<option value="">Select staff member…</option>' +
+      (staffNames || []).map(s => `<option value="${s.ID}">${s.Name} — ${roleLabel(s.Role)}</option>`).join('');
+    fromSel.disabled = false;
+    if (fromGroup) fromGroup.querySelector('.form-label').innerHTML = 'Requested from <span style="color:var(--red)">*</span> <span style="color:var(--muted);font-size:10px;">(who owes the documents)</span>';
+  } else {
+    // Program team — can only log documents THEY owe (locked to self)
+    fromSel.innerHTML = `<option value="${user.staffId}" selected>${user.name} (you)</option>`;
+    fromSel.disabled = true;
+    if (fromGroup) fromGroup.querySelector('.form-label').innerHTML = 'Documents you owe <span style="color:var(--muted);font-size:10px;">(you can only log your own documents)</span>';
+  }
 
   openModal('modal-quick-doc');
 }
