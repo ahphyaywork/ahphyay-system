@@ -711,6 +711,25 @@ tbody tr:hover td{background:#fafcfb;}
         </div>
       </div>
 
+      <!-- ── RECURRING TASKS PANEL ── -->
+      <div class="panel" id="panel-recurring">
+        <div class="section-hd">
+          <div class="section-title">Recurring Tasks</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="generateRecurring()" id="btn-generate-recurring"><i class="ti ti-player-play"></i> Generate due tasks</button>
+            <button class="btn btn-primary btn-sm" onclick="openAddRecurring()"><i class="ti ti-plus"></i> New Template</button>
+          </div>
+        </div>
+        <div style="background:var(--teal-lt);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#085041;">
+          <i class="ti ti-info-circle"></i> Recurring task templates auto-generate real tasks based on their frequency. Daily tasks generate once per day, weekly every 7 days, monthly once per month. Generation runs automatically when management opens the system, or manually via the button above.
+        </div>
+        <div id="seed-prompt" style="display:none;background:var(--off);border:1px dashed var(--border2);border-radius:12px;padding:20px;text-align:center;margin-bottom:16px;">
+          <div style="font-size:14px;color:var(--navy);margin-bottom:10px;">No recurring templates yet. Load the 11 standard workflow templates from the support team workflow?</div>
+          <button class="btn btn-primary btn-sm" onclick="seedRecurring()" id="btn-seed"><i class="ti ti-download"></i> Load 11 templates</button>
+        </div>
+        <div id="recurring-list"></div>
+      </div>
+
       <!-- ── REQUESTS PANEL ── -->
       <div class="panel" id="panel-requests">
         <div class="section-hd">
@@ -1137,6 +1156,55 @@ tbody tr:hover td{background:#fafcfb;}
   </div>
 </div>
 
+<!-- Recurring Task Modal -->
+<div class="modal-overlay" id="modal-recurring">
+  <div class="modal" style="width:min(520px,92vw);">
+    <div class="modal-header">
+      <div class="modal-title" id="recurring-modal-title">New Recurring Template</div>
+      <button class="modal-close" onclick="closeModal('modal-recurring')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="recurring-id">
+      <div class="form-group">
+        <label class="form-label">Title <span style="color:var(--red)">*</span></label>
+        <input class="form-input" id="recurring-title" placeholder="e.g. Monthly financial report">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-input" id="recurring-description" rows="3" placeholder="What needs to be done…" style="resize:vertical;"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Frequency <span style="color:var(--red)">*</span></label>
+          <select class="form-input" id="recurring-frequency">
+            <option value="Daily">Daily</option>
+            <option value="Weekly">Weekly</option>
+            <option value="Monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Team</label>
+          <select class="form-input" id="recurring-team">
+            <option value="Support Team">Support Team</option>
+            <option value="Program Team">Program Team</option>
+            <option value="Management">Management</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assign to <span style="color:var(--muted);font-size:10px;">(optional — who owns this task)</span></label>
+        <select class="form-input" id="recurring-assignee">
+          <option value="">Unassigned</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-recurring')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRecurring()">Save Template</button>
+    </div>
+  </div>
+</div>
+
 <!-- New Request Modal -->
 <div class="modal-overlay" id="modal-new-request">
   <div class="modal" style="width:min(520px,92vw);">
@@ -1385,6 +1453,7 @@ function showApp() {
   buildNav();
   navigateTo('dashboard');
   startNotifPolling();
+  autoGenerateRecurring();
   setTimeout(() => {
     if (!cache.staff) api('/staff').then(d => { if (d) cache.staff = d; });
     if (!cache.staffNames) api('/staff/names').then(d => { if (d) cache.staffNames = d; });
@@ -1407,6 +1476,7 @@ function buildNav() {
     { sep:'Management',                                  roles: mgmtRoles },
     { panel:'worklog',   icon:'<i class="ti ti-clipboard-list"></i>', label:'Work Log',    roles: mgmtRoles },
     { panel:'kpi',       icon:'<i class="ti ti-chart-bar"></i>', label:'KPI Overview',roles: mgmtRoles },
+    { panel:'recurring', icon:'<i class="ti ti-repeat"></i>', label:'Recurring',    roles: mgmtRoles },
     { sep:'Organisation',                                roles: mgmtRoles },
     { panel:'staff',     icon:'<i class="ti ti-users"></i>', label:'Staff',       roles: ['bod','developer'] },
     { panel:'projects',  icon:'<i class="ti ti-folder"></i>', label:'Projects',    roles: mgmtRoles },
@@ -1469,6 +1539,7 @@ function navigateTo(panelId, label) {
   else if (panelId === 'worklog') loadWorklog();
   else if (panelId === 'kpi') { loadKPI(); initReportDates(); }
   else if (panelId === 'requests') loadRequests();
+  else if (panelId === 'recurring') loadRecurring();
   else if (panelId === 'storage') loadStorage();
   else if (panelId === 'profile') loadProfile();
 
@@ -4179,6 +4250,197 @@ async function confirmDeleteTask(taskId, taskName) {
   } else {
     showToast(res?.error || 'Failed to delete task', 'error');
   }
+}
+
+// ════════════════════════════════════════════════════════
+// RECURRING TASKS
+// ════════════════════════════════════════════════════════
+const FREQ_COLORS = {
+  'Daily':   { bg:'#FFEBEE', color:'#C62828' },
+  'Weekly':  { bg:'#E3F2FD', color:'#1565C0' },
+  'Monthly': { bg:'#E8F5E9', color:'#2E7D32' },
+};
+
+async function loadRecurring() {
+  const el = document.getElementById('recurring-list');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  const data = await api('/recurring');
+  if (!data) return;
+  cache._recurring = data;
+
+  const seedPrompt = document.getElementById('seed-prompt');
+
+  if (!data.length) {
+    el.innerHTML = '';
+    // Only show seed prompt to BOD/Developer
+    if (seedPrompt && ['bod','developer'].includes(user.role)) {
+      seedPrompt.style.display = 'block';
+    }
+    el.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-repeat"></i></div>No recurring templates yet</div>';
+    return;
+  }
+
+  if (seedPrompt) seedPrompt.style.display = 'none';
+
+  // Group by frequency
+  const order = ['Daily','Weekly','Monthly'];
+  el.innerHTML = order.map(freq => {
+    const items = data.filter(r => r.Frequency === freq);
+    if (!items.length) return '';
+    return `<div style="margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">${freq} (${items.length})</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${items.map(r => renderRecurringCard(r)).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderRecurringCard(r) {
+  const fc = FREQ_COLORS[r.Frequency] || FREQ_COLORS['Weekly'];
+  const isActive = r.Active?.toLowerCase() === 'true';
+  const lastGen = r.LastGenerated ? new Date(r.LastGenerated).toLocaleDateString('en-GB', {day:'numeric',month:'short'}) : 'Never';
+
+  return `<div style="background:var(--white);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;${!isActive ? 'opacity:0.55;' : ''}">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="font-size:14px;font-weight:600;color:var(--navy);">${r.Title}</span>
+          <span style="background:${fc.bg};color:${fc.color};font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;">${r.Frequency}</span>
+          ${!isActive ? '<span style="background:var(--off);color:var(--muted);font-size:10px;padding:2px 8px;border-radius:99px;border:1px solid var(--border2);">Inactive</span>' : ''}
+        </div>
+        ${r.Description ? `<div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:6px;">${r.Description}</div>` : ''}
+        <div style="font-size:11px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;">
+          <span><i class="ti ti-users" style="font-size:11px;"></i> ${r.Team}</span>
+          <span><i class="ti ti-user" style="font-size:11px;"></i> ${r.assigneeName || 'Unassigned'}</span>
+          <span><i class="ti ti-clock" style="font-size:11px;"></i> Last: ${lastGen}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        <button class="btn btn-outline btn-sm btn-icon" onclick="openEditRecurring('${r.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>
+        <button class="btn btn-outline btn-sm btn-icon" onclick="toggleRecurringActive('${r.ID}', ${isActive})" title="${isActive ? 'Deactivate' : 'Activate'}"><i class="ti ti-${isActive ? 'player-pause' : 'player-play'}"></i></button>
+        <button class="btn btn-danger btn-sm btn-icon" onclick="deleteRecurring('${r.ID}','${r.Title.replace(/'/g,"\'")}')" title="Delete"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function openAddRecurring() {
+  document.getElementById('recurring-modal-title').textContent = 'New Recurring Template';
+  document.getElementById('recurring-id').value = '';
+  document.getElementById('recurring-title').value = '';
+  document.getElementById('recurring-description').value = '';
+  document.getElementById('recurring-frequency').value = 'Weekly';
+  document.getElementById('recurring-team').value = 'Support Team';
+  populateRecurringAssignees('');
+  openModal('modal-recurring');
+}
+
+function openEditRecurring(id) {
+  const data = cache._recurring?.find(r => r.ID === id);
+  if (!data) return;
+  document.getElementById('recurring-modal-title').textContent = 'Edit Recurring Template';
+  document.getElementById('recurring-id').value = id;
+  document.getElementById('recurring-title').value = data.Title;
+  document.getElementById('recurring-description').value = data.Description || '';
+  document.getElementById('recurring-frequency').value = data.Frequency;
+  document.getElementById('recurring-team').value = data.Team || 'Support Team';
+  populateRecurringAssignees(data.AssigneeID || '');
+  openModal('modal-recurring');
+}
+
+async function populateRecurringAssignees(selectedId) {
+  const staffNames = cache.staffNames || await api('/staff/names');
+  if (staffNames) cache.staffNames = staffNames;
+  const sel = document.getElementById('recurring-assignee');
+  sel.innerHTML = '<option value="">Unassigned</option>' +
+    (staffNames || []).map(s =>
+      `<option value="${s.ID}" ${s.ID === selectedId ? 'selected' : ''}>${s.Name} — ${roleLabel(s.Role)}</option>`
+    ).join('');
+}
+
+async function saveRecurring() {
+  const id = document.getElementById('recurring-id').value;
+  const body = {
+    title: document.getElementById('recurring-title').value.trim(),
+    description: document.getElementById('recurring-description').value.trim(),
+    frequency: document.getElementById('recurring-frequency').value,
+    team: document.getElementById('recurring-team').value,
+    assigneeId: document.getElementById('recurring-assignee').value,
+  };
+  if (!body.title) { showToast('Title is required', 'error'); return; }
+
+  const res = id
+    ? await api(`/recurring/${id}`, { method:'PUT', body: JSON.stringify(body) })
+    : await api('/recurring', { method:'POST', body: JSON.stringify(body) });
+
+  if (res?.success) {
+    closeModal('modal-recurring');
+    showToast(id ? 'Template updated ✓' : 'Template created ✓', 'success');
+    loadRecurring();
+  } else {
+    showToast(res?.error || 'Failed to save', 'error');
+  }
+}
+
+async function toggleRecurringActive(id, currentActive) {
+  const res = await api(`/recurring/${id}`, {
+    method:'PUT',
+    body: JSON.stringify({ active: !currentActive }),
+  });
+  if (res?.success) {
+    showToast(currentActive ? 'Template deactivated' : 'Template activated', 'success');
+    loadRecurring();
+  } else {
+    showToast(res?.error || 'Failed', 'error');
+  }
+}
+
+async function deleteRecurring(id, title) {
+  if (!confirm(`Delete recurring template "${title}"?\n\nThis won't delete tasks already generated from it.`)) return;
+  const res = await api(`/recurring/${id}`, { method:'DELETE' });
+  if (res?.success) {
+    showToast('Template deleted', 'success');
+    loadRecurring();
+  } else {
+    showToast(res?.error || 'Failed to delete', 'error');
+  }
+}
+
+async function generateRecurring() {
+  const btn = document.getElementById('btn-generate-recurring');
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Generating…';
+  const res = await api('/recurring/generate', { method:'POST' });
+  if (res?.success) {
+    showToast(res.generated > 0 ? `${res.generated} task${res.generated>1?'s':''} generated ✓` : 'No tasks due right now', 'success');
+    cache.tasks = null;
+    loadRecurring();
+  } else {
+    showToast(res?.error || 'Failed to generate', 'error');
+  }
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-player-play"></i> Generate due tasks';
+}
+
+async function seedRecurring() {
+  const btn = document.getElementById('btn-seed');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Loading…'; }
+  const res = await api('/recurring/seed', { method:'POST' });
+  if (res?.success) {
+    showToast(`${res.seeded} templates loaded ✓`, 'success');
+    loadRecurring();
+  } else {
+    showToast(res?.error || 'Failed to seed', 'error');
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-download"></i> Load 11 templates'; }
+}
+
+// Auto-generate recurring tasks silently on login for management
+async function autoGenerateRecurring() {
+  if (!['bod','developer','senior-impact','senior-biz','project-coordinator'].includes(user.role)) return;
+  try {
+    await api('/recurring/generate', { method:'POST' });
+  } catch(e) {}
 }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
