@@ -711,6 +711,21 @@ tbody tr:hover td{background:#fafcfb;}
         </div>
       </div>
 
+      <!-- ── DOCUMENT SUBMISSIONS PANEL ── -->
+      <div class="panel" id="panel-docs">
+        <div class="section-hd">
+          <div class="section-title">Document Submission Tracker</div>
+          <button class="btn btn-primary btn-sm" onclick="openAddDoc()"><i class="ti ti-plus"></i> New Request</button>
+        </div>
+        <div style="background:#FFF8E1;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#8D6E00;">
+          <i class="ti ti-alert-triangle"></i> Track supporting documents owed by project teams. Overdue submissions block finance reporting — these are flagged in red. Submit within 3–5 days post-activity to keep monthly closing on schedule.
+        </div>
+        <!-- Counters -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;" id="doc-counters"></div>
+        <!-- List -->
+        <div id="docs-list"></div>
+      </div>
+
       <!-- ── RECURRING TASKS PANEL ── -->
       <div class="panel" id="panel-recurring">
         <div class="section-hd">
@@ -1157,6 +1172,66 @@ tbody tr:hover td{background:#fafcfb;}
   </div>
 </div>
 
+<!-- Document Submission Modal -->
+<div class="modal-overlay" id="modal-doc">
+  <div class="modal" style="width:min(560px,92vw);">
+    <div class="modal-header">
+      <div class="modal-title" id="doc-modal-title">New Document Request</div>
+      <button class="modal-close" onclick="closeModal('modal-doc')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="doc-id">
+      <div class="form-group">
+        <label class="form-label">Title <span style="color:var(--red)">*</span></label>
+        <input class="form-input" id="doc-title" placeholder="e.g. Workshop receipts — March training">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Document type</label>
+          <select class="form-input" id="doc-type">
+            <option value="Receipts">Receipts</option>
+            <option value="Invoices">Invoices</option>
+            <option value="GRN">GRN</option>
+            <option value="PO">Purchase Order</option>
+            <option value="Procurement forms">Procurement forms</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Project</label>
+          <select class="form-input" id="doc-project">
+            <option value="">No project</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Requested from <span style="color:var(--red)">*</span> <span style="color:var(--muted);font-size:10px;">(who owes the documents)</span></label>
+        <select class="form-input" id="doc-requested-from">
+          <option value="">Select staff member…</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Activity date</label>
+          <input type="date" class="form-input" id="doc-activity-date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Due date <span style="color:var(--red)">*</span></label>
+          <input type="date" class="form-input" id="doc-due-date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-input" id="doc-notes" rows="2" placeholder="Any details, or flag missing items here…" style="resize:vertical;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-doc')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDoc()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Recurring Task Modal -->
 <div class="modal-overlay" id="modal-recurring">
   <div class="modal" style="width:min(520px,92vw);">
@@ -1484,14 +1559,21 @@ function buildNav() {
     { panel:'tasks',     icon:'<i class="ti ti-checklist"></i>', label:'Tasks',       roles: allRoles },
     { panel:'storage',   icon:'<i class="ti ti-database"></i>', label:'Storage',     roles: allRoles },
     { panel:'requests',  icon:'<i class="ti ti-send"></i>', label:'Requests',    roles: allRoles },
+    { panel:'docs',      icon:'<i class="ti ti-file-text"></i>', label:'Documents',   roles: mgmtRoles, supportTeam: true },
     { sep:'My Account',                                  roles: allRoles },
     { panel:'kpi',       icon:'<i class="ti ti-chart-line"></i>', label:'My KPIs',     roles: staffRoles },
     { panel:'profile',   icon:'<i class="ti ti-user-circle"></i>', label:'My Profile',  roles: allRoles },
   ];
 
   nav.innerHTML = '';
+  const isSupportTeam = user.team === 'Support Team';
   items.forEach(item => {
-    if (!item.roles.includes(role)) return;
+    // supportTeam flag: visible to management OR support team members
+    if (item.supportTeam) {
+      if (!item.roles.includes(role) && !isSupportTeam) return;
+    } else {
+      if (!item.roles.includes(role)) return;
+    }
     if (item.sep) {
       const sep = document.createElement('div');
       sep.className = 'nav-section-label';
@@ -1541,6 +1623,7 @@ function navigateTo(panelId, label) {
   else if (panelId === 'kpi') { loadKPI(); initReportDates(); }
   else if (panelId === 'requests') loadRequests();
   else if (panelId === 'recurring') loadRecurring();
+  else if (panelId === 'docs') loadDocs();
   else if (panelId === 'storage') loadStorage();
   else if (panelId === 'profile') loadProfile();
 
@@ -4250,6 +4333,176 @@ async function confirmDeleteTask(taskId, taskName) {
     loadTasks();
   } else {
     showToast(res?.error || 'Failed to delete task', 'error');
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// DOCUMENT SUBMISSIONS
+// ════════════════════════════════════════════════════════
+const DOC_STATUS = {
+  'Pending':    { bg:'#FFF3E0', color:'#E65100', icon:'ti-clock' },
+  'Submitted':  { bg:'#E3F2FD', color:'#1565C0', icon:'ti-upload' },
+  'Verified':   { bg:'#E8F5E9', color:'#2E7D32', icon:'ti-circle-check' },
+  'Incomplete': { bg:'#FFEBEE', color:'#C62828', icon:'ti-alert-circle' },
+};
+
+const DOC_TYPE_OPTIONS = ['Receipts','Invoices','GRN','PO','Procurement forms','Other'];
+
+async function loadDocs() {
+  const list = document.getElementById('docs-list');
+  list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  const data = await api('/docs');
+  if (!data) return;
+  if (data.error) { list.innerHTML = `<div class="empty">${data.error}</div>`; return; }
+
+  cache._docs = data.docs;
+
+  // Counters
+  const c = data.counts;
+  document.getElementById('doc-counters').innerHTML = `
+    ${docCounter('Pending', c.pending, '#E65100', '#FFF3E0')}
+    ${docCounter('Overdue', c.overdue, '#C62828', '#FFEBEE')}
+    ${docCounter('Verified', c.verified, '#2E7D32', '#E8F5E9')}
+    ${docCounter('Incomplete', c.incomplete, '#6A1B9A', '#F3E5F5')}
+  `;
+
+  if (!data.docs.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-file-text"></i></div>No document requests yet</div>';
+    return;
+  }
+
+  list.innerHTML = data.docs.map(d => renderDocCard(d)).join('');
+}
+
+function docCounter(label, count, color, bg) {
+  return `<div style="background:${bg};border-radius:12px;padding:14px 16px;text-align:center;">
+    <div style="font-size:24px;font-weight:700;color:${color};">${count}</div>
+    <div style="font-size:11px;color:${color};font-weight:500;margin-top:2px;">${label}</div>
+  </div>`;
+}
+
+function renderDocCard(d) {
+  const sc = DOC_STATUS[d.Status] || DOC_STATUS['Pending'];
+  const dueFmt = d.DueDate ? new Date(d.DueDate).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) : '—';
+  const actFmt = d.ActivityDate ? new Date(d.ActivityDate).toLocaleDateString('en-GB', {day:'numeric',month:'short'}) : '';
+
+  return `<div style="background:var(--white);border:1px solid ${d.isOverdue ? '#E24B4A' : 'var(--border2)'};border-radius:12px;padding:16px;margin-bottom:12px;${d.isOverdue ? 'box-shadow:0 0 0 1px #E24B4A;' : ''}">
+    ${d.isOverdue ? `<div style="background:#FFEBEE;color:#C62828;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;margin-bottom:10px;display:inline-block;"><i class="ti ti-alert-triangle"></i> Blocking reporting — overdue</div>` : ''}
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:600;color:var(--navy);margin-bottom:4px;">${d.Title}</div>
+        <div style="font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;">
+          <span><i class="ti ti-file" style="font-size:11px;"></i> ${d.DocumentType}</span>
+          ${d.projectName ? `<span><i class="ti ti-folder" style="font-size:11px;"></i> ${d.projectName}</span>` : ''}
+          <span><i class="ti ti-user" style="font-size:11px;"></i> From: <strong>${d.requestedFromName}</strong></span>
+        </div>
+      </div>
+      <span style="background:${sc.bg};color:${sc.color};font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;white-space:nowrap;flex-shrink:0;">
+        <i class="ti ${sc.icon}" style="font-size:11px;"></i> ${d.Status}
+      </span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-bottom:${d.Notes ? '8px' : '12px'};">
+      ${actFmt ? `<span>Activity: ${actFmt}</span>` : ''}
+      <span style="${d.isOverdue ? 'color:#C62828;font-weight:600;' : ''}">Due: ${dueFmt}</span>
+    </div>
+    ${d.Notes ? `<div style="font-size:12px;color:var(--text);background:var(--off);border-radius:8px;padding:8px 12px;margin-bottom:12px;">${d.Notes}</div>` : ''}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+      ${d.Status === 'Pending' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Submitted')"><i class="ti ti-upload"></i> Mark Submitted</button>` : ''}
+      ${d.Status === 'Submitted' ? `<button class="btn btn-primary btn-sm" onclick="updateDocStatus('${d.ID}','Verified')"><i class="ti ti-circle-check"></i> Verify</button>` : ''}
+      ${d.Status !== 'Verified' && d.Status !== 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Incomplete')"><i class="ti ti-alert-circle"></i> Flag Incomplete</button>` : ''}
+      ${d.Status === 'Incomplete' ? `<button class="btn btn-outline btn-sm" onclick="updateDocStatus('${d.ID}','Pending')"><i class="ti ti-refresh"></i> Reopen</button>` : ''}
+      <button class="btn btn-outline btn-sm btn-icon" onclick="openEditDoc('${d.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>
+      ${['bod','developer','senior-impact','senior-biz','project-coordinator'].includes(user.role) ? `<button class="btn btn-danger btn-sm btn-icon" onclick="deleteDoc('${d.ID}','${d.Title.replace(/'/g,"\'")}')" title="Delete"><i class="ti ti-trash"></i></button>` : ''}
+    </div>
+  </div>`;
+}
+
+async function populateDocDropdowns(selectedFrom, selectedProject) {
+  const staffNames = cache.staffNames || await api('/staff/names');
+  if (staffNames) cache.staffNames = staffNames;
+  const fromSel = document.getElementById('doc-requested-from');
+  fromSel.innerHTML = '<option value="">Select staff member…</option>' +
+    (staffNames || []).map(s => `<option value="${s.ID}" ${s.ID===selectedFrom?'selected':''}>${s.Name} — ${roleLabel(s.Role)}</option>`).join('');
+
+  if (!cache.projects) { const p = await api('/projects'); if (p) cache.projects = p; }
+  const projSel = document.getElementById('doc-project');
+  projSel.innerHTML = '<option value="">No project</option>' +
+    (cache.projects || []).map(p => `<option value="${p.ID}" ${p.ID===selectedProject?'selected':''}>${p.Name}</option>`).join('');
+}
+
+async function openAddDoc() {
+  document.getElementById('doc-modal-title').textContent = 'New Document Request';
+  document.getElementById('doc-id').value = '';
+  document.getElementById('doc-title').value = '';
+  document.getElementById('doc-type').value = 'Receipts';
+  document.getElementById('doc-activity-date').value = '';
+  document.getElementById('doc-due-date').value = '';
+  document.getElementById('doc-notes').value = '';
+  await populateDocDropdowns('', '');
+  openModal('modal-doc');
+}
+
+async function openEditDoc(id) {
+  const d = cache._docs?.find(x => x.ID === id);
+  if (!d) return;
+  document.getElementById('doc-modal-title').textContent = 'Edit Document Request';
+  document.getElementById('doc-id').value = id;
+  document.getElementById('doc-title').value = d.Title;
+  document.getElementById('doc-type').value = d.DocumentType || 'Receipts';
+  document.getElementById('doc-activity-date').value = d.ActivityDate || '';
+  document.getElementById('doc-due-date').value = d.DueDate || '';
+  document.getElementById('doc-notes').value = d.Notes || '';
+  await populateDocDropdowns(d.RequestedFromID, d.ProjectID);
+  openModal('modal-doc');
+}
+
+async function saveDoc() {
+  const id = document.getElementById('doc-id').value;
+  const body = {
+    title: document.getElementById('doc-title').value.trim(),
+    documentType: document.getElementById('doc-type').value,
+    projectId: document.getElementById('doc-project').value,
+    requestedFromId: document.getElementById('doc-requested-from').value,
+    activityDate: document.getElementById('doc-activity-date').value,
+    dueDate: document.getElementById('doc-due-date').value,
+    notes: document.getElementById('doc-notes').value.trim(),
+  };
+  if (!body.title) { showToast('Title is required', 'error'); return; }
+  if (!body.requestedFromId) { showToast('Select who owes the documents', 'error'); return; }
+  if (!body.dueDate) { showToast('Due date is required', 'error'); return; }
+
+  const res = id
+    ? await api(`/docs/${id}`, { method:'PUT', body: JSON.stringify(body) })
+    : await api('/docs', { method:'POST', body: JSON.stringify(body) });
+
+  if (res?.success) {
+    closeModal('modal-doc');
+    showToast(id ? 'Updated ✓' : 'Document request created ✓', 'success');
+    loadDocs();
+  } else {
+    showToast(res?.error || 'Failed to save', 'error');
+  }
+}
+
+async function updateDocStatus(id, status) {
+  const res = await api(`/docs/${id}`, { method:'PUT', body: JSON.stringify({ status }) });
+  if (res?.success) {
+    showToast('Status updated ✓', 'success');
+    loadDocs();
+  } else {
+    showToast(res?.error || 'Failed', 'error');
+  }
+}
+
+async function deleteDoc(id, title) {
+  if (!confirm(`Delete document request "${title}"?`)) return;
+  const res = await api(`/docs/${id}`, { method:'DELETE' });
+  if (res?.success) {
+    showToast('Deleted', 'success');
+    loadDocs();
+  } else {
+    showToast(res?.error || 'Failed to delete', 'error');
   }
 }
 
