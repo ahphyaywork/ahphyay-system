@@ -1220,9 +1220,15 @@ tbody tr:hover td{background:#fafcfb;}
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Requested from <span style="color:var(--red)">*</span> <span style="color:var(--muted);font-size:10px;">(who owes the documents)</span></label>
+        <label class="form-label" id="quick-doc-from-label">Who owes the documents <span style="color:var(--red)">*</span></label>
         <select class="form-input" id="quick-doc-from">
           <option value="">Select staff member…</option>
+        </select>
+      </div>
+      <div class="form-group" id="quick-doc-verifier-group" style="display:none;">
+        <label class="form-label">Who will verify your documents? <span style="color:var(--red)">*</span> <span style="color:var(--muted);font-size:10px;">(a senior or finance staff member)</span></label>
+        <select class="form-input" id="quick-doc-verifier">
+          <option value="">Select verifier…</option>
         </select>
       </div>
       <div class="form-group">
@@ -2520,21 +2526,41 @@ async function openQuickDoc() {
   document.getElementById('quick-doc-notes').value = '';
 
   const fromSel = document.getElementById('quick-doc-from');
-  const fromGroup = fromSel.closest('.form-group');
+  const fromLabel = document.getElementById('quick-doc-from-label');
+  const verifierGroup = document.getElementById('quick-doc-verifier-group');
+  const verifierSel = document.getElementById('quick-doc-verifier');
+
+  const staffNames = cache.staffNames || await api('/staff/names');
+  if (staffNames) cache.staffNames = staffNames;
 
   if (hasFullDocsAccess()) {
-    // Support/management — can request from anyone
-    const staffNames = cache.staffNames || await api('/staff/names');
-    if (staffNames) cache.staffNames = staffNames;
+    // Support/management — request documents FROM anyone, no verifier picker needed
     fromSel.innerHTML = '<option value="">Select staff member…</option>' +
       (staffNames || []).map(s => `<option value="${s.ID}">${s.Name} — ${roleLabel(s.Role)}</option>`).join('');
     fromSel.disabled = false;
-    if (fromGroup) fromGroup.querySelector('.form-label').innerHTML = 'Requested from <span style="color:var(--red)">*</span> <span style="color:var(--muted);font-size:10px;">(who owes the documents)</span>';
+    if (fromLabel) fromLabel.innerHTML = 'Request documents from <span style="color:var(--red)">*</span> <span style="color:var(--muted);font-size:10px;">(who needs to submit them)</span>';
+    if (verifierGroup) verifierGroup.style.display = 'none';
   } else {
-    // Program team — can only log documents THEY owe (locked to self)
+    // Program team — logging documents THEY owe (locked to self) + must choose a verifier
     fromSel.innerHTML = `<option value="${user.staffId}" selected>${user.name} (you)</option>`;
     fromSel.disabled = true;
-    if (fromGroup) fromGroup.querySelector('.form-label').innerHTML = 'Documents you owe <span style="color:var(--muted);font-size:10px;">(you can only log your own documents)</span>';
+    if (fromLabel) fromLabel.innerHTML = 'You are submitting these documents <span style="color:var(--muted);font-size:10px;">(this is your own submission)</span>';
+
+    // Populate verifier dropdown — senior/finance staff (management or support team)
+    // We can't see team here, so offer all staff; the worker enforces final rules.
+    const mgmtRoleKeys = ['developer','bod','senior-impact','senior-biz','project-coordinator'];
+    const verifiers = (staffNames || []).filter(s =>
+      s.ID !== user.staffId && (mgmtRoleKeys.includes(s.Role) || true) // show all except self; seniors first
+    );
+    // Sort: management roles first
+    verifiers.sort((a, b) => {
+      const am = mgmtRoleKeys.includes(a.Role) ? 0 : 1;
+      const bm = mgmtRoleKeys.includes(b.Role) ? 0 : 1;
+      return am - bm;
+    });
+    verifierSel.innerHTML = '<option value="">Select verifier…</option>' +
+      verifiers.map(s => `<option value="${s.ID}">${s.Name} — ${roleLabel(s.Role)}</option>`).join('');
+    if (verifierGroup) verifierGroup.style.display = 'block';
   }
 
   openModal('modal-quick-doc');
@@ -2542,11 +2568,13 @@ async function openQuickDoc() {
 
 async function saveQuickDoc() {
   const projectId = document.getElementById('task-project').value;
+  const isSelfOwed = !hasFullDocsAccess();
   const body = {
     title: document.getElementById('quick-doc-title').value.trim(),
     documentType: document.getElementById('quick-doc-type').value,
     projectId: projectId,
     requestedFromId: document.getElementById('quick-doc-from').value,
+    verifierId: isSelfOwed ? document.getElementById('quick-doc-verifier').value : '',
     activityDate: '',
     dueDate: document.getElementById('quick-doc-due').value,
     notes: document.getElementById('quick-doc-notes').value.trim(),
@@ -2554,6 +2582,7 @@ async function saveQuickDoc() {
   if (!body.title) { showToast('Title is required', 'error'); return; }
   if (!body.requestedFromId) { showToast('Select who owes the documents', 'error'); return; }
   if (!body.dueDate) { showToast('Due date is required', 'error'); return; }
+  if (isSelfOwed && !body.verifierId) { showToast('Please choose who will verify your documents', 'error'); return; }
 
   const btn = document.getElementById('btn-save-quick-doc');
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Creating…';
@@ -4687,7 +4716,7 @@ function renderDocCard(d, fullAccess) {
 
   // Can this person submit? (the owner, or support/management)
   const canSubmit = fullAccess || d.RequestedFromID === user.staffId;
-  const canVerify = fullAccess;
+  const canVerify = d.canVerify === true; // worker decides: chosen verifier or admin override
 
   return `<div style="background:var(--white);border:1px solid ${d.isOverdue ? '#E24B4A' : 'var(--border2)'};border-radius:12px;padding:16px;margin-bottom:12px;${d.isOverdue ? 'box-shadow:0 0 0 1px #E24B4A;' : ''}">
     ${d.isOverdue ? `<div style="background:#FFEBEE;color:#C62828;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;margin-bottom:10px;display:inline-block;"><i class="ti ti-alert-triangle"></i> Blocking reporting — overdue</div>` : ''}
@@ -4697,7 +4726,8 @@ function renderDocCard(d, fullAccess) {
         <div style="font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;">
           <span><i class="ti ti-file" style="font-size:11px;"></i> ${d.DocumentType}</span>
           ${d.projectName ? `<span><i class="ti ti-folder" style="font-size:11px;"></i> ${d.projectName}</span>` : ''}
-          ${fullAccess ? `<span><i class="ti ti-user" style="font-size:11px;"></i> From: <strong>${d.requestedFromName}</strong></span>` : ''}
+          ${fullAccess ? `<span><i class="ti ti-user" style="font-size:11px;"></i> Submitted by: <strong>${d.requestedFromName}</strong></span>` : ''}
+          <span><i class="ti ti-circle-check" style="font-size:11px;"></i> Verifier: <strong>${d.verifierName}</strong></span>
         </div>
       </div>
       <span style="background:${sc.bg};color:${sc.color};font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;white-space:nowrap;flex-shrink:0;">
