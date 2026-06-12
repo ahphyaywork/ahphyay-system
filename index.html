@@ -993,7 +993,7 @@ tbody tr:hover td{background:#fafcfb;}
       </div>
       <div class="form-group">
         <label class="form-label">Depends on document <span style="color:var(--muted);font-size:10px;">(task auto-completes when this document is verified)</span></label>
-        <select class="form-input" id="task-linked-doc">
+        <select class="form-input" id="task-linked-doc" onchange="handleLinkedDocChange()">
           <option value="">No document dependency</option>
         </select>
       </div>
@@ -1174,6 +1174,56 @@ tbody tr:hover td{background:#fafcfb;}
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-storage-rename')">Cancel</button>
       <button class="btn btn-primary" onclick="submitRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Create Document (from task) Modal -->
+<div class="modal-overlay" id="modal-quick-doc" style="z-index:1100;">
+  <div class="modal" style="width:min(500px,92vw);">
+    <div class="modal-header">
+      <div class="modal-title">Create Document Request</div>
+      <button class="modal-close" onclick="closeModal('modal-quick-doc')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--teal-lt);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:#085041;">
+        <i class="ti ti-link" style="font-size:11px;"></i> This document will be created and automatically linked to your task. The task will auto-complete when this document is verified.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Title <span style="color:var(--red)">*</span></label>
+        <input class="form-input" id="quick-doc-title" placeholder="e.g. Workshop receipts">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Document type</label>
+          <select class="form-input" id="quick-doc-type">
+            <option value="Receipts">Receipts</option>
+            <option value="Invoices">Invoices</option>
+            <option value="GRN">GRN</option>
+            <option value="PO">Purchase Order</option>
+            <option value="Procurement forms">Procurement forms</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Due date <span style="color:var(--red)">*</span></label>
+          <input type="date" class="form-input" id="quick-doc-due">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Requested from <span style="color:var(--red)">*</span> <span style="color:var(--muted);font-size:10px;">(who owes the documents)</span></label>
+        <select class="form-input" id="quick-doc-from">
+          <option value="">Select staff member…</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-input" id="quick-doc-notes" rows="2" placeholder="Optional details…" style="resize:vertical;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-quick-doc')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveQuickDoc()" id="btn-save-quick-doc"><i class="ti ti-plus"></i> Create & Link</button>
     </div>
   </div>
 </div>
@@ -2455,9 +2505,74 @@ async function populateLinkedDocDropdown(selectedDocId) {
     docs = data?.docs || [];
     cache._allDocs = docs;
   }
-  // Only show non-verified docs as linkable options (plus the currently linked one)
+  // Can this user create documents? (support team or management)
+  const canCreateDocs = cache._docsFullAccess !== false; // true unless explicitly limited
   sel.innerHTML = '<option value="">No document dependency</option>' +
+    (canCreateDocs ? '<option value="__new__">+ Create new document request…</option>' : '') +
     docs.map(d => `<option value="${d.ID}" ${d.ID === selectedDocId ? 'selected' : ''}>${d.Title} — ${d.Status}</option>`).join('');
+}
+
+function handleLinkedDocChange() {
+  const sel = document.getElementById('task-linked-doc');
+  if (sel.value === '__new__') {
+    // Open quick-create popup, pre-filled from task
+    openQuickDoc();
+    // Reset dropdown back to blank until the doc is created
+    sel.value = '';
+  }
+}
+
+async function openQuickDoc() {
+  // Pre-fill title + due date from the task being created/edited
+  const taskName = document.getElementById('task-name').value.trim();
+  const taskDue = document.getElementById('task-due').value;
+  document.getElementById('quick-doc-title').value = taskName ? (taskName + ' — supporting documents') : '';
+  document.getElementById('quick-doc-due').value = taskDue || '';
+  document.getElementById('quick-doc-type').value = 'Receipts';
+  document.getElementById('quick-doc-notes').value = '';
+
+  // Populate "requested from" with all staff
+  const staffNames = cache.staffNames || await api('/staff/names');
+  if (staffNames) cache.staffNames = staffNames;
+  const fromSel = document.getElementById('quick-doc-from');
+  fromSel.innerHTML = '<option value="">Select staff member…</option>' +
+    (staffNames || []).map(s => `<option value="${s.ID}">${s.Name} — ${roleLabel(s.Role)}</option>`).join('');
+
+  openModal('modal-quick-doc');
+}
+
+async function saveQuickDoc() {
+  const projectId = document.getElementById('task-project').value;
+  const body = {
+    title: document.getElementById('quick-doc-title').value.trim(),
+    documentType: document.getElementById('quick-doc-type').value,
+    projectId: projectId,
+    requestedFromId: document.getElementById('quick-doc-from').value,
+    activityDate: '',
+    dueDate: document.getElementById('quick-doc-due').value,
+    notes: document.getElementById('quick-doc-notes').value.trim(),
+  };
+  if (!body.title) { showToast('Title is required', 'error'); return; }
+  if (!body.requestedFromId) { showToast('Select who owes the documents', 'error'); return; }
+  if (!body.dueDate) { showToast('Due date is required', 'error'); return; }
+
+  const btn = document.getElementById('btn-save-quick-doc');
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Creating…';
+
+  const res = await api('/docs', { method:'POST', body: JSON.stringify(body) });
+
+  if (res?.success && res.id) {
+    // Refresh docs cache and select the new doc in the task dropdown
+    cache._allDocs = null;
+    await populateLinkedDocDropdown(res.id);
+    document.getElementById('task-linked-doc').value = res.id;
+    closeModal('modal-quick-doc');
+    showToast('Document created and linked ✓', 'success');
+  } else {
+    showToast(res?.error || 'Failed to create document', 'error');
+  }
+
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-plus"></i> Create & Link';
 }
 
 function openAddTask() {
