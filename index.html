@@ -2071,13 +2071,23 @@ function renderTaskRows(tasks, projects, staff) {
             : '—'}
       </td>
       <td>
-        <div style="display:flex;gap:4px;">
+        <div style="display:flex;gap:4px;align-items:center;">
           ${(canEdit || isMyTask)
             ? `<button class="btn btn-outline btn-sm btn-icon" onclick="openEditTask('${t.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>`
             : ''}
           <button class="btn btn-outline btn-sm btn-icon" onclick="openComments('${t.ID}','${t.Name.replace(/'/g,"\'")}','${t._commentCount||0}')" title="Comments" style="position:relative;">
             <i class="ti ti-message"></i>${t._commentCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;background:var(--teal);color:white;border-radius:99px;font-size:9px;padding:1px 4px;min-width:14px;text-align:center;">${t._commentCount}</span>` : ''}
           </button>
+          ${(canEdit || isMyTask)
+            ? `<div style="position:relative;">
+                <button class="btn btn-outline btn-sm btn-icon" onclick="toggleTaskMenu(event,'${t.ID}')" title="More"><i class="ti ti-dots-vertical"></i></button>
+                <div id="task-menu-${t.ID}" class="task-dropdown" style="display:none;position:absolute;right:0;top:36px;background:var(--white);border:1px solid var(--border2);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:50;min-width:140px;overflow:hidden;">
+                  <button onclick="confirmDeleteTask('${t.ID}','${t.Name.replace(/'/g,"\'")}')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--red);text-align:left;" onmouseover="this.style.background='var(--off)'" onmouseout="this.style.background='none'">
+                    <i class="ti ti-trash"></i> Delete task
+                  </button>
+                </div>
+              </div>`
+            : ''}
         </div>
       </td>
     </tr>`;
@@ -4117,6 +4127,46 @@ async function submitResponse(action) {
   }
 
   btn.disabled = false;
+}
+
+// ════════════════════════════════════════════════════════
+// TASK DELETE
+// ════════════════════════════════════════════════════════
+function toggleTaskMenu(event, taskId) {
+  event.stopPropagation();
+  // Close all other open menus
+  document.querySelectorAll('.task-dropdown').forEach(el => {
+    if (el.id !== 'task-menu-' + taskId) el.style.display = 'none';
+  });
+  const menu = document.getElementById('task-menu-' + taskId);
+  if (menu) {
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+// Close task menus when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.task-dropdown') && !e.target.closest('[onclick^="toggleTaskMenu"]')) {
+    document.querySelectorAll('.task-dropdown').forEach(el => el.style.display = 'none');
+  }
+});
+
+async function confirmDeleteTask(taskId, taskName) {
+  // Close the menu first
+  document.querySelectorAll('.task-dropdown').forEach(el => el.style.display = 'none');
+
+  if (!confirm(`Delete "${taskName}"?\n\nThis will permanently remove the task and all its comments. This cannot be undone.`)) {
+    return;
+  }
+
+  const res = await api(`/tasks/${taskId}`, { method: 'DELETE' });
+  if (res?.success) {
+    showToast('Task deleted', 'success');
+    cache.tasks = null;
+    loadTasks();
+  } else {
+    showToast(res?.error || 'Failed to delete task', 'error');
+  }
 }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
