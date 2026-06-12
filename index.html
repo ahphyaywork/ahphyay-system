@@ -2343,14 +2343,30 @@ function renderTaskRows(tasks, projects, staff) {
         })() : ''}
       </td>
       <td>
-        ${hasEvidence
-          ? `<div>
-              <button class="btn btn-outline btn-sm" onclick="viewEvidence('${t.ID}')" style="color:var(--teal)"><i class="ti ti-external-link" style="font-size:13px;"></i> View</button>
-              ${t.EvidenceDate ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">Submitted: ${t.EvidenceDate.slice(0,10)}</div>` : ''}
-             </div>`
-          : (isMyTask || canEdit)
-            ? `<button class="btn btn-primary btn-sm" onclick="openEvidence('${t.ID}')">+ Submit</button>`
-            : '—'}
+        ${t.LinkedDocID
+          ? (() => {
+              // Document-linked task: the document submission IS the evidence
+              const verified = t.linkedDocStatus === 'Verified';
+              if (verified && hasEvidence) {
+                return `<div>
+                  <button class="btn btn-outline btn-sm" onclick="viewEvidence('${t.ID}')" style="color:var(--teal)"><i class="ti ti-file-check" style="font-size:13px;"></i> View documents</button>
+                  <div style="font-size:10px;color:#2E7D32;margin-top:3px;">Verified document</div>
+                </div>`;
+              }
+              const statusColor = t.linkedDocStatus === 'Verified' ? '#2E7D32' : t.linkedDocStatus === 'Submitted' ? '#1565C0' : t.linkedDocStatus === 'Incomplete' ? '#C62828' : '#E65100';
+              return `<div style="font-size:11px;color:var(--muted);">
+                <i class="ti ti-link" style="font-size:11px;"></i> Via document
+                <div style="color:${statusColor};font-weight:600;margin-top:2px;">${t.linkedDocStatus || 'Pending'}</div>
+              </div>`;
+            })()
+          : hasEvidence
+            ? `<div>
+                <button class="btn btn-outline btn-sm" onclick="viewEvidence('${t.ID}')" style="color:var(--teal)"><i class="ti ti-external-link" style="font-size:13px;"></i> View</button>
+                ${t.EvidenceDate ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">Submitted: ${t.EvidenceDate.slice(0,10)}</div>` : ''}
+               </div>`
+            : (isMyTask || canEdit)
+              ? `<button class="btn btn-primary btn-sm" onclick="openEvidence('${t.ID}')">+ Submit</button>`
+              : '—'}
       </td>
       <td>
         <div style="display:flex;gap:4px;align-items:center;">
