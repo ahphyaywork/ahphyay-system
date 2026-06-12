@@ -716,6 +716,7 @@ tbody tr:hover td{background:#fafcfb;}
         <div class="section-hd">
           <div class="section-title">Recurring Tasks</div>
           <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="resetRecurringGen()" id="btn-reset-recurring" title="Clear generation timestamps so all active templates regenerate"><i class="ti ti-refresh"></i> Reset cycle</button>
             <button class="btn btn-outline btn-sm" onclick="generateRecurring()" id="btn-generate-recurring"><i class="ti ti-player-play"></i> Generate due tasks</button>
             <button class="btn btn-primary btn-sm" onclick="openAddRecurring()"><i class="ti ti-plus"></i> New Template</button>
           </div>
@@ -4433,6 +4434,20 @@ async function seedRecurring() {
     showToast(res?.error || 'Failed to seed', 'error');
   }
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-download"></i> Load 11 templates'; }
+}
+
+async function resetRecurringGen() {
+  if (!confirm('Reset generation cycle?\n\nThis clears the "last generated" timestamp on all templates so they will generate fresh tasks on the next Generate. Use this after changing assignees. Existing tasks are not deleted.')) return;
+  const btn = document.getElementById('btn-reset-recurring');
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Resetting…';
+  const res = await api('/recurring/reset-generation', { method:'POST' });
+  if (res?.success) {
+    showToast('Cycle reset — click Generate to create fresh tasks', 'success');
+    loadRecurring();
+  } else {
+    showToast(res?.error || 'Failed', 'error');
+  }
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i> Reset cycle';
 }
 
 // Auto-generate recurring tasks silently on login for management
