@@ -2238,18 +2238,21 @@ function applyTaskFilters() {
     countEl.textContent = shown < total ? `${shown} of ${total}` : `${total} task${total!==1?'s':''}`;
   }
 
-  // Sort: Overdue first → Due soon → Pending → In Progress → Done
-  const getSort = t => {
-    if (t.Status === 'Done') return 10;
-    if (t.DueDate) {
-      const diff = Math.ceil((new Date(t.DueDate) - today) / (1000*60*60*24));
-      if (diff < 0) return 0;
-      if (diff <= 3) return 1;
-    }
-    if (t.Status === 'In Progress') return 3;
-    return 2;
-  };
-  filtered = [...filtered].sort((a, b) => getSort(a) - getSort(b));
+  // Sort: not-done tasks first, ordered by closest due date; done tasks last.
+  // Tasks without a due date sink below dated ones within their group.
+  filtered = [...filtered].sort((a, b) => {
+    const aDone = a.Status === 'Done';
+    const bDone = b.Status === 'Done';
+    // Done tasks always go to the bottom
+    if (aDone !== bDone) return aDone ? 1 : -1;
+
+    // Within the same done/not-done group, sort by due date (soonest first)
+    const aHas = !!a.DueDate;
+    const bHas = !!b.DueDate;
+    if (aHas !== bHas) return aHas ? -1 : 1;   // dated tasks before undated
+    if (!aHas && !bHas) return 0;              // both undated — keep order
+    return a.DueDate.localeCompare(b.DueDate); // both dated — earliest first
+  });
 
   // Overdue warning banner (only when not already on overdue tab)
   const overdue = tasks.filter(t => t.Status !== 'Done' && t.DueDate && new Date(t.DueDate) < today);
