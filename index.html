@@ -1205,7 +1205,7 @@ tbody tr:hover td{background:#fafcfb;}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
           <label class="form-label">Document type</label>
-          <select class="form-input" id="quick-doc-type">
+          <select class="form-input" id="quick-doc-type" onchange="toggleOtherType('quick')">
             <option value="Receipts">Receipts</option>
             <option value="Invoices">Invoices</option>
             <option value="GRN">GRN</option>
@@ -1213,6 +1213,7 @@ tbody tr:hover td{background:#fafcfb;}
             <option value="Procurement forms">Procurement forms</option>
             <option value="Other">Other</option>
           </select>
+          <input class="form-input" id="quick-doc-type-other" placeholder="Type the document name…" style="display:none;margin-top:6px;">
         </div>
         <div class="form-group">
           <label class="form-label">Due date <span style="color:var(--red)">*</span></label>
@@ -1314,7 +1315,7 @@ tbody tr:hover td{background:#fafcfb;}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
           <label class="form-label">Document type</label>
-          <select class="form-input" id="doc-type">
+          <select class="form-input" id="doc-type" onchange="toggleOtherType('main')">
             <option value="Receipts">Receipts</option>
             <option value="Invoices">Invoices</option>
             <option value="GRN">GRN</option>
@@ -1322,6 +1323,7 @@ tbody tr:hover td{background:#fafcfb;}
             <option value="Procurement forms">Procurement forms</option>
             <option value="Other">Other</option>
           </select>
+          <input class="form-input" id="doc-type-other" placeholder="Type the document name…" style="display:none;margin-top:6px;">
         </div>
         <div class="form-group">
           <label class="form-label">Project</label>
@@ -2541,6 +2543,29 @@ function hasFullDocsAccess() {
   return mgmtRoles.includes(user.role) || user.team === 'Support Team';
 }
 
+// Show/hide the "Other" text input depending on the selected document type
+function toggleOtherType(which) {
+  const sel = document.getElementById(which === 'quick' ? 'quick-doc-type' : 'doc-type');
+  const other = document.getElementById(which === 'quick' ? 'quick-doc-type-other' : 'doc-type-other');
+  if (!sel || !other) return;
+  if (sel.value === 'Other') {
+    other.style.display = 'block';
+  } else {
+    other.style.display = 'none';
+    other.value = '';
+  }
+}
+
+// Resolve the final document type — if "Other" is chosen, use the typed value
+function resolveDocType(which) {
+  const sel = document.getElementById(which === 'quick' ? 'quick-doc-type' : 'doc-type');
+  const other = document.getElementById(which === 'quick' ? 'quick-doc-type-other' : 'doc-type-other');
+  if (sel.value === 'Other') {
+    return (other.value || '').trim() || 'Other';
+  }
+  return sel.value;
+}
+
 async function openQuickDoc() {
   // Pre-fill title + due date from the task being created/edited
   const taskName = document.getElementById('task-name').value.trim();
@@ -2548,6 +2573,8 @@ async function openQuickDoc() {
   document.getElementById('quick-doc-title').value = taskName ? (taskName + ' — supporting documents') : '';
   document.getElementById('quick-doc-due').value = taskDue || '';
   document.getElementById('quick-doc-type').value = 'Receipts';
+  document.getElementById('quick-doc-type-other').style.display = 'none';
+  document.getElementById('quick-doc-type-other').value = '';
   document.getElementById('quick-doc-notes').value = '';
 
   const fromSel = document.getElementById('quick-doc-from');
@@ -2596,7 +2623,7 @@ async function saveQuickDoc() {
   const isSelfOwed = !hasFullDocsAccess();
   const body = {
     title: document.getElementById('quick-doc-title').value.trim(),
-    documentType: document.getElementById('quick-doc-type').value,
+    documentType: resolveDocType('quick'),
     projectId: projectId,
     requestedFromId: document.getElementById('quick-doc-from').value,
     verifierId: isSelfOwed ? document.getElementById('quick-doc-verifier').value : '',
@@ -4804,6 +4831,8 @@ async function openAddDoc() {
   document.getElementById('doc-id').value = '';
   document.getElementById('doc-title').value = '';
   document.getElementById('doc-type').value = 'Receipts';
+  document.getElementById('doc-type-other').style.display = 'none';
+  document.getElementById('doc-type-other').value = '';
   document.getElementById('doc-activity-date').value = '';
   document.getElementById('doc-due-date').value = '';
   document.getElementById('doc-notes').value = '';
@@ -4817,7 +4846,18 @@ async function openEditDoc(id) {
   document.getElementById('doc-modal-title').textContent = 'Edit Document Request';
   document.getElementById('doc-id').value = id;
   document.getElementById('doc-title').value = d.Title;
-  document.getElementById('doc-type').value = d.DocumentType || 'Receipts';
+  const stdTypes = ['Receipts','Invoices','GRN','PO','Procurement forms'];
+  const typeSel = document.getElementById('doc-type');
+  const typeOther = document.getElementById('doc-type-other');
+  if (d.DocumentType && !stdTypes.includes(d.DocumentType)) {
+    typeSel.value = 'Other';
+    typeOther.style.display = 'block';
+    typeOther.value = d.DocumentType;
+  } else {
+    typeSel.value = d.DocumentType || 'Receipts';
+    typeOther.style.display = 'none';
+    typeOther.value = '';
+  }
   document.getElementById('doc-activity-date').value = d.ActivityDate || '';
   document.getElementById('doc-due-date').value = d.DueDate || '';
   document.getElementById('doc-notes').value = d.Notes || '';
@@ -4829,7 +4869,7 @@ async function saveDoc() {
   const id = document.getElementById('doc-id').value;
   const body = {
     title: document.getElementById('doc-title').value.trim(),
-    documentType: document.getElementById('doc-type').value,
+    documentType: resolveDocType('main'),
     projectId: document.getElementById('doc-project').value,
     requestedFromId: document.getElementById('doc-requested-from').value,
     activityDate: document.getElementById('doc-activity-date').value,
