@@ -2937,6 +2937,12 @@ async function loadKPI() {
   const pendCount = kpis.filter(k=>k.taskStatus==='Pending').length;
   const withEvidence = kpis.filter(k=>k.hasEvidence).length;
   const avgPct = kpis.length ? Math.round(kpis.reduce((a,k)=>a+k.percentage,0)/kpis.length) : 0;
+  // Precision metrics for the overview
+  const todayKpi = new Date().toISOString().slice(0,10);
+  const overdueAll = kpis.filter(k=>k.taskStatus!=='Done' && k.dueDate && k.dueDate < todayKpi).length;
+  const doneWithDueAll = kpis.filter(k=>k.taskStatus==='Done' && k.dueDate);
+  const onTimeAll = doneWithDueAll.filter(k=>(k.evidenceDate||'').slice(0,10) && (k.evidenceDate||'').slice(0,10) <= k.dueDate).length;
+  const onTimeRateAll = doneWithDueAll.length ? Math.round((onTimeAll/doneWithDueAll.length)*100) : null;
 
   let html = `
     <div class="stats-grid" style="margin-bottom:20px;">
@@ -2951,9 +2957,14 @@ async function loadKPI() {
         <div class="stat-sub">${progCount} in progress · ${pendCount} pending</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Evidence submitted</div>
-        <div class="stat-val"><span class="stat-accent" style="background:var(--purple)"></span>${withEvidence}</div>
-        <div class="stat-sub">of ${doneCount} done tasks</div>
+        <div class="stat-label">On-time rate</div>
+        <div class="stat-val"><span class="stat-accent" style="background:${onTimeRateAll===null?'#94A3B8':onTimeRateAll>=70?'var(--teal)':onTimeRateAll>=40?'var(--amber)':'var(--red)'}"></span>${onTimeRateAll===null?'—':onTimeRateAll+'%'}</div>
+        <div class="stat-sub">done by due date</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Overdue</div>
+        <div class="stat-val"><span class="stat-accent" style="background:${overdueAll>0?'var(--red)':'var(--teal)'}"></span>${overdueAll}</div>
+        <div class="stat-sub">${withEvidence} of ${doneCount} have evidence</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Avg completion</div>
@@ -3004,12 +3015,72 @@ async function loadKPI() {
             <div class="prog-bar"><div class="prog-fill ${getColor(s.avgPercentage)}" style="width:${Math.min(s.avgPercentage,100)}%"></div></div>
             <span class="prog-pct">${s.avgPercentage}%</span>
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
             <span class="badge badge-done"><span class="badge-dot"></span>${s.doneCount} done</span>
             <span class="badge badge-prog"><span class="badge-dot"></span>${s.inProgressCount||0} in progress</span>
             <span class="badge badge-late"><span class="badge-dot"></span>${s.taskCount-s.doneCount-(s.inProgressCount||0)} pending</span>
           </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding-top:10px;border-top:1px solid var(--border2);">
+            <div style="text-align:center;">
+              <div style="font-size:15px;font-weight:700;color:${s.onTimeRate===null?'#94A3B8':s.onTimeRate>=80?'#1D9E75':s.onTimeRate>=50?'#EF9F27':'#E24B4A'};">${s.onTimeRate===null?'—':s.onTimeRate+'%'}</div>
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;">On-time</div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:15px;font-weight:700;color:${s.overdueCount>0?'#E24B4A':'#1D9E75'};">${s.overdueCount}</div>
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;">Overdue</div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:15px;font-weight:700;color:${s.avgDaysLate>0?'#E24B4A':'#64748B'};">${s.avgDaysLate>0?s.avgDaysLate+'d':'—'}</div>
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;">Avg late</div>
+            </div>
+          </div>
         </div>`).join('')}
+    </div>`;
+  }
+
+  // ── Project metrics section ──
+  const projSummary = data.projectSummary || [];
+  if (projSummary.length) {
+    html += `<div class="section-title" style="margin-bottom:12px;">Project health</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:24px;">
+      ${projSummary.map(p => {
+        const hColor = p.health>=75?'#1D9E75':p.health>=50?'#EF9F27':'#E24B4A';
+        const hLabel = p.healthStatus==='healthy'?'Healthy':p.healthStatus==='at-risk'?'At risk':'Critical';
+        return `
+        <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;padding:16px 18px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+            <div>
+              <div style="font-weight:600;font-size:14px;color:var(--navy);">${p.shortName}</div>
+              <div style="font-size:11px;color:var(--muted);">${p.taskCount} tasks</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:22px;font-weight:700;color:${hColor};line-height:1;">${p.health}</div>
+              <div style="font-size:9px;color:${hColor};font-weight:600;text-transform:uppercase;">${hLabel}</div>
+            </div>
+          </div>
+          <div class="prog-wrap" style="margin-bottom:12px;">
+            <div class="prog-bar"><div class="prog-fill" style="width:${p.health}%;background:${hColor};"></div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div style="text-align:center;background:var(--off);border-radius:8px;padding:6px;">
+              <div style="font-size:14px;font-weight:700;color:var(--navy);">${p.completionRate}%</div>
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Completion</div>
+            </div>
+            <div style="text-align:center;background:var(--off);border-radius:8px;padding:6px;">
+              <div style="font-size:14px;font-weight:700;color:${p.onTimeRate===null?'#94A3B8':p.onTimeRate>=80?'#1D9E75':p.onTimeRate>=50?'#EF9F27':'#E24B4A'};">${p.onTimeRate===null?'—':p.onTimeRate+'%'}</div>
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">On-time</div>
+            </div>
+            <div style="text-align:center;background:${p.overdueCount>0?'#FFEBEE':'var(--off)'};border-radius:8px;padding:6px;">
+              <div style="font-size:14px;font-weight:700;color:${p.overdueCount>0?'#C62828':'#1D9E75'};">${p.overdueCount}</div>
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Overdue</div>
+            </div>
+            <div style="text-align:center;background:${p.atRiskCount>0?'#FFF3E0':'var(--off)'};border-radius:8px;padding:6px;">
+              <div style="font-size:14px;font-weight:700;color:${p.atRiskCount>0?'#E65100':'#64748B'};">${p.atRiskCount}</div>
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">At risk</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
     </div>`;
   }
 
