@@ -965,8 +965,8 @@ tbody tr:hover td{background:#fafcfb;}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
-          <label class="form-label">Project *</label>
-          <select class="form-input" id="task-project"></select>
+          <label class="form-label">Project(s) * <span style="color:var(--muted);font-size:10px;">(select one or more)</span></label>
+          <div id="task-project-picker" style="border:1px solid var(--border2);border-radius:8px;padding:6px;max-height:120px;overflow-y:auto;background:var(--white);"></div>
         </div>
         <div class="form-group">
           <label class="form-label">Category</label>
@@ -2281,7 +2281,11 @@ function renderTaskRows(tasks, projects, staff) {
   }
 
   tbody.innerHTML = tasks.map(t => {
-    const proj = projects?.find(p => p.ID === t.ProjectID);
+    const taskProjIds = (t.ProjectID || '').split(',').map(s => s.trim()).filter(Boolean);
+    const projBadges = taskProjIds.map(pid => {
+      const p = projects?.find(pp => pp.ID === pid);
+      return `<span class="badge badge-done" style="margin:1px 2px;">${p?.ShortName || pid}</span>`;
+    }).join('') || '<span style="color:var(--muted)">—</span>';
     const assigneeIds = (t.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
     // Show ROLES instead of names — dedupe so the same role isn't repeated
     const assigneeRoles = [...new Set(assigneeRoleLabels(t.AssigneeID))];
@@ -2295,7 +2299,7 @@ function renderTaskRows(tasks, projects, staff) {
         ${t.Description ? `<br><span style="font-size:11px;color:var(--muted)">${t.Description}</span>` : ''}
         ${t.DueDate ? `<br><span style="font-size:10px;color:var(--muted)">Due: ${t.DueDate}</span>` : ''}
       </td>
-      <td><span class="badge badge-done">${proj?.ShortName || t.ProjectID}</span></td>
+      <td>${projBadges}</td>
       <td style="color:var(--muted)">${t.Category || '—'}</td>
       <td>${assigneeRoles.length ? assigneeRoles.map(r => `<span style="display:inline-block;background:var(--teal-lt);color:#085041;font-size:10px;padding:2px 7px;border-radius:99px;margin:1px;">${r}</span>`).join(' ') : '<span style="color:var(--muted)">Unassigned</span>'}</td>
       <td>
@@ -2487,6 +2491,24 @@ function getSelectedAssignees() {
   return selectedAssigneeIds.join(',');
 }
 
+// Render the multi-select project picker as checkboxes; pre-check the given project IDs
+function renderProjectPicker(selectedIds) {
+  const sel = new Set((selectedIds || []).map(s => s.trim()).filter(Boolean));
+  const projects = cache.projects || [];
+  const box = document.getElementById('task-project-picker');
+  if (!box) return;
+  box.innerHTML = projects.map(p => `
+    <label style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;cursor:pointer;font-size:13px;">
+      <input type="checkbox" class="task-project-cb" value="${p.ID}" ${sel.has(p.ID) ? 'checked' : ''} style="width:15px;height:15px;cursor:pointer;">
+      <span>${p.Name}</span>
+    </label>`).join('');
+}
+
+// Get the selected project IDs as a comma-separated string
+function getSelectedProjects() {
+  return Array.from(document.querySelectorAll('.task-project-cb:checked')).map(cb => cb.value).join(',');
+}
+
 async function populateLinkedDocDropdown(selectedDocId) {
   const sel = document.getElementById('task-linked-doc');
   if (!sel) return;
@@ -2570,7 +2592,7 @@ async function openQuickDoc() {
 }
 
 async function saveQuickDoc() {
-  const projectId = document.getElementById('task-project').value;
+  const projectId = (getSelectedProjects().split(',')[0] || '');
   const isSelfOwed = !hasFullDocsAccess();
   const body = {
     title: document.getElementById('quick-doc-title').value.trim(),
@@ -2617,9 +2639,7 @@ function openAddTask() {
   document.getElementById('task-priority').value = 'Medium';
   populateLinkedDocDropdown('');
 
-  const projects = cache.projects || [];
-  const projSel = document.getElementById('task-project');
-  projSel.innerHTML = projects.map(p => `<option value="${p.ID}">${p.Name}</option>`).join('');
+  renderProjectPicker([]);
 
   const canAssign = ['developer','bod','senior-impact','senior-biz','project-coordinator'].includes(user.role);
   if (canAssign) {
@@ -2644,10 +2664,8 @@ function openEditTask(id) {
   document.getElementById('task-priority').value = t.Priority || 'Medium';
   populateLinkedDocDropdown(t.LinkedDocID || '');
 
-  const projSel = document.getElementById('task-project');
-  projSel.innerHTML = (cache.projects||[]).map(p =>
-    `<option value="${p.ID}" ${p.ID === t.ProjectID ? 'selected' : ''}>${p.Name}</option>`
-  ).join('');
+  const taskProjects = (t.ProjectID || '').split(',').map(s => s.trim()).filter(Boolean);
+  renderProjectPicker(taskProjects);
 
   const canAssign = ['developer','bod','senior-impact','senior-biz','project-coordinator'].includes(user.role);
   const selectedIds = (t.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -2664,7 +2682,7 @@ async function saveTask() {
   const editId = document.getElementById('edit-task-id').value;
   const body = {
     name: document.getElementById('task-name').value.trim(),
-    projectId: document.getElementById('task-project').value,
+    projectId: getSelectedProjects(),
     category: document.getElementById('task-category').value.trim(),
     dueDate: document.getElementById('task-due').value,
     description: document.getElementById('task-desc').value.trim(),
@@ -2673,7 +2691,7 @@ async function saveTask() {
     assigneeId: getSelectedAssignees() || user.staffId,
     linkedDocId: document.getElementById('task-linked-doc').value,
   };
-  if (!body.name || !body.projectId) { showToast('Name and project are required', 'error'); return; }
+  if (!body.name || !body.projectId) { showToast('Name and at least one project are required', 'error'); return; }
 
   // Warn if marking Done while linked document is not yet verified
   if (body.status === 'Done' && body.linkedDocId) {
@@ -2755,7 +2773,7 @@ async function loadTasksForWorklog() {
   const tasks = cache.tasks || await api('/tasks');
   cache.tasks = tasks;
   const sel = document.getElementById('wl-task');
-  const filtered = (tasks||[]).filter(t => (!projId || t.ProjectID===projId));
+  const filtered = (tasks||[]).filter(t => (!projId || (t.ProjectID||'').split(',').map(s=>s.trim()).includes(projId)));
   sel.innerHTML = filtered.map(t=>`<option value="${t.ID}">${t.Name} (${t.Target} ${t.Unit})</option>`).join('');
 }
 
@@ -3072,7 +3090,7 @@ async function loadKpiByProject() {
 
   let html = '';
   projects.forEach(proj => {
-    const projTasks = allTasks.filter(t => t.ProjectID === proj.ID);
+    const projTasks = allTasks.filter(t => (t.ProjectID||'').split(',').map(s=>s.trim()).includes(proj.ID));
     if (!projTasks.length) return;
 
     const done    = projTasks.filter(t => t.Status === 'Done').length;
@@ -3168,10 +3186,12 @@ async function loadKpiByStaff() {
     const inProg = myTasks.filter(t => t.Status === 'In Progress').length;
     const pct    = Math.round((done / myTasks.length) * 100);
 
-    const projIds = [...new Set(myTasks.map(t => t.ProjectID))];
+    // Collect every project ID referenced (tasks may belong to several projects)
+    const projIds = [...new Set(myTasks.flatMap(t => (t.ProjectID || '').split(',').map(s => s.trim()).filter(Boolean)))];
     const byProject = projIds.map(pid => {
       const proj   = projects.find(p => p.ID === pid);
-      const pTasks = myTasks.filter(t => t.ProjectID === pid);
+      // A multi-project task shows under each of its projects
+      const pTasks = myTasks.filter(t => (t.ProjectID || '').split(',').map(s => s.trim()).includes(pid));
       const pDone  = pTasks.filter(t => t.Status === 'Done').length;
       const pPct   = pTasks.length ? Math.round((pDone / pTasks.length) * 100) : 0;
       return { proj, tasks: pTasks, done: pDone, pct: pPct };
@@ -4105,11 +4125,12 @@ async function downloadKPIReport() {
         startY: 24,
         head: [['Task', 'Project', 'Category', 'Due date', 'Status', 'Evidence']],
         body: myTasks.map(t => {
-          const proj = projects.find(p => p.ID === t.ProjectID);
+          const projNames = (t.ProjectID || '').split(',').map(s => s.trim()).filter(Boolean)
+            .map(pid => projects.find(p => p.ID === pid)?.ShortName || pid).join(', ');
           const hasEvidence = !!(t.EvidenceFile || t.EvidenceLink);
           return [
             t.Name,
-            proj?.ShortName || '—',
+            projNames || '—',
             t.Category || '—',
             t.DueDate || '—',
             t.Status || 'Pending',
@@ -4134,7 +4155,7 @@ async function downloadKPIReport() {
 
     // ── Section 3: Per Project ────────────────────────────
     for (const proj of projects) {
-      const projTasks = activeTasks.filter(t => t.ProjectID === proj.ID);
+      const projTasks = activeTasks.filter(t => (t.ProjectID||'').split(',').map(s=>s.trim()).includes(proj.ID));
       if (!projTasks.length) continue;
 
       doc.addPage();
