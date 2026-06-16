@@ -2909,7 +2909,45 @@ async function loadKPI() {
   if (staffRolesKpi.includes(role)) {
     const kpis = data.kpis || [];
     if (!kpis.length) { el.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-chart-bar"></i></div>No tasks assigned yet.</div>'; return; }
-    el.innerHTML = kpis.map(k => `
+    const my = data.myKpi;
+    const scoreColor = my ? (my.kpiScore>=70?'#1D9E75':my.kpiScore>=50?'#EF9F27':'#E24B4A') : '#64748B';
+    const myScoreCard = my ? `
+      <div style="background:var(--white);border:1px solid var(--border2);border-radius:16px;padding:20px 22px;margin-bottom:18px;">
+        <div style="display:flex;align-items:center;gap:18px;">
+          <div style="position:relative;width:72px;height:72px;flex-shrink:0;">
+            <svg width="72" height="72" viewBox="0 0 72 72">
+              <circle cx="36" cy="36" r="30" fill="none" stroke="#E2EDE8" stroke-width="6"/>
+              <circle cx="36" cy="36" r="30" fill="none" stroke="${scoreColor}" stroke-width="6"
+                stroke-dasharray="${(my.kpiScore/100)*188.5} 188.5" stroke-linecap="round" transform="rotate(-90 36 36)"/>
+              <text x="36" y="41" text-anchor="middle" font-size="20" font-weight="bold" fill="${scoreColor}">${my.kpiScore}</text>
+            </svg>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:13px;color:var(--muted);">Your KPI Score</div>
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-size:28px;font-weight:700;color:${scoreColor};">${my.kpiScore}</span>
+              <span style="font-size:14px;color:var(--muted);">/ 100</span>
+              <span class="badge ${my.kpiScore>=70?'badge-done':my.kpiScore>=50?'badge-prog':'badge-late'}" style="margin-left:4px;"><span class="badge-dot"></span>${my.kpiLabel}</span>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">${my.doneCount} of ${my.taskCount} tasks done · ${my.overdueCount} overdue</div>
+          </div>
+          <button onclick="toggleKpiBreakdown('me')" style="background:none;border:1px solid var(--border2);border-radius:8px;padding:8px 12px;color:var(--teal);font-size:12px;cursor:pointer;font-family:inherit;align-self:flex-start;"><i class="ti ti-info-circle"></i> How is this calculated?</button>
+        </div>
+        <div id="kpi-breakdown-me" style="display:none;background:var(--off);border-radius:10px;padding:14px 16px;margin-top:16px;font-size:12px;">
+          <div style="font-weight:600;color:var(--navy);margin-bottom:8px;">How your score is calculated</div>
+          ${[['Completion','% of your tasks done',my.kpiBreakdown.completion],['Timeliness','% finished by due date',my.kpiBreakdown.timeliness],['Evidence','% of done tasks with evidence',my.kpiBreakdown.evidence],['Reliability','fewer overdue is better',my.kpiBreakdown.reliability]].map(([label,desc,b]) => `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">
+              <div style="width:96px;"><div style="color:var(--navy);font-weight:600;">${label}</div><div style="font-size:9px;color:var(--muted);">${desc}</div></div>
+              <div style="flex:1;height:6px;background:#E2EDE8;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${b.pct}%;background:var(--teal);"></div></div>
+              <span style="width:36px;text-align:right;color:var(--navy);font-weight:600;">${b.pct}%</span>
+              <span style="width:80px;text-align:right;color:var(--muted);">× ${b.weight}% = ${b.points} pts</span>
+            </div>`).join('')}
+          <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-weight:700;color:var(--navy);">
+            <span>Total KPI Score</span><span>${my.kpiScore} / 100</span>
+          </div>
+        </div>
+      </div>` : '';
+    el.innerHTML = myScoreCard + '<div class="section-title" style="margin-bottom:12px;">Your tasks</div>' + kpis.map(k => `
       <div style="background:var(--white);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
           <div>
