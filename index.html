@@ -715,7 +715,7 @@ tbody tr:hover td{background:#fafcfb;}
         <div id="doc-filter-bar" style="display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap;">
           <div style="position:relative;flex:1;min-width:200px;">
             <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;"></i>
-            <input id="doc-search" placeholder="Search by title or person…" oninput="renderFilteredDocs()" style="width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;outline:none;">
+            <input id="doc-search" placeholder="Search title, person, type, project…" oninput="renderFilteredDocs()" style="width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;outline:none;">
           </div>
           <select id="doc-status-filter" onchange="renderFilteredDocs()" style="padding:9px 12px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;outline:none;">
             <option value="">All statuses</option>
@@ -725,12 +725,22 @@ tbody tr:hover td{background:#fafcfb;}
             <option value="Verified">Verified</option>
             <option value="Incomplete">Incomplete</option>
           </select>
+          <select id="doc-project-filter" onchange="renderFilteredDocs()" style="padding:9px 12px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;outline:none;">
+            <option value="">All projects</option>
+          </select>
+          <select id="doc-person-filter" onchange="renderFilteredDocs()" style="padding:9px 12px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;outline:none;">
+            <option value="">All people</option>
+          </select>
+          <select id="doc-type-filter" onchange="renderFilteredDocs()" style="padding:9px 12px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;outline:none;">
+            <option value="">All types</option>
+          </select>
           <select id="doc-sort" onchange="renderFilteredDocs()" style="padding:9px 12px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;outline:none;">
             <option value="priority">Smart priority</option>
             <option value="overdue">Most overdue first</option>
             <option value="due">By due date</option>
             <option value="newest">Newest first</option>
           </select>
+          <button id="doc-clear-filters" onclick="clearDocFilters()" style="display:none;padding:9px 12px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;color:var(--muted);"><i class="ti ti-x"></i> Clear</button>
         </div>
         <!-- List -->
         <div id="docs-list"></div>
@@ -4667,6 +4677,12 @@ async function loadDocs() {
       ${docCounter('Incomplete', c.incomplete, '#6A1B9A', '#F3E5F5', 'Incomplete')}
     `;
     if (filterBar) filterBar.style.display = data.docs.length ? 'flex' : 'none';
+    // Ensure all filter controls are visible for full-access users
+    ['doc-project-filter','doc-person-filter','doc-type-filter','doc-sort'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = '';
+    });
+    populateDocFilters(data.docs);
   } else {
     // Non-full-access user — they may have documents to SUBMIT and/or to VERIFY
     const toVerify = (data.docs || []).filter(d => d.canVerify && !d.isOwner).length;
@@ -4678,7 +4694,17 @@ async function loadDocs() {
     if (sectionTitle) sectionTitle.textContent = title;
     if (newBtn) newBtn.style.display = 'none';
     counters.style.display = 'none';
-    if (filterBar) filterBar.style.display = 'none';
+    // General staff get a simple search + status filter (only when they have a few docs).
+    // The project/person/type dropdowns are hidden to keep their view clean.
+    const simple = (data.docs || []).length > 3;
+    if (filterBar) filterBar.style.display = simple ? 'flex' : 'none';
+    ['doc-project-filter','doc-person-filter','doc-type-filter'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    // Keep the sort dropdown simple too
+    const sortEl = document.getElementById('doc-sort');
+    if (sortEl) sortEl.style.display = 'none';
   }
 
   if (!data.docs.length) {
@@ -4695,6 +4721,41 @@ function filterDocsByStatus(status) {
   if (sel) { sel.value = status; renderFilteredDocs(); }
 }
 
+// Populate the project / person / type filter dropdowns from the loaded documents
+function populateDocFilters(docs) {
+  docs = docs || [];
+  const projSel = document.getElementById('doc-project-filter');
+  const personSel = document.getElementById('doc-person-filter');
+  const typeSel = document.getElementById('doc-type-filter');
+  if (!projSel || !personSel || !typeSel) return;
+
+  // Preserve current selections
+  const curProj = projSel.value, curPerson = personSel.value, curType = typeSel.value;
+
+  // Unique projects (by name)
+  const projects = [...new Set(docs.map(d => d.projectName).filter(Boolean))].sort();
+  projSel.innerHTML = '<option value="">All projects</option>' +
+    projects.map(p => `<option value="${p}" ${p===curProj?'selected':''}>${p}</option>`).join('');
+
+  // Unique people (those who owe documents)
+  const people = [...new Set(docs.map(d => d.requestedFromName).filter(n => n && n !== '—'))].sort();
+  personSel.innerHTML = '<option value="">All people</option>' +
+    people.map(p => `<option value="${p}" ${p===curPerson?'selected':''}>${p}</option>`).join('');
+
+  // Unique document types
+  const types = [...new Set(docs.map(d => d.DocumentType).filter(Boolean))].sort();
+  typeSel.innerHTML = '<option value="">All types</option>' +
+    types.map(t => `<option value="${t}" ${t===curType?'selected':''}>${t}</option>`).join('');
+}
+
+function clearDocFilters() {
+  ['doc-search','doc-status-filter','doc-project-filter','doc-person-filter','doc-type-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderFilteredDocs();
+}
+
 function renderFilteredDocs() {
   const list = document.getElementById('docs-list');
   let docs = (cache._docs || []).slice();
@@ -4702,13 +4763,18 @@ function renderFilteredDocs() {
 
   const search = (document.getElementById('doc-search')?.value || '').toLowerCase().trim();
   const statusFilter = document.getElementById('doc-status-filter')?.value || '';
+  const projectFilter = document.getElementById('doc-project-filter')?.value || '';
+  const personFilter = document.getElementById('doc-person-filter')?.value || '';
+  const typeFilter = document.getElementById('doc-type-filter')?.value || '';
   const sort = document.getElementById('doc-sort')?.value || 'priority';
 
-  // Search by title or person
+  // Search by title, person, type, or project
   if (search) {
     docs = docs.filter(d =>
       (d.Title || '').toLowerCase().includes(search) ||
       (d.requestedFromName || '').toLowerCase().includes(search) ||
+      (d.verifierName || '').toLowerCase().includes(search) ||
+      (d.DocumentType || '').toLowerCase().includes(search) ||
       (d.projectName || '').toLowerCase().includes(search)
     );
   }
@@ -4719,6 +4785,16 @@ function renderFilteredDocs() {
   } else if (statusFilter) {
     docs = docs.filter(d => d.Status === statusFilter);
   }
+
+  // Project / person / type filters
+  if (projectFilter) docs = docs.filter(d => d.projectName === projectFilter);
+  if (personFilter)  docs = docs.filter(d => d.requestedFromName === personFilter);
+  if (typeFilter)    docs = docs.filter(d => d.DocumentType === typeFilter);
+
+  // Show the Clear button only when a filter is active
+  const anyFilter = search || statusFilter || projectFilter || personFilter || typeFilter;
+  const clearBtn = document.getElementById('doc-clear-filters');
+  if (clearBtn) clearBtn.style.display = anyFilter ? 'inline-flex' : 'none';
 
   // Sort
   if (sort === 'priority') {
