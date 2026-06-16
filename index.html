@@ -2532,10 +2532,18 @@ async function populateLinkedDocDropdown(selectedDocId) {
     docs = data?.docs || [];
     cache._allDocs = docs;
   }
-  // Everyone can create — but program team can only create docs they themselves owe
-  sel.innerHTML = '<option value="">No document dependency</option>' +
-    '<option value="__new__">+ Create new document request…</option>' +
-    docs.map(d => `<option value="${d.ID}" ${d.ID === selectedDocId ? 'selected' : ''}>${d.Title} — ${d.Status}</option>`).join('');
+  // Only offer "no dependency" and "create new" — existing documents are not listed.
+  // Exception: if this task is already linked to a document (editing), keep that one
+  // selectable so the link isn't lost.
+  let html = '<option value="">No document dependency</option>' +
+    '<option value="__new__">+ Create new document request…</option>';
+  if (selectedDocId) {
+    const linked = docs.find(d => d.ID === selectedDocId);
+    if (linked) {
+      html += `<option value="${linked.ID}" selected>${linked.Title} — ${linked.Status}</option>`;
+    }
+  }
+  sel.innerHTML = html;
 }
 
 function handleLinkedDocChange() {
