@@ -726,9 +726,10 @@ tbody tr:hover td{background:#fafcfb;}
             <option value="Incomplete">Incomplete</option>
           </select>
           <select id="doc-sort" onchange="renderFilteredDocs()" style="padding:9px 12px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;outline:none;">
+            <option value="priority">Smart priority</option>
             <option value="overdue">Most overdue first</option>
-            <option value="newest">Newest first</option>
             <option value="due">By due date</option>
+            <option value="newest">Newest first</option>
           </select>
         </div>
         <!-- List -->
@@ -4701,7 +4702,7 @@ function renderFilteredDocs() {
 
   const search = (document.getElementById('doc-search')?.value || '').toLowerCase().trim();
   const statusFilter = document.getElementById('doc-status-filter')?.value || '';
-  const sort = document.getElementById('doc-sort')?.value || 'overdue';
+  const sort = document.getElementById('doc-sort')?.value || 'priority';
 
   // Search by title or person
   if (search) {
@@ -4720,7 +4721,30 @@ function renderFilteredDocs() {
   }
 
   // Sort
-  if (sort === 'overdue') {
+  if (sort === 'priority') {
+    // Smart priority: surface what needs action most urgently.
+    // 0 Overdue (unsubmitted) → 1 Submitted (awaiting verify) → 2 Incomplete →
+    // 3 Pending due soon → 4 Pending later → 5 Verified (done, bottom)
+    const today = new Date(); today.setHours(0,0,0,0);
+    const rank = d => {
+      if (d.Status === 'Verified') return 5;
+      if (d.isOverdue) return 0;
+      if (d.Status === 'Submitted') return 1;
+      if (d.Status === 'Incomplete') return 2;
+      if (d.DueDate) {
+        const diff = Math.ceil((new Date(d.DueDate) - today) / (1000*60*60*24));
+        if (diff <= 3) return 3;   // due within 3 days
+      }
+      return 4;                    // pending, not yet due
+    };
+    docs.sort((a, b) => {
+      const ra = rank(a), rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      // Within the same bucket, earliest due date first (verified: newest first)
+      if (ra === 5) return (b.CreatedAt || '').localeCompare(a.CreatedAt || '');
+      return (a.DueDate || '').localeCompare(b.DueDate || '');
+    });
+  } else if (sort === 'overdue') {
     docs.sort((a, b) => {
       if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
       return (a.DueDate || '').localeCompare(b.DueDate || '');
@@ -4736,7 +4760,43 @@ function renderFilteredDocs() {
     return;
   }
 
-  list.innerHTML = docs.map(d => renderDocCard(d, fullAccess)).join('');
+  // In smart-priority mode, add group headers so the ordering is clear at a glance
+  if (sort === 'priority' && fullAccess) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const groupOf = d => {
+      if (d.Status === 'Verified') return 'Verified';
+      if (d.isOverdue) return 'Overdue — blocking reporting';
+      if (d.Status === 'Submitted') return 'Awaiting your verification';
+      if (d.Status === 'Incomplete') return 'Flagged incomplete';
+      if (d.DueDate) {
+        const diff = Math.ceil((new Date(d.DueDate) - today) / (1000*60*60*24));
+        if (diff <= 3) return 'Due soon';
+      }
+      return 'Upcoming';
+    };
+    const groupColor = {
+      'Overdue — blocking reporting':'#C62828', 'Awaiting your verification':'#1565C0',
+      'Flagged incomplete':'#6A1B9A', 'Due soon':'#E65100', 'Upcoming':'#64748B', 'Verified':'#2E7D32'
+    };
+    let html = '', lastGroup = null;
+    docs.forEach(d => {
+      const g = groupOf(d);
+      if (g !== lastGroup) {
+        const count = docs.filter(x => groupOf(x) === g).length;
+        html += `<div style="display:flex;align-items:center;gap:8px;margin:18px 2px 10px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${groupColor[g]};"></span>
+          <span style="font-size:12px;font-weight:700;color:${groupColor[g]};text-transform:uppercase;letter-spacing:0.5px;">${g}</span>
+          <span style="font-size:11px;color:var(--muted);">${count}</span>
+          <span style="flex:1;height:1px;background:var(--border2);"></span>
+        </div>`;
+        lastGroup = g;
+      }
+      html += renderDocCard(d, fullAccess);
+    });
+    list.innerHTML = html;
+  } else {
+    list.innerHTML = docs.map(d => renderDocCard(d, fullAccess)).join('');
+  }
 }
 
 function docCounter(label, count, color, bg, filterVal) {
