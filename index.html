@@ -2868,6 +2868,11 @@ function getPeriodRange(period) {
 // ════════════════════════════════════════════════════════
 // KPI
 // ════════════════════════════════════════════════════════
+function toggleKpiBreakdown(staffId) {
+  const el = document.getElementById('kpi-breakdown-' + staffId);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
 async function loadKPI() {
   const projSel = document.getElementById('kpi-filter-project');
   const staffSel = document.getElementById('kpi-filter-staff');
@@ -2979,7 +2984,7 @@ async function loadKPI() {
         <canvas id="kpi-chart-status" height="120"></canvas>
       </div>
       <div class="stat-card">
-        <div class="stat-label" style="margin-bottom:12px;">Staff KPI comparison</div>
+        <div class="stat-label" style="margin-bottom:12px;">Staff KPI score comparison</div>
         <canvas id="kpi-chart-staff" height="120"></canvas>
       </div>
     </div>`;
@@ -2994,26 +2999,45 @@ async function loadKPI() {
               <svg width="48" height="48" viewBox="0 0 48 48">
                 <circle cx="24" cy="24" r="20" fill="none" stroke="#E2EDE8" stroke-width="4"/>
                 <circle cx="24" cy="24" r="20" fill="none"
-                  stroke="${s.avgPercentage>=70?'#1D9E75':s.avgPercentage>=40?'#EF9F27':'#E24B4A'}"
+                  stroke="${s.kpiScore>=70?'#1D9E75':s.kpiScore>=50?'#EF9F27':'#E24B4A'}"
                   stroke-width="4"
-                  stroke-dasharray="${(s.avgPercentage/100)*125.7} 125.7"
+                  stroke-dasharray="${(s.kpiScore/100)*125.7} 125.7"
                   stroke-linecap="round"
                   transform="rotate(-90 24 24)"/>
-                <text x="24" y="28" text-anchor="middle" font-size="9" font-weight="bold"
-                  fill="${s.avgPercentage>=70?'#1D9E75':s.avgPercentage>=40?'#EF9F27':'#E24B4A'}">${s.avgPercentage}%</text>
+                <text x="24" y="28" text-anchor="middle" font-size="11" font-weight="bold"
+                  fill="${s.kpiScore>=70?'#1D9E75':s.kpiScore>=50?'#EF9F27':'#E24B4A'}">${s.kpiScore}</text>
               </svg>
             </div>
             <div style="flex:1;">
               <div class="s-name">${s.name}</div>
               <div class="s-role">${s.role} · ${s.taskCount} tasks</div>
             </div>
-            <span class="badge ${getBadge(s.overallStatus)}" style="margin-left:auto">
-              <span class="badge-dot"></span>${s.avgPercentage}%
+            <span class="badge ${s.kpiScore>=70?'badge-done':s.kpiScore>=50?'badge-prog':'badge-late'}" style="margin-left:auto">
+              <span class="badge-dot"></span>${s.kpiLabel}
             </span>
           </div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+            <span style="font-size:13px;color:var(--muted);">KPI Score</span>
+            <span style="font-size:20px;font-weight:700;color:${s.kpiScore>=70?'#1D9E75':s.kpiScore>=50?'#EF9F27':'#E24B4A'};">${s.kpiScore}</span>
+            <span style="font-size:12px;color:var(--muted);">/ 100</span>
+            <button onclick="toggleKpiBreakdown('${s.staffId}')" style="margin-left:auto;background:none;border:none;color:var(--teal);font-size:11px;cursor:pointer;font-family:inherit;"><i class="ti ti-info-circle"></i> How?</button>
+          </div>
           <div class="prog-wrap" style="margin-bottom:8px;">
-            <div class="prog-bar"><div class="prog-fill ${getColor(s.avgPercentage)}" style="width:${Math.min(s.avgPercentage,100)}%"></div></div>
-            <span class="prog-pct">${s.avgPercentage}%</span>
+            <div class="prog-bar"><div class="prog-fill ${s.kpiScore>=70?'prog-green':s.kpiScore>=50?'prog-amber':'prog-red'}" style="width:${Math.min(s.kpiScore,100)}%"></div></div>
+            <span class="prog-pct">${s.kpiScore}</span>
+          </div>
+          <div id="kpi-breakdown-${s.staffId}" style="display:none;background:var(--off);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;">
+            <div style="font-weight:600;color:var(--navy);margin-bottom:6px;">Score breakdown</div>
+            ${[['Completion',s.kpiBreakdown.completion],['Timeliness',s.kpiBreakdown.timeliness],['Evidence',s.kpiBreakdown.evidence],['Reliability',s.kpiBreakdown.reliability]].map(([label,b]) => `
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <span style="width:78px;color:var(--muted);">${label}</span>
+                <div style="flex:1;height:5px;background:#E2EDE8;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${b.pct}%;background:var(--teal);"></div></div>
+                <span style="width:34px;text-align:right;color:var(--navy);">${b.pct}%</span>
+                <span style="width:54px;text-align:right;color:var(--muted);">×${b.weight}% = ${b.points}</span>
+              </div>`).join('')}
+            <div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);font-weight:700;color:var(--navy);">
+              <span>Total KPI Score</span><span>${s.kpiScore} / 100</span>
+            </div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
             <span class="badge badge-done"><span class="badge-dot"></span>${s.doneCount} done</span>
@@ -3143,8 +3167,8 @@ async function loadKPI() {
       type: 'bar',
       data: {
         labels: summary.map(s => s.name.split(' ')[0]),
-        datasets: [{ data: summary.map(s => s.avgPercentage),
-          backgroundColor: summary.map(s => s.avgPercentage>=70?'#1D9E75':s.avgPercentage>=40?'#EF9F27':'#E24B4A'),
+        datasets: [{ data: summary.map(s => s.kpiScore),
+          backgroundColor: summary.map(s => s.kpiScore>=70?'#1D9E75':s.kpiScore>=50?'#EF9F27':'#E24B4A'),
           borderRadius: 6, borderWidth: 0 }]
       },
       options: {
