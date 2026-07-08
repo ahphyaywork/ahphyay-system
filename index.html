@@ -4336,11 +4336,37 @@ async function downloadKPIReport() {
     const toDate = document.getElementById('report-date-to').value;
     if (!fromDate || !toDate) { showToast('Please select a date range', 'error'); return; }
 
-    const [tasks, projects, staffList] = await Promise.all([
+    const [tasks, projects, staffList, kpiData] = await Promise.all([
       api('/tasks'),
       api('/projects'),
       api('/staff'),
+      api('/kpi'),
     ]);
+
+    const staffSummary = (kpiData && kpiData.staffSummary) || [];
+    const projectSummary = (kpiData && kpiData.projectSummary) || [];
+
+    // Render a Chart.js chart off-screen and return a PNG data URL
+    async function chartToImage(config, width = 600, height = 320) {
+      return new Promise(resolve => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.style.position = 'fixed'; canvas.style.left = '-9999px';
+        document.body.appendChild(canvas);
+        const chart = new Chart(canvas.getContext('2d'), {
+          ...config,
+          options: { ...(config.options||{}), responsive: false, animation: false,
+            plugins: { ...((config.options||{}).plugins||{}), legend: { ...(((config.options||{}).plugins||{}).legend||{}) } } }
+        });
+        // Give it a tick to paint
+        setTimeout(() => {
+          const url = canvas.toDataURL('image/png', 1.0);
+          chart.destroy();
+          document.body.removeChild(canvas);
+          resolve(url);
+        }, 120);
+      });
+    }
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -4381,6 +4407,102 @@ async function downloadKPIReport() {
     doc.setFontSize(10); doc.setTextColor(180,220,205);
     doc.text(`Total tasks: ${activeTasks.length}  |  Done: ${done}  |  In Progress: ${inProg}  |  Pending: ${pending}  |  Team KPI: ${teamPct}%`, M, 155);
 
+    // ── KPI Dashboard page (with charts) ─────────────────
+    const rgb = arr => `rgb(${arr[0]},${arr[1]},${arr[2]})`;
+
+    // Build chart images
+    const statusChartImg = await chartToImage({
+      type: 'doughnut',
+      data: {
+        labels: ['Done', 'In Progress', 'Pending'],
+        datasets: [{ data: [done, inProg, pending], backgroundColor: [rgb(teal), rgb(amber), rgb(red)], borderWidth: 0 }]
+      },
+      options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 13 } } }, title: { display: true, text: 'Task Status', font: { size: 15, weight: 'bold' } } } }
+    }, 460, 320);
+
+    // Staff KPI score bar
+    const staffForChart = staffSummary.slice().sort((a,b) => b.kpiScore - a.kpiScore);
+    const staffKpiImg = staffForChart.length ? await chartToImage({
+      type: 'bar',
+      data: {
+        labels: staffForChart.map(s => (s.name||'').split(' ')[0]),
+        datasets: [{ data: staffForChart.map(s => s.kpiScore),
+          backgroundColor: staffForChart.map(s => s.kpiScore>=70?rgb(teal):s.kpiScore>=50?rgb(amber):rgb(red)), borderRadius: 4 }]
+      },
+      options: { plugins: { legend: { display: false }, title: { display: true, text: 'Staff KPI Scores', font: { size: 15, weight: 'bold' } } }, scales: { y: { beginAtZero: true, max: 100 } } }
+    }, 900, 340) : null;
+
+    // Project health bar
+    const projHealthImg = projectSummary.length ? await chartToImage({
+      type: 'bar',
+      data: {
+        labels: projectSummary.map(p => p.shortName),
+        datasets: [{ data: projectSummary.map(p => p.health),
+          backgroundColor: projectSummary.map(p => p.health>=75?rgb(teal):p.health>=50?rgb(amber):rgb(red)), borderRadius: 4 }]
+      },
+      options: { plugins: { legend: { display: false }, title: { display: true, text: 'Project Health Scores', font: { size: 15, weight: 'bold' } } }, scales: { y: { beginAtZero: true, max: 100 } } }
+    }, 900, 340) : null;
+
+    doc.addPage();
+    doc.setFillColor(...navy); doc.rect(0, 0, W, 18, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(13); doc.setFont('helvetica','bold');
+    doc.text('KPI Dashboard', M, 12);
+    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...muted);
+    doc.text(`${fromDate} — ${toDate}`, W - M, 12, { align: 'right' });
+
+    // Precision metric cards row
+    const todayR = new Date().toISOString().slice(0,10);
+    const overdueR = activeTasks.filter(t => t.Status!=='Done' && t.DueDate && t.DueDate < todayR).length;
+    const doneWithDueR = activeTasks.filter(t => t.Status==='Done' && t.DueDate);
+    const onTimeR = doneWithDueR.filter(t => (t.EvidenceDate||'').slice(0,10) && (t.EvidenceDate||'').slice(0,10) <= t.DueDate).length;
+    const onTimeRateR = doneWithDueR.length ? Math.round((onTimeR/doneWithDueR.length)*100) : 0;
+
+    const cards = [
+      ['Team KPI', teamPct + '%', teal],
+      ['On-time', onTimeRateR + '%', onTimeRateR>=70?teal:onTimeRateR>=40?amber:red],
+      ['Overdue', String(overdueR), overdueR>0?red:teal],
+      ['Total tasks', String(activeTasks.length), navy],
+    ];
+    let cx = M;
+    const cardW = (W - 2*M - 3*4) / 4;
+    cards.forEach(([label, val, color]) => {
+      doc.setFillColor(245, 247, 250); doc.roundedRect(cx, 24, cardW, 22, 2, 2, 'F');
+      doc.setTextColor(...color); doc.setFontSize(16); doc.setFont('helvetica','bold');
+      doc.text(String(val), cx + cardW/2, 35, { align: 'center' });
+      doc.setTextColor(...muted); doc.setFontSize(8); doc.setFont('helvetica','normal');
+      doc.text(label, cx + cardW/2, 42, { align: 'center' });
+      cx += cardW + 4;
+    });
+
+    // Status donut
+    doc.addImage(statusChartImg, 'PNG', M, 52, 85, 59);
+    // Staff KPI chart (wide)
+    if (staffKpiImg) doc.addImage(staffKpiImg, 'PNG', M + 90, 52, W - 2*M - 90, 59);
+    // Project health chart (full width)
+    if (projHealthImg) doc.addImage(projHealthImg, 'PNG', M, 118, W - 2*M, 62);
+
+    // ── Project Health metrics table ─────────────────────
+    if (projectSummary.length) {
+      doc.autoTable({
+        startY: 188,
+        head: [['Project', 'Tasks', 'Completion', 'On-time', 'Overdue', 'At risk', 'Health']],
+        body: projectSummary.map(p => [
+          p.shortName, p.taskCount, p.completionRate + '%',
+          p.onTimeRate === null ? '—' : p.onTimeRate + '%',
+          p.overdueCount, p.atRiskCount, p.health,
+        ]),
+        styles: { fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: navy, textColor: [255,255,255], fontStyle: 'bold' },
+        columnStyles: { 6: { halign: 'center', fontStyle: 'bold' } },
+        didParseCell: (data) => {
+          if (data.column.index === 6 && data.section === 'body') {
+            const h = parseInt(data.cell.raw);
+            data.cell.styles.textColor = h>=75?teal:h>=50?amber:red;
+          }
+        },
+      });
+    }
+
     // ── Section 1: Overall Team Summary ──────────────────
     doc.addPage();
     doc.setFillColor(...navy); doc.rect(0, 0, W, 18, 'F');
@@ -4389,25 +4511,31 @@ async function downloadKPIReport() {
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...muted);
     doc.text(`${fromDate} — ${toDate}`, W - M, 12, { align: 'right' });
 
-    const activeStaff = staffList.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRoleKey(s.Role) !== 'developer');
-    const summaryData = activeStaff.map(s => {
+    // Use the real KPI summary (scores, on-time, overdue) — fall back to task calc if missing
+    const summaryData = (staffSummary.length ? staffSummary.map(s => ({
+      name: s.name, role: roleLabel(s.role), staffId: s.staffId,
+      tasks: s.taskCount, done: s.doneCount, inProg: s.inProgressCount,
+      pending: s.taskCount - s.doneCount - s.inProgressCount,
+      pct: s.kpiScore, label: s.kpiLabel,
+      onTime: s.onTimeRate, overdue: s.overdueCount,
+    })) : staffList.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRoleKey(s.Role) !== 'developer').map(s => {
       const sTasks = activeTasks.filter(t => (t.AssigneeID||'').split(',').map(x=>x.trim()).includes(s.ID));
       const sDone = sTasks.filter(t => t.Status === 'Done').length;
       const pct = sTasks.length ? Math.round((sDone / sTasks.length) * 100) : 0;
-      return { name: s.Name, role: roleLabel(normalizeRoleKey(s.Role)), staffId: s.ID, tasks: sTasks.length, done: sDone, inProg: sTasks.filter(t=>t.Status==='In Progress').length, pending: sTasks.filter(t=>!t.Status||t.Status==='Pending').length, pct };
-    }).sort((a,b) => b.pct - a.pct);
+      return { name: s.Name, role: roleLabel(normalizeRoleKey(s.Role)), staffId: s.ID, tasks: sTasks.length, done: sDone, inProg: sTasks.filter(t=>t.Status==='In Progress').length, pending: sTasks.filter(t=>!t.Status||t.Status==='Pending').length, pct, label:'', onTime:null, overdue:0 };
+    })).sort((a,b) => b.pct - a.pct);
 
     doc.autoTable({
       startY: 24,
-      head: [['Role', 'Tasks', 'Done', 'In Progress', 'Pending', 'KPI Score']],
-      body: summaryData.map(s => [s.role, s.tasks, s.done, s.inProg, s.pending, s.pct + '%']),
+      head: [['Role', 'Tasks', 'Done', 'On-time', 'Overdue', 'KPI Score']],
+      body: summaryData.map(s => [s.role, s.tasks, s.done, s.onTime===null?'—':s.onTime+'%', s.overdue, s.pct + (s.label?'  ('+s.label+')':'')]),
       styles: { fontSize: 9, cellPadding: 3 },
       headStyles: { fillColor: navy, textColor: [255,255,255], fontStyle: 'bold' },
       columnStyles: { 5: { halign: 'center', fontStyle: 'bold' } },
       didParseCell: (data) => {
         if (data.column.index === 5 && data.section === 'body') {
           const pct = parseInt(data.cell.raw);
-          data.cell.styles.textColor = getColor(pct);
+          data.cell.styles.textColor = getColor(pct >= 70 ? 100 : pct >= 50 ? 50 : 10);
         }
       },
     });
@@ -4417,7 +4545,7 @@ async function downloadKPIReport() {
     const y = doc.lastAutoTable.finalY + 6;
     doc.setFontSize(10); doc.setFont('helvetica','bold');
     doc.setTextColor(...navy);
-    doc.text(`Team average KPI: ${avgPct}%`, M, y);
+    doc.text(`Team average KPI Score: ${avgPct}`, M, y);
 
     // ── Section 2: Per Staff Member (shown by role) ───────
     for (const s of summaryData) {
