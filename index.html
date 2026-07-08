@@ -534,6 +534,20 @@ tbody tr:hover td{background:#fafcfb;}
       </div>
 
       <!-- ── STAFF PANEL ── -->
+      <div class="panel" id="panel-access">
+        <div class="section-hd">
+          <div class="section-title">Access Control</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="resetPermissions()"><i class="ti ti-refresh"></i> Reset to defaults</button>
+            <button class="btn btn-primary btn-sm" onclick="savePermissions()" id="btn-save-perms"><i class="ti ti-device-floppy"></i> Save changes</button>
+          </div>
+        </div>
+        <div style="background:#FFF8E1;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#8D6E00;">
+          <i class="ti ti-info-circle"></i> Toggle what each role can see and do. Changes take effect the next time a user logs in. BOD always keeps access to this tab and staff management (anti-lockout safeguard).
+        </div>
+        <div id="access-matrix" style="overflow-x:auto;"></div>
+      </div>
+
       <div class="panel" id="panel-staff">
         <div class="section-hd">
           <div class="section-title">Staff Management</div>
@@ -1687,27 +1701,35 @@ function buildNav() {
   const allRoles = [...mgmtRoles, ...staffRoles];
 
   const items = [
-    { panel:'dashboard', icon:'<i class="ti ti-layout-dashboard"></i>', label:'Dashboard',   roles: allRoles },
+    { panel:'dashboard', icon:'<i class="ti ti-layout-dashboard"></i>', label:'Dashboard',   roles: allRoles, perm:'tab.dashboard' },
     { sep:'Management',                                  roles: mgmtRoles },
-    { panel:'worklog',   icon:'<i class="ti ti-clipboard-list"></i>', label:'Work Log',    roles: mgmtRoles },
-    { panel:'kpi',       icon:'<i class="ti ti-chart-bar"></i>', label:'KPI Overview',roles: mgmtRoles },
-    { panel:'recurring', icon:'<i class="ti ti-repeat"></i>', label:'Recurring',    roles: mgmtRoles },
+    { panel:'worklog',   icon:'<i class="ti ti-clipboard-list"></i>', label:'Work Log',    roles: mgmtRoles, perm:'tab.worklog' },
+    { panel:'kpi',       icon:'<i class="ti ti-chart-bar"></i>', label:'KPI Overview',roles: mgmtRoles, perm:'tab.kpi', mgmtKpi:true },
+    { panel:'recurring', icon:'<i class="ti ti-repeat"></i>', label:'Recurring',    roles: mgmtRoles, perm:'tab.recurring' },
     { sep:'Organisation',                                roles: mgmtRoles },
-    { panel:'staff',     icon:'<i class="ti ti-users"></i>', label:'Staff',       roles: ['bod','developer'] },
-    { panel:'projects',  icon:'<i class="ti ti-folder"></i>', label:'Projects',    roles: mgmtRoles },
-    { panel:'tasks',     icon:'<i class="ti ti-checklist"></i>', label:'Tasks',       roles: allRoles },
-    { panel:'storage',   icon:'<i class="ti ti-database"></i>', label:'Storage',     roles: allRoles },
-    { panel:'docs',      icon:'<i class="ti ti-file-text"></i>', label:'Documents',   roles: allRoles },
+    { panel:'staff',     icon:'<i class="ti ti-users"></i>', label:'Staff',       roles: ['bod','developer'], perm:'tab.staff' },
+    { panel:'access',    icon:'<i class="ti ti-shield-lock"></i>', label:'Access Control', roles: ['bod','developer'], perm:'tab.access' },
+    { panel:'projects',  icon:'<i class="ti ti-folder"></i>', label:'Projects',    roles: mgmtRoles, perm:'tab.projects' },
+    { panel:'tasks',     icon:'<i class="ti ti-checklist"></i>', label:'Tasks',       roles: allRoles, perm:'tab.tasks' },
+    { panel:'storage',   icon:'<i class="ti ti-database"></i>', label:'Storage',     roles: allRoles, perm:'tab.storage' },
+    { panel:'docs',      icon:'<i class="ti ti-file-text"></i>', label:'Documents',   roles: allRoles, perm:'tab.documents' },
     { sep:'My Account',                                  roles: allRoles },
-    { panel:'kpi',       icon:'<i class="ti ti-chart-line"></i>', label:'My KPIs',     roles: staffRoles },
+    { panel:'kpi',       icon:'<i class="ti ti-chart-line"></i>', label:'My KPIs',     roles: staffRoles, perm:'tab.kpi', staffKpi:true },
     { panel:'profile',   icon:'<i class="ti ti-user-circle"></i>', label:'My Profile',  roles: allRoles },
   ];
 
   nav.innerHTML = '';
   const isSupportTeam = user.team === 'Support Team';
+  const perms = user.permissions || {};
   items.forEach(item => {
-    // supportTeam flag: visible to management OR support team members
-    if (item.supportTeam) {
+    // Permission-driven visibility: if the item has a perm key, that config decides.
+    // Falls back to the role list when no perm key (e.g. profile).
+    if (item.perm) {
+      if (perms[item.perm] !== true) return;
+      // KPI tab appears twice (mgmt vs staff) — keep the right one per role group
+      if (item.mgmtKpi && !mgmtRoles.includes(role)) return;
+      if (item.staffKpi && !staffRoles.includes(role)) return;
+    } else if (item.supportTeam) {
       if (!item.roles.includes(role) && !isSupportTeam) return;
     } else {
       if (!item.roles.includes(role)) return;
@@ -1755,6 +1777,7 @@ function navigateTo(panelId, label) {
   // load data
   if (panelId === 'dashboard') loadDashboard();
   else if (panelId === 'staff') loadStaff();
+  else if (panelId === 'access') loadAccessControl();
   else if (panelId === 'projects') loadProjects();
   else if (panelId === 'tasks') loadTasks();
   else if (panelId === 'worklog') loadWorklog();
@@ -2031,6 +2054,104 @@ async function loadDashboard() {
 // ════════════════════════════════════════════════════════
 // STAFF
 // ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// ACCESS CONTROL (permissions matrix)
+// ════════════════════════════════════════════════════════
+let _permData = null;      // { permissions, keys, roles, defaults }
+let _permEdits = null;     // working copy being edited
+
+async function loadAccessControl() {
+  const box = document.getElementById('access-matrix');
+  box.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-loader"></i></div>Loading permissions…</div>';
+  const data = await api('/permissions');
+  if (!data || !data.permissions) {
+    box.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-lock"></i></div>Could not load permissions.</div>';
+    return;
+  }
+  _permData = data;
+  // Deep copy for editing
+  _permEdits = JSON.parse(JSON.stringify(data.permissions));
+  renderAccessMatrix();
+}
+
+function renderAccessMatrix() {
+  const box = document.getElementById('access-matrix');
+  const keys = _permData.keys;      // { key: label }
+  const roleLabels = _permData.roles; // { roleKey: label }
+  const roleKeys = Object.keys(roleLabels);
+
+  // Group keys into Tabs and Features
+  const keyEntries = Object.entries(keys);
+  const tabKeys = keyEntries.filter(([k]) => k.startsWith('tab.'));
+  const featKeys = keyEntries.filter(([k]) => !k.startsWith('tab.'));
+
+  const section = (title, entries) => `
+    <tr><td colspan="${roleKeys.length + 1}" style="background:var(--navy);color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:8px 12px;">${title}</td></tr>
+    ${entries.map(([key, label]) => `
+      <tr>
+        <td style="position:sticky;left:0;background:var(--white);font-size:12px;color:var(--navy);padding:8px 12px;white-space:nowrap;border-right:1px solid var(--border2);">${label}</td>
+        ${roleKeys.map(rk => {
+          const on = _permEdits[rk] && _permEdits[rk][key] === true;
+          // BOD's anti-lockout keys are forced on and locked
+          const locked = rk === 'bod' && (key === 'tab.access' || key === 'staff.manage');
+          return `<td style="text-align:center;padding:6px;">
+            <input type="checkbox" ${on?'checked':''} ${locked?'disabled title="Locked — anti-lockout safeguard"':''}
+              onchange="togglePerm('${rk}','${key}',this.checked)"
+              style="width:17px;height:17px;cursor:${locked?'not-allowed':'pointer'};${locked?'opacity:0.5;':''}">
+          </td>`;
+        }).join('')}
+      </tr>`).join('')}`;
+
+  box.innerHTML = `
+    <table style="border-collapse:collapse;min-width:100%;font-size:12px;">
+      <thead>
+        <tr>
+          <th style="position:sticky;left:0;background:var(--off);text-align:left;padding:10px 12px;font-size:11px;color:var(--muted);border-right:1px solid var(--border2);">Capability</th>
+          ${roleKeys.map(rk => `<th style="padding:10px 6px;font-size:10px;color:var(--navy);font-weight:600;text-align:center;min-width:70px;writing-mode:horizontal-tb;">${roleLabels[rk]}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>
+        ${section('Tabs', tabKeys)}
+        ${section('Features', featKeys)}
+      </tbody>
+    </table>`;
+}
+
+function togglePerm(roleKey, permKey, value) {
+  if (!_permEdits[roleKey]) _permEdits[roleKey] = {};
+  _permEdits[roleKey][permKey] = value;
+}
+
+async function savePermissions() {
+  // Enforce anti-lockout client-side too
+  if (!_permEdits['bod']) _permEdits['bod'] = {};
+  _permEdits['bod']['tab.access'] = true;
+  _permEdits['bod']['staff.manage'] = true;
+
+  const btn = document.getElementById('btn-save-perms');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Saving…';
+  const res = await api('/permissions', { method:'POST', body: JSON.stringify({ permissions: _permEdits }) });
+  btn.disabled = false; btn.innerHTML = orig;
+
+  if (res?.success) {
+    showToast('Permissions saved — changes apply on next login', 'success');
+  } else {
+    showToast(res?.error || 'Failed to save', 'error');
+  }
+}
+
+async function resetPermissions() {
+  if (!confirm('Reset all permissions to the original defaults? This undoes all your changes.')) return;
+  const res = await api('/permissions/reset', { method:'POST', body: JSON.stringify({}) });
+  if (res?.success) {
+    showToast('Permissions reset to defaults', 'success');
+    loadAccessControl();
+  } else {
+    showToast(res?.error || 'Failed to reset', 'error');
+  }
+}
+
 async function loadStaff() {
   const data = await api('/staff');
   if (!data) return;
