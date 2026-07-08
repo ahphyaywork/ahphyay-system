@@ -669,6 +669,10 @@ tbody tr:hover td{background:#fafcfb;}
             style="padding:8px 18px;border:none;background:none;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;">
             By Staff
           </button>
+          <button onclick="switchKpiTab('ranking')" id="kpi-tab-ranking"
+            style="padding:8px 18px;border:none;background:none;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;">
+            Ranking &amp; Trends
+          </button>
         </div>
         <div id="kpi-filters" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
           <select class="form-input" id="kpi-filter-project" style="width:auto;padding:6px 10px;font-size:12px;" onchange="loadKPI()">
@@ -3368,7 +3372,7 @@ let currentKpiTab = 'overview';
 
 function switchKpiTab(tab) {
   currentKpiTab = tab;
-  ['overview','project','staff'].forEach(t => {
+  ['overview','project','staff','ranking'].forEach(t => {
     const btn = document.getElementById('kpi-tab-' + t);
     if (!btn) return;
     if (t === tab) {
@@ -3385,6 +3389,114 @@ function switchKpiTab(tab) {
   if (tab === 'overview') loadKPI();
   else if (tab === 'project') loadKpiByProject();
   else if (tab === 'staff') loadKpiByStaff();
+  else if (tab === 'ranking') loadKpiRanking();
+}
+
+async function loadKpiRanking() {
+  const el = document.getElementById('kpi-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Loading...</div>';
+  const data = await api('/kpi');
+  if (!data || !data.staffSummary) { el.innerHTML = '<div class="empty">No data.</div>'; return; }
+
+  const summary = data.staffSummary.slice().sort((a, b) => b.kpiScore - a.kpiScore);
+  const trends = data.trends || {};
+
+  // Ranking table
+  const medal = i => i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : (i+1);
+  const scoreColor = s => s>=70?'#1D9E75':s>=50?'#EF9F27':'#E24B4A';
+
+  // Trend arrow: compare latest snapshot to the previous one
+  const trendFor = staffId => {
+    const series = trends[staffId] || [];
+    if (series.length < 2) return { icon:'ti-minus', color:'#94A3B8', text:'—' };
+    const latest = series[series.length-1].score;
+    const prev = series[series.length-2].score;
+    const diff = latest - prev;
+    if (diff > 2) return { icon:'ti-trending-up', color:'#1D9E75', text:'+'+diff };
+    if (diff < -2) return { icon:'ti-trending-down', color:'#E24B4A', text:String(diff) };
+    return { icon:'ti-minus', color:'#94A3B8', text:'steady' };
+  };
+
+  let html = `
+    <div class="section-title" style="margin-bottom:8px;">Performance Ranking</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Ranked by KPI score. Trend compares the two most recent weekly snapshots. Use this to recognise strong performers and spot who needs support.</div>
+    <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;overflow:hidden;margin-bottom:24px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:var(--off);">
+            <th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--muted);width:50px;">Rank</th>
+            <th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--muted);">Staff</th>
+            <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">KPI Score</th>
+            <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">Trend</th>
+            <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">On-time</th>
+            <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">Overdue</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summary.map((s, i) => {
+            const t = trendFor(s.staffId);
+            return `<tr style="border-top:1px solid var(--border2);">
+              <td style="padding:11px 14px;font-size:16px;">${medal(i)}</td>
+              <td style="padding:11px 14px;">
+                <div style="font-weight:600;color:var(--navy);">${s.name}</div>
+                <div style="font-size:11px;color:var(--muted);">${roleLabel(s.role)}</div>
+              </td>
+              <td style="text-align:center;padding:11px 14px;">
+                <span style="font-size:17px;font-weight:700;color:${scoreColor(s.kpiScore)};">${s.kpiScore}</span>
+                <div style="font-size:9px;color:var(--muted);">${s.kpiLabel}</div>
+              </td>
+              <td style="text-align:center;padding:11px 14px;color:${t.color};font-weight:600;font-size:12px;">
+                <i class="ti ${t.icon}"></i> ${t.text}
+              </td>
+              <td style="text-align:center;padding:11px 14px;color:${s.onTimeRate===null?'#94A3B8':scoreColor(s.onTimeRate)};">${s.onTimeRate===null?'—':s.onTimeRate+'%'}</td>
+              <td style="text-align:center;padding:11px 14px;color:${s.overdueCount>0?'#E24B4A':'#1D9E75'};font-weight:600;">${s.overdueCount}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  // Trend chart (multi-line) if we have any snapshot history
+  const anyHistory = Object.values(trends).some(series => series.length >= 2);
+  if (anyHistory) {
+    html += `<div class="section-title" style="margin-bottom:12px;">Score Trends Over Time</div>
+      <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;padding:18px;height:340px;">
+        <canvas id="kpi-trend-chart"></canvas>
+      </div>`;
+  } else {
+    html += `<div style="background:#EFF6FF;border-radius:12px;padding:20px;text-align:center;color:#1565C0;font-size:13px;">
+      <i class="ti ti-chart-line" style="font-size:24px;"></i><br>
+      Trend history is being recorded weekly. Come back in a couple of weeks to see performance trends over time.
+    </div>`;
+  }
+
+  el.innerHTML = html;
+
+  // Render trend chart
+  if (anyHistory) {
+    const staffMap = {};
+    data.staffSummary.forEach(s => staffMap[s.staffId] = s.name.split(' ')[0]);
+    const allWeeks = [...new Set(Object.values(trends).flatMap(series => series.map(p => p.week)))].sort();
+    const palette = ['#1D9E75','#EF9F27','#E24B4A','#1565C0','#6A4AB7','#0F6E56','#C2410C','#0891B2','#BE185D','#4338CA'];
+    const datasets = Object.entries(trends).filter(([,series]) => series.length >= 2).map(([sid, series], idx) => {
+      const byWeek = {}; series.forEach(p => byWeek[p.week] = p.score);
+      return {
+        label: staffMap[sid] || sid,
+        data: allWeeks.map(w => byWeek[w] ?? null),
+        borderColor: palette[idx % palette.length],
+        backgroundColor: 'transparent',
+        tension: 0.3, spanGaps: true, borderWidth: 2, pointRadius: 3,
+      };
+    });
+    const ctx = document.getElementById('kpi-trend-chart');
+    if (ctx) new Chart(ctx, {
+      type: 'line',
+      data: { labels: allWeeks, datasets },
+      options: { responsive: true, maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, max: 100 } },
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } } }
+    });
+  }
 }
 
 async function loadKpiByProject() {
