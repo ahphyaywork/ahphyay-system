@@ -16,6 +16,7 @@ const CORS = {
 };
 
 const ROLES = {
+  DEVELOPER:         'developer',
   BOD:               'bod',
   SENIOR_IMPACT:     'senior-impact',
   SENIOR_BIZ:        'senior-biz',
@@ -30,13 +31,15 @@ const ROLES = {
 };
 
 // Permission group helpers
-const isAdmin      = r => r === 'bod';
-const isManagement = r => ['bod','senior-impact','senior-biz','project-coordinator'].includes(r);
+const isAdmin      = r => r === 'bod' || r === 'developer';
+const isManagement = r => ['bod','developer','senior-impact','senior-biz','project-coordinator'].includes(r);
+const isDeveloper  = r => r === 'developer';
 const isStaffLevel = r => ['production-lead','senior-admin','project-officer','network-catalyst','page-admin','admin-assistant','production-intern'].includes(r);
 const hasAccess    = r => Object.values(ROLES).includes(r);
 
 // Role display labels
 const ROLE_LABELS = {
+  'developer':            'Developer',
   'bod':                  'BOD',
   'senior-impact':        'Senior Impact Coordinator',
   'senior-biz':           'Senior Business Development Coordinator',
@@ -139,6 +142,8 @@ export default {
       if (path === '/tasks' && request.method === 'POST')         return await addTask(request, env, role, staffId);
       if (path.match(/^\/tasks\/[\w-]+$/) && request.method === 'PUT')
         return await updateTask(request, env, role, path.split('/')[2], staffId);
+      if (path.match(/^\/tasks\/[\w-]+$/) && request.method === 'DELETE')
+        return await deleteTask(env, role, staffId, path.split('/')[2]);
 
       // Task evidence file upload
       if (path.match(/^\/tasks\/[\w-]+\/evidence$/) && request.method === 'POST') {
@@ -166,6 +171,36 @@ export default {
       if (path.match(/^\/storage\/file\/[\w-]+$/) && request.method === 'DELETE') return await deleteStorageFile(request, env, role, staffId, path.split('/')[3]);
       if (path.match(/^\/storage\/file\/[\w-]+\/rename$/) && request.method === 'PUT') return await renameStorageFile(request, env, role, staffId, path.split('/')[3]);
       if (path === '/storage/init-missing' && request.method === 'POST')            return await initMissingFolders(env, role);
+
+      // Document Submissions
+      if (path === '/docs' && request.method === 'GET')
+        return await getDocSubmissions(env, role, staffId);
+      if (path === '/docs' && request.method === 'POST')
+        return await createDocSubmission(request, env, role, staffId, auth.name);
+      if (path.match(/^\/docs\/[\w-]+$/) && request.method === 'PUT')
+        return await updateDocSubmission(request, env, role, staffId, path.split('/')[2]);
+      if (path.match(/^\/docs\/[\w-]+$/) && request.method === 'DELETE')
+        return await deleteDocSubmission(env, role, path.split('/')[2]);
+      if (path.match(/^\/docs\/[\w-]+\/submit$/) && request.method === 'POST')
+        return await submitDocuments(request, env, role, staffId, path.split('/')[2]);
+      if (path.match(/^\/docs\/[\w-]+\/upload$/) && request.method === 'POST')
+        return await uploadDocFile(request, env, role, staffId, path.split('/')[2]);
+
+      // Recurring Tasks
+      if (path === '/recurring' && request.method === 'GET')
+        return await getRecurringTasks(env, role);
+      if (path === '/recurring' && request.method === 'POST')
+        return await addRecurringTask(request, env, role);
+      if (path.match(/^\/recurring\/[\w-]+$/) && request.method === 'PUT')
+        return await updateRecurringTask(request, env, role, path.split('/')[2]);
+      if (path.match(/^\/recurring\/[\w-]+$/) && request.method === 'DELETE')
+        return await deleteRecurringTask(env, role, path.split('/')[2]);
+      if (path === '/recurring/generate' && request.method === 'POST')
+        return await generateRecurringTasks(env, role);
+      if (path === '/recurring/seed' && request.method === 'POST')
+        return await seedRecurringTasks(env, role);
+      if (path === '/recurring/reset-generation' && request.method === 'POST')
+        return await resetRecurringGeneration(env, role);
 
       // Requests
       if (path === '/requests' && request.method === 'GET')
@@ -233,6 +268,7 @@ async function handleLogin(request, env) {
       role,
       email: user.Email,
       projects: user.Projects,
+      team: user.Team || 'Program Team',
     }
   });
 }
@@ -285,14 +321,14 @@ async function getStaffNames(env) {
   const staff = await sheetsRead(env, 'Staff');
   const names = staff
     .filter(s => s.Active?.toLowerCase() === 'true')
-    .map(s => ({ ID: s.ID, Name: s.Name }));
+    .map(s => ({ ID: s.ID, Name: s.Name, Role: normalizeRole(s.Role) }));
   return json(names);
 }
 
 async function addStaff(request, env, role) {
   if (!isAdmin(role)) return json({ error: 'Admin only' }, 403);
   const body = await request.json();
-  const { name, username, password, staffRole, type, email, projects } = body;
+  const { name, username, password, staffRole, type, email, projects, team } = body;
   if (!name || !username || !password) return json({ error: 'Missing required fields' }, 400);
 
   const staff = await sheetsRead(env, 'Staff');
@@ -311,7 +347,7 @@ async function addStaff(request, env, role) {
     // Don't block account creation if folder creation fails
   }
 
-  const row = [id, name, username, hashed, staffRole || 'Staff', type || 'Staff', email || '', projects || '', 'true', new Date().toISOString(), '', folderId];
+  const row = [id, name, username, hashed, staffRole || 'project-officer', type || 'Full-time', email || '', projects || '', 'true', new Date().toISOString(), '', folderId, team || 'Program Team'];
   await sheetsAppend(env, 'Staff', row);
   return json({ success: true, id });
 }
@@ -331,10 +367,13 @@ async function updateStaff(request, env, role, targetId) {
     existing.Password,
     body.role || existing.Role,
     body.type || existing.Type,
-    body.email || existing.Email,
-    body.projects || existing.Projects,
+    body.email !== undefined ? body.email : existing.Email,
+    body.projects !== undefined ? body.projects : existing.Projects,
     body.active !== undefined ? String(body.active) : existing.Active,
     existing.CreatedAt,
+    existing.PhotoURL || '',
+    existing.FolderID || '',
+    body.team || existing.Team || 'Program Team',
   ];
   await sheetsUpdateRow(env, 'Staff', rowIdx + 2, updated);
   return json({ success: true });
@@ -385,13 +424,49 @@ async function updateProject(request, env, role, projectId) {
 // ══════════════════════════════════════════════════════════
 // TASKS
 // ══════════════════════════════════════════════════════════
+// Check whether a task belongs to a given project (ProjectID may be comma-separated for multi-project tasks)
+function taskInProject(taskProjectField, projectId) {
+  if (!taskProjectField) return false;
+  return taskProjectField.split(',').map(s => s.trim()).filter(Boolean).includes(projectId);
+}
+
+// Generate the next task ID by finding the highest existing TASK-NNN number and adding 1.
+// This avoids collisions when rows are manually added/deleted (counting rows is unreliable).
+function nextTaskId(tasks) {
+  let maxNum = 0;
+  for (const t of tasks) {
+    const m = /^TASK-(\d+)$/.exec((t.ID || '').trim());
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > maxNum) maxNum = n;
+    }
+  }
+  return 'TASK-' + String(maxNum + 1).padStart(3, '0');
+}
+
 async function getTasks(url, env, role, staffId) {
   const tasks = await sheetsRead(env, 'Tasks');
   const projectId = url.searchParams.get('projectId');
   let filtered = tasks.filter(t => t.Active?.toLowerCase() === 'true');
-  if (projectId) filtered = filtered.filter(t => t.ProjectID === projectId);
+  if (projectId) filtered = filtered.filter(t => taskInProject(t.ProjectID, projectId));
   if (isStaffLevel(role))
     filtered = filtered.filter(t => isAssigned(t.AssigneeID, staffId));
+
+  // Enrich tasks that have a linked document with that doc's title + status
+  const hasLinks = filtered.some(t => t.LinkedDocID);
+  if (hasLinks) {
+    const docs = await sheetsRead(env, 'DocSubmissions');
+    filtered = filtered.map(t => {
+      if (t.LinkedDocID) {
+        const doc = docs.find(d => d.ID === t.LinkedDocID);
+        if (doc) {
+          return { ...t, linkedDocTitle: doc.Title, linkedDocStatus: doc.Status };
+        }
+      }
+      return t;
+    });
+  }
+
   return json(filtered);
 }
 
@@ -404,14 +479,15 @@ async function addTask(request, env, role, staffId) {
     : (body.assigneeId || '');
 
   const tasks = await sheetsRead(env, 'Tasks');
-  const id = 'TASK-' + String(tasks.length + 1).padStart(3, '0');
+  const id = nextTaskId(tasks);
   const row = [
     id, body.projectId, body.name, body.category || '',
     body.dueDate || '', body.description || '',
     body.status || 'Pending', assigneeId,
     'true', '', '', '',
     new Date().toISOString(), '',
-    body.priority || 'Medium'
+    body.priority || 'Medium',
+    body.linkedDocId || ''
   ];
   await sheetsAppend(env, 'Tasks', row);
 
@@ -459,6 +535,7 @@ async function updateTask(request, env, role, taskId, staffId) {
     e.CreatedAt,
     (body.evidenceFile || body.evidenceLink) ? new Date().toISOString() : (e.EvidenceDate || ''),
     body.priority || e.Priority || 'Medium',
+    body.linkedDocId !== undefined ? body.linkedDocId : (e.LinkedDocID || ''),
   ];
   await sheetsUpdateRow(env, 'Tasks', rowIdx + 2, updated);
 
@@ -540,6 +617,37 @@ async function updateWorklog(request, env, role, logId) {
   return json({ success: true });
 }
 
+async function deleteTask(env, role, staffId, taskId) {
+  const tasks = await sheetsRead(env, 'Tasks');
+  const rowIdx = tasks.findIndex(t => t.ID === taskId);
+  if (rowIdx === -1) return json({ error: 'Task not found' }, 404);
+
+  const task = tasks[rowIdx];
+
+  // Permission: management can delete any task, staff can delete tasks they're assigned to
+  if (!isManagement(role) && !isAssigned(task.AssigneeID, staffId)) {
+    return json({ error: 'You can only delete your own tasks' }, 403);
+  }
+
+  // Delete the task row from the sheet
+  await sheetsDeleteRow(env, 'Tasks', rowIdx + 2);
+
+  // Clean up related comments for this task
+  try {
+    const comments = await sheetsRead(env, 'Comments');
+    // Delete from bottom up to keep row indices valid
+    const toDelete = comments
+      .map((c, i) => ({ c, i }))
+      .filter(x => x.c.TaskID === taskId)
+      .sort((a, b) => b.i - a.i);
+    for (const x of toDelete) {
+      await sheetsDeleteRow(env, 'Comments', x.i + 2);
+    }
+  } catch(e) { console.error('Comment cleanup failed:', e.message); }
+
+  return json({ success: true });
+}
+
 async function deleteWorklog(env, role, logId) {
   if (!isAdmin(role)) return json({ error: 'Admin only' }, 403);
   const logs = await sheetsRead(env, 'WorkLog');
@@ -552,6 +660,74 @@ async function deleteWorklog(env, role, logId) {
 // ══════════════════════════════════════════════════════════
 // KPI
 // ══════════════════════════════════════════════════════════
+// Compute a staff member's composite KPI score + breakdown from their tasks.
+// Used by both the management view and each staff member's own "My KPIs".
+function computeStaffKpi(staffTasks, todayStr) {
+  const total = staffTasks.length;
+  const done = staffTasks.filter(t => t.Status === 'Done').length;
+  const inProg = staffTasks.filter(t => t.Status === 'In Progress').length;
+
+  // 1. Completion
+  const completionPct = total ? Math.round((done / total) * 100) : 0;
+
+  // 2. Timeliness (% of done-with-due tasks finished on time)
+  const doneWithDue = staffTasks.filter(t => t.Status === 'Done' && t.DueDate);
+  const onTimeDone = doneWithDue.filter(t => {
+    const completed = (t.EvidenceDate || '').slice(0, 10) || todayStr;
+    return completed <= t.DueDate;
+  }).length;
+  const onTimeRate = doneWithDue.length ? Math.round((onTimeDone / doneWithDue.length) * 100) : null;
+  const timelinessPct = onTimeRate === null ? completionPct : onTimeRate;
+
+  // 3. Evidence (% of done tasks with evidence)
+  const doneTasks = staffTasks.filter(t => t.Status === 'Done');
+  const doneWithEvidence = doneTasks.filter(t => t.EvidenceFile || t.EvidenceLink).length;
+  const evidencePct = doneTasks.length ? Math.round((doneWithEvidence / doneTasks.length) * 100) : (total ? 0 : 100);
+
+  // 4. Reliability (overdue penalty)
+  const overdueTasks = staffTasks.filter(t => t.Status !== 'Done' && t.DueDate && t.DueDate < todayStr);
+  const overdueCount = overdueTasks.length;
+  const overdueShare = total ? overdueCount / total : 0;
+  const overduePct = Math.round(100 * (1 - overdueShare));
+
+  // Average days late
+  const lateDaysArr = overdueTasks.map(t => {
+    if (todayStr <= t.DueDate) return 0;
+    return Math.max(0, Math.round((new Date(todayStr) - new Date(t.DueDate)) / 86400000));
+  }).filter(d => d > 0);
+  const avgDaysLate = lateDaysArr.length ? Math.round(lateDaysArr.reduce((a,b)=>a+b,0) / lateDaysArr.length) : 0;
+
+  // Weighted score
+  const kpiScore = Math.round(
+    0.40 * completionPct +
+    0.30 * timelinessPct +
+    0.15 * evidencePct +
+    0.15 * overduePct
+  );
+  const kpiLabel = kpiScore >= 85 ? 'Excellent'
+                 : kpiScore >= 70 ? 'Strong'
+                 : kpiScore >= 50 ? 'Developing'
+                 : 'Needs attention';
+
+  return {
+    taskCount: total,
+    doneCount: done,
+    inProgressCount: inProg,
+    avgPercentage: completionPct,
+    onTimeRate,
+    overdueCount,
+    avgDaysLate,
+    kpiScore,
+    kpiLabel,
+    kpiBreakdown: {
+      completion: { pct: completionPct, weight: 40, points: Math.round(0.40 * completionPct) },
+      timeliness: { pct: timelinessPct, weight: 30, points: Math.round(0.30 * timelinessPct) },
+      evidence:   { pct: evidencePct,   weight: 15, points: Math.round(0.15 * evidencePct) },
+      reliability:{ pct: overduePct,    weight: 15, points: Math.round(0.15 * overduePct) },
+    },
+  };
+}
+
 async function getKPI(url, env, role, staffId) {
   const [tasks, projects, staff] = await Promise.all([
     sheetsRead(env, 'Tasks'),
@@ -563,11 +739,13 @@ async function getKPI(url, env, role, staffId) {
   const targetStaffId = isStaffLevel(role) ? staffId : (filterStaffId || null);
 
   let relevantTasks = tasks.filter(t => t.Active?.toLowerCase() === 'true');
-  if (projectId)     relevantTasks = relevantTasks.filter(t => t.ProjectID === projectId);
+  if (projectId)     relevantTasks = relevantTasks.filter(t => taskInProject(t.ProjectID, projectId));
   if (targetStaffId) relevantTasks = relevantTasks.filter(t => isAssigned(t.AssigneeID, targetStaffId));
 
   const kpis = relevantTasks.map(t => {
-    const proj = projects.find(p => p.ID === t.ProjectID);
+    // For multi-project tasks, show the first project (or the filtered one) as the label
+    const firstProjId = projectId || (t.ProjectID || '').split(',').map(s=>s.trim()).filter(Boolean)[0] || '';
+    const proj = projects.find(p => p.ID === firstProjId);
     const status = t.Status || 'Pending';
     const pct = status === 'Done' ? 100 : status === 'In Progress' ? 50 : 0;
     return {
@@ -588,28 +766,100 @@ async function getKPI(url, env, role, staffId) {
     };
   });
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Helper: was a done task completed on or before its due date?
+  const isOnTime = t => {
+    if (t.Status !== 'Done' || !t.DueDate) return null; // not applicable
+    const completed = (t.EvidenceDate || '').slice(0, 10) || todayStr;
+    return completed <= t.DueDate;
+  };
+  // Helper: days a task is late (overdue & not done) or was late (done after due)
+  const daysLate = t => {
+    if (!t.DueDate) return 0;
+    if (t.Status === 'Done') {
+      const completed = (t.EvidenceDate || '').slice(0, 10);
+      if (!completed || completed <= t.DueDate) return 0;
+      return Math.max(0, Math.round((new Date(completed) - new Date(t.DueDate)) / 86400000));
+    }
+    // not done — measure against today
+    if (todayStr <= t.DueDate) return 0;
+    return Math.max(0, Math.round((new Date(todayStr) - new Date(t.DueDate)) / 86400000));
+  };
+
   let staffSummary = [];
   if (isManagement(role)) {
-    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true');
+    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRole(s.Role) !== 'developer');
     staffSummary = activeStaff.map(s => {
-      const staffKpis = kpis.filter(k => isAssigned(k.assigneeId, s.ID));
-      const done = staffKpis.filter(k => k.taskStatus === 'Done').length;
-      const inProg = staffKpis.filter(k => k.taskStatus === 'In Progress').length;
-      const avg = staffKpis.length ? Math.round((done / staffKpis.length) * 100) : 0;
+      const staffTasks = relevantTasks.filter(t => isAssigned(t.AssigneeID, s.ID));
+      const k = computeStaffKpi(staffTasks, todayStr);
       return {
         staffId: s.ID,
         name: s.Name,
-        role: s.Role,
-        taskCount: staffKpis.length,
-        doneCount: done,
-        inProgressCount: inProg,
-        avgPercentage: avg,
-        overallStatus: avg >= 80 ? 'on-track' : avg >= 40 ? 'at-risk' : 'behind',
+        role: normalizeRole(s.Role),
+        ...k,
+        overallStatus: k.avgPercentage >= 80 ? 'on-track' : k.avgPercentage >= 40 ? 'at-risk' : 'behind',
       };
     });
   }
 
-  return json({ kpis, staffSummary });
+  // Per-project metrics
+  let projectSummary = [];
+  if (isManagement(role)) {
+    const activeProjects = projects.filter(p => p.Status?.toLowerCase() === 'active' || !p.Status);
+    projectSummary = activeProjects.map(p => {
+      const pTasks = relevantTasks.filter(t => taskInProject(t.ProjectID, p.ID));
+      const total = pTasks.length;
+      const done = pTasks.filter(t => t.Status === 'Done').length;
+      const completionRate = total ? Math.round((done / total) * 100) : 0;
+
+      // On-time rate
+      const doneWithDue = pTasks.filter(t => t.Status === 'Done' && t.DueDate);
+      const onTimeDone = doneWithDue.filter(t => isOnTime(t) === true).length;
+      const onTimeRate = doneWithDue.length ? Math.round((onTimeDone / doneWithDue.length) * 100) : null;
+
+      // Overdue (not done, past due) and at-risk (not done, due within 3 days)
+      const overdueCount = pTasks.filter(t => t.Status !== 'Done' && t.DueDate && t.DueDate < todayStr).length;
+      const atRiskCount = pTasks.filter(t => {
+        if (t.Status === 'Done' || !t.DueDate || t.DueDate < todayStr) return false;
+        const diff = Math.round((new Date(t.DueDate) - new Date(todayStr)) / 86400000);
+        return diff >= 0 && diff <= 3;
+      }).length;
+
+      // Composite health score (0–100): weighted blend of completion, timeliness, and overdue penalty
+      // 50% completion + 30% on-time + 20% (1 - overdue share)
+      const overdueShare = total ? overdueCount / total : 0;
+      const onTimeComponent = onTimeRate === null ? completionRate : onTimeRate; // fall back to completion if no due-dated done tasks
+      const health = Math.round(
+        0.5 * completionRate +
+        0.3 * onTimeComponent +
+        0.2 * (100 * (1 - overdueShare))
+      );
+
+      return {
+        projectId: p.ID,
+        name: p.Name,
+        shortName: p.ShortName || p.Name,
+        taskCount: total,
+        doneCount: done,
+        completionRate,
+        onTimeRate,
+        overdueCount,
+        atRiskCount,
+        health,
+        healthStatus: health >= 75 ? 'healthy' : health >= 50 ? 'at-risk' : 'critical',
+      };
+    });
+  }
+
+  // Personal KPI for the requesting staff member (for their own "My KPIs" view)
+  let myKpi = null;
+  if (staffId) {
+    const myTasks = relevantTasks.filter(t => isAssigned(t.AssigneeID, staffId));
+    myKpi = computeStaffKpi(myTasks, todayStr);
+  }
+
+  return json({ kpis, staffSummary, projectSummary, myKpi });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -623,7 +873,7 @@ async function getDashboard(env, role, staffId) {
   ]);
   const logs = [];
 
-  const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true');
+  const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRole(s.Role) !== 'developer');
   const activeProjects = projects.filter(p => p.Status?.toLowerCase() === 'active');
 
   const now = new Date();
@@ -685,7 +935,7 @@ async function getDashboard(env, role, staffId) {
       const sTasks = activeTasks.filter(t => isAssigned(t.AssigneeID, s.ID));
       const done = sTasks.filter(t => t.Status === 'Done').length;
       const avg = sTasks.length ? Math.round((done / sTasks.length) * 100) : 0;
-      return { staffId: s.ID, name: s.Name, role: s.Role, taskCount: sTasks.length, avgKpi: avg, status: avg >= 70 ? 'on-track' : avg >= 40 ? 'at-risk' : 'behind' };
+      return { staffId: s.ID, name: s.Name, role: normalizeRole(s.Role), taskCount: sTasks.length, avgKpi: avg, status: avg >= 70 ? 'on-track' : avg >= 40 ? 'at-risk' : 'behind' };
     }),
   });
 }
@@ -1270,6 +1520,633 @@ async function initMissingFolders(env, role) {
 }
 
 // ══════════════════════════════════════════════════════════
+// DOCUMENT SUBMISSIONS
+// ══════════════════════════════════════════════════════════
+
+// Access: Support Team + Management only
+function canAccessDocs(role, team) {
+  if (isManagement(role)) return true;
+  return team === 'Support Team';
+}
+
+async function getDocSubmissions(env, role, staffId) {
+  const staff = await sheetsRead(env, 'Staff');
+  const me = staff.find(s => s.ID === staffId);
+  const myTeam = me?.Team || '';
+  const fullAccess = canAccessDocs(role, myTeam);
+
+  const [allDocs, projects] = await Promise.all([
+    sheetsRead(env, 'DocSubmissions'),
+    sheetsRead(env, 'Projects'),
+  ]);
+
+  // Visibility:
+  //  - Full access (support/management) → all documents
+  //  - Otherwise → documents they owe (RequestedFromID) OR documents they must verify (RequestedByID)
+  const docs = fullAccess
+    ? allDocs
+    : allDocs.filter(d => d.RequestedFromID === staffId || d.RequestedByID === staffId);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const enriched = docs.map(d => {
+    const isOverdue = d.Status !== 'Verified' && d.Status !== 'Submitted' && d.DueDate && d.DueDate < today;
+    // Parse submission entries (JSON array with timestamps)
+    let entries = [];
+    try { entries = d.Files ? JSON.parse(d.Files) : []; } catch(_) {
+      if (d.Files) {
+        entries = d.Files.split(',').map(u => u.trim()).filter(Boolean)
+          .map(url => ({ type: 'file', url, name: 'File', time: d.CreatedAt || '', by: '' }));
+      }
+    }
+    if (d.SubmitLink) {
+      entries.push({ type: 'link', url: d.SubmitLink, name: 'Link', time: d.CreatedAt || '', by: '' });
+    }
+    // Can the current user verify this specific document?
+    const canVerify = fullAccess || d.RequestedByID === staffId || isAdmin(role);
+    // Is the current user the one who owes it?
+    const isOwner = d.RequestedFromID === staffId;
+    return {
+      ...d,
+      entries,
+      requestedFromName: staff.find(s => s.ID === d.RequestedFromID)?.Name || '—',
+      requestedByName: staff.find(s => s.ID === d.RequestedByID)?.Name || '—',
+      verifierName: staff.find(s => s.ID === d.RequestedByID)?.Name || '—',
+      projectName: projects.find(p => p.ID === d.ProjectID)?.Name || '',
+      isOverdue,
+      canVerify,
+      isOwner,
+    };
+  });
+
+  // Sort: overdue first, then by due date
+  enriched.sort((a, b) => {
+    if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+    return (a.DueDate || '').localeCompare(b.DueDate || '');
+  });
+
+  const pending = enriched.filter(d => d.Status === 'Pending').length;
+  const overdue = enriched.filter(d => d.isOverdue).length;
+  const verified = enriched.filter(d => d.Status === 'Verified').length;
+  const incomplete = enriched.filter(d => d.Status === 'Incomplete').length;
+
+  return json({ docs: enriched, counts: { pending, overdue, verified, incomplete, total: enriched.length }, fullAccess });
+}
+
+async function createDocSubmission(request, env, role, staffId, staffName) {
+  const staff = await sheetsRead(env, 'Staff');
+  const me = staff.find(s => s.ID === staffId);
+  const fullAccess = canAccessDocs(role, me?.Team);
+
+  const { title, projectId, requestedFromId, documentType, activityDate, dueDate, notes, verifierId } = await request.json();
+  if (!title?.trim() || !requestedFromId || !dueDate) {
+    return json({ error: 'Title, person, and due date are required' }, 400);
+  }
+
+  // Support Team + Management can request from anyone.
+  // Program team can only create a request where THEY are the one who owes the documents.
+  const isSelfOwed = requestedFromId === staffId;
+  if (!fullAccess && !isSelfOwed) {
+    return json({ error: 'You can only log documents that you owe' }, 403);
+  }
+
+  // For self-owed documents created by non-full-access staff, a verifier must be chosen.
+  // The verifier becomes the RequestedBy (the person responsible for verifying).
+  // For normal finance-created requests, the creator is the RequestedBy.
+  let requestedById = staffId;
+  if (!fullAccess && isSelfOwed) {
+    if (!verifierId) return json({ error: 'Please choose who will verify your documents' }, 400);
+    requestedById = verifierId;
+  } else if (verifierId) {
+    // Full-access creator can also explicitly set a verifier if they want
+    requestedById = verifierId;
+  }
+
+  const id = 'DOC-' + Date.now();
+  const row = [
+    id, title.trim(), projectId || '', requestedFromId, requestedById,
+    documentType || 'Other', activityDate || '', dueDate, 'Pending',
+    notes?.trim() || '', new Date().toISOString()
+  ];
+  await sheetsAppend(env, 'DocSubmissions', row);
+
+  // Notify appropriately
+  try {
+    if (isSelfOwed) {
+      // Staff logging their own document → notify the chosen verifier
+      await createNotification(env, requestedById, 'assigned',
+        'Document to verify from ' + staffName,
+        `"${title.trim()}" — ${staffName} will submit documents for your verification (due ${dueDate}).`,
+        ''
+      );
+    } else {
+      // Finance requesting from someone → notify the person who owes it
+      await createNotification(env, requestedFromId, 'assigned',
+        'Document requested by ' + staffName,
+        `"${title.trim()}" is due by ${dueDate}. Please submit your supporting documents.`,
+        ''
+      );
+    }
+  } catch(e) {}
+
+  return json({ success: true, id });
+}
+
+async function updateDocSubmission(request, env, role, staffId, docId) {
+  const docs = await sheetsRead(env, 'DocSubmissions');
+  const rowIdx = docs.findIndex(d => d.ID === docId);
+  if (rowIdx === -1) return json({ error: 'Not found' }, 404);
+
+  const body = await request.json();
+
+  // Verification access control: only the chosen verifier (RequestedByID) or BOD/Developer can verify/flag
+  if (body.status === 'Verified' || body.status === 'Incomplete') {
+    const docRow = docs[rowIdx];
+    const isChosenVerifier = docRow.RequestedByID === staffId;
+    const isAdminOverride = isAdmin(role); // bod or developer
+    if (!isChosenVerifier && !isAdminOverride) {
+      return json({ error: 'Only the assigned verifier can verify or flag this document' }, 403);
+    }
+  }
+  const e = docs[rowIdx];
+
+  // When flagging incomplete, append the reason to Notes with a timestamp
+  let newNotes = body.notes !== undefined ? body.notes : e.Notes;
+  if (body.status === 'Incomplete' && body.incompleteReason) {
+    const stamp = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+    const flagNote = `[Incomplete — ${stamp}] ${body.incompleteReason}`;
+    newNotes = e.Notes ? (e.Notes + '\n' + flagNote) : flagNote;
+  }
+
+  const updated = [
+    e.ID,
+    body.title !== undefined ? body.title : e.Title,
+    body.projectId !== undefined ? body.projectId : e.ProjectID,
+    body.requestedFromId || e.RequestedFromID,
+    e.RequestedByID,
+    body.documentType || e.DocumentType,
+    body.activityDate !== undefined ? body.activityDate : e.ActivityDate,
+    body.dueDate || e.DueDate,
+    body.status || e.Status,
+    newNotes,
+    e.CreatedAt,
+    body.files !== undefined ? body.files : (e.Files || ''),
+    body.submitLink !== undefined ? body.submitLink : (e.SubmitLink || ''),
+  ];
+  await sheetsUpdateRow(env, 'DocSubmissions', rowIdx + 2, updated);
+
+  // Notify requester when status changes to Submitted
+  if (body.status === 'Submitted' && e.Status !== 'Submitted') {
+    try {
+      await createNotification(env, e.RequestedByID, 'completed',
+        'Documents submitted',
+        `"${e.Title}" has been submitted and is ready for verification`,
+        ''
+      );
+    } catch(ex) {}
+  }
+
+  // Notify the staff member when their submission is flagged incomplete
+  if (body.status === 'Incomplete') {
+    try {
+      const reason = body.incompleteReason || 'Please review and resubmit.';
+      await createNotification(env, e.RequestedFromID, 'overdue',
+        'Document flagged incomplete',
+        `"${e.Title}": ${reason}`,
+        ''
+      );
+    } catch(ex) {}
+  }
+
+  // When document is VERIFIED, auto-complete any tasks linked to it
+  if (body.status === 'Verified' && e.Status !== 'Verified') {
+    try {
+      const tasks = await sheetsRead(env, 'Tasks');
+      let completedCount = 0;
+      for (let i = 0; i < tasks.length; i++) {
+        const t = tasks[i];
+        const taskDocId = (t.LinkedDocID || '').trim();
+        if (taskDocId === docId.trim() && t.Status !== 'Done' && t.Active?.toLowerCase() === 'true') {
+          // Mark the linked task as Done
+          await sheetsUpdate(env, 'Tasks', i + 2, getColIndex('Tasks', 'Status'), 'Done');
+
+          // Attach the verified document's files/links as the task's evidence
+          try {
+            let entries = [];
+            try { entries = e.Files ? JSON.parse(e.Files) : []; } catch(_) {}
+            const fileLinks = entries.filter(en => en.type === 'file').map(en => en.url);
+            const linkLinks = entries.filter(en => en.type === 'link').map(en => en.url);
+            if (fileLinks.length) {
+              await sheetsUpdate(env, 'Tasks', i + 2, getColIndex('Tasks', 'EvidenceFile'), fileLinks.join(','));
+            }
+            if (linkLinks.length) {
+              await sheetsUpdate(env, 'Tasks', i + 2, getColIndex('Tasks', 'EvidenceLink'), linkLinks.join(','));
+            }
+            await sheetsUpdate(env, 'Tasks', i + 2, getColIndex('Tasks', 'EvidenceNote'), `Auto-attached from verified document: ${e.Title}`);
+            await sheetsUpdate(env, 'Tasks', i + 2, getColIndex('Tasks', 'EvidenceDate'), new Date().toISOString());
+          } catch(evErr) { console.error('Failed to attach doc evidence to task:', evErr.message); }
+
+          completedCount++;
+          // Notify the task's assignees
+          const assigneeIds = (t.AssigneeID || '').split(',').map(s => s.trim()).filter(Boolean);
+          for (const aid of assigneeIds) {
+            await createNotification(env, aid, 'completed',
+              'Task auto-completed',
+              `"${t.Name}" is now complete — its linked document "${e.Title}" was verified`,
+              t.ID
+            );
+          }
+        }
+      }
+      console.log(`Doc ${docId} verified — auto-completed ${completedCount} linked task(s)`);
+    } catch(ex) { console.error('Auto-complete linked tasks failed:', ex.message); }
+  }
+
+  return json({ success: true });
+}
+
+// Submit documents (upload files + optional link) — accessible to the person who owes them OR support/management
+async function submitDocuments(request, env, role, staffId, docId) {
+  const docs = await sheetsRead(env, 'DocSubmissions');
+  const rowIdx = docs.findIndex(d => d.ID === docId);
+  if (rowIdx === -1) return json({ error: 'Not found' }, 404);
+
+  const e = docs[rowIdx];
+  const staff = await sheetsRead(env, 'Staff');
+  const me = staff.find(s => s.ID === staffId);
+  const fullAccess = canAccessDocs(role, me?.Team);
+
+  // Only the person who owes the docs, or support/management, can submit
+  if (!fullAccess && e.RequestedFromID !== staffId) {
+    return json({ error: 'You can only submit your own documents' }, 403);
+  }
+
+  const body = await request.json();
+  const { files, links } = body;
+  // files: [{url, name}], links: [string]
+  const now = new Date().toISOString();
+  const submitterName = me?.Name || 'Someone';
+
+  // Parse existing entries (stored as JSON array)
+  let entries = [];
+  try { entries = e.Files ? JSON.parse(e.Files) : []; } catch(_) {
+    // Migrate old comma-separated format
+    if (e.Files) {
+      entries = e.Files.split(',').map(u => u.trim()).filter(Boolean)
+        .map(url => ({ type: 'file', url, name: 'File', time: e.CreatedAt || now, by: '' }));
+    }
+  }
+
+  // Add new file entries with timestamps
+  for (const f of (files || [])) {
+    if (f.url) entries.push({ type: 'file', url: f.url, name: f.name || 'File', time: now, by: submitterName });
+  }
+  // Add new link entries with timestamps
+  for (const l of (links || [])) {
+    if (l && l.trim()) entries.push({ type: 'link', url: l.trim(), name: 'Link', time: now, by: submitterName });
+  }
+
+  const updated = [
+    e.ID, e.Title, e.ProjectID, e.RequestedFromID, e.RequestedByID,
+    e.DocumentType, e.ActivityDate, e.DueDate, 'Submitted', e.Notes, e.CreatedAt,
+    JSON.stringify(entries),
+    '',  // SubmitLink no longer used — links are in the entries now
+  ];
+  await sheetsUpdateRow(env, 'DocSubmissions', rowIdx + 2, updated);
+
+  // Notify the finance person who requested it
+  try {
+    await createNotification(env, e.RequestedByID, 'completed',
+      'Documents submitted',
+      `"${e.Title}" has been submitted and is ready for verification`,
+      ''
+    );
+  } catch(ex) {}
+
+  return json({ success: true });
+}
+
+// Upload a single document file to Drive for a doc submission
+async function uploadDocFile(request, env, role, staffId, docId) {
+  try {
+    const docs = await sheetsRead(env, 'DocSubmissions');
+    const doc = docs.find(d => d.ID === docId);
+    if (!doc) return json({ error: 'Document request not found' }, 404);
+
+    const staff = await sheetsRead(env, 'Staff');
+    const me = staff.find(s => s.ID === staffId);
+    const fullAccess = canAccessDocs(role, me?.Team);
+    if (!fullAccess && doc.RequestedFromID !== staffId) {
+      return json({ error: 'You can only submit your own documents' }, 403);
+    }
+
+    const formData = await request.formData();
+    const file = formData.get('file');
+    if (!file) return json({ error: 'No file provided' }, 400);
+
+    const maxSize = 100 * 1024 * 1024; // 100MB
+    const arrayBuffer = await file.arrayBuffer();
+    if (arrayBuffer.byteLength > maxSize) return json({ error: 'File must be under 100MB' }, 400);
+
+    const token = await getDriveToken(env);
+
+    // Store in a per-document folder under the Evidence root
+    const folderId = await getOrCreateDocFolder(token, env, docId, doc.Title);
+
+    const fileName = (file.name || 'document').replace(/[^\w.\-_ ]/g, '_');
+    const fileType = file.type || 'application/octet-stream';
+
+    const boundary = 'AhPhyayDocBoundary';
+    const CRLF = String.fromCharCode(13) + String.fromCharCode(10);
+    const metadataJson = JSON.stringify({ name: fileName, parents: [folderId] });
+
+    const part1 = '--' + boundary + CRLF +
+      'Content-Type: application/json; charset=UTF-8' + CRLF + CRLF +
+      metadataJson + CRLF +
+      '--' + boundary + CRLF +
+      'Content-Type: ' + fileType + CRLF + CRLF;
+    const part3 = CRLF + '--' + boundary + '--';
+
+    const enc = new TextEncoder();
+    const p1 = enc.encode(part1);
+    const p2 = new Uint8Array(arrayBuffer);
+    const p3 = enc.encode(part3);
+    const combined = new Uint8Array(p1.byteLength + p2.byteLength + p3.byteLength);
+    combined.set(p1, 0);
+    combined.set(p2, p1.byteLength);
+    combined.set(p3, p1.byteLength + p2.byteLength);
+
+    const uploadRes = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'multipart/related; boundary=' + boundary,
+        },
+        body: combined,
+      }
+    );
+
+    const uploadData = await uploadRes.json();
+    if (!uploadData.id) return json({ error: 'Upload failed', detail: uploadData }, 500);
+
+    await fetch('https://www.googleapis.com/drive/v3/files/' + uploadData.id + '/permissions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+    });
+
+    const fileUrl = 'https://drive.google.com/file/d/' + uploadData.id + '/view?usp=sharing';
+    return json({ success: true, fileUrl, fileName });
+  } catch (e) {
+    return json({ error: e.message }, 500);
+  }
+}
+
+// Get or create a Drive folder for a document submission
+async function getOrCreateDocFolder(token, env, docId, docTitle) {
+  const rootFolderId = env.Evidence_Folder_ID || 'root';
+  const safeName = ('DOC ' + docId + ' — ' + (docTitle || 'Untitled')).replace(/[/\\]/g, '-');
+
+  const searchUrl = 'https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({
+    q: `name='${safeName.replace(/'/g, "\'")}' and '${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: 'files(id,name)',
+    pageSize: '1',
+  });
+  const searchRes = await fetch(searchUrl, { headers: { Authorization: 'Bearer ' + token } });
+  const searchData = await searchRes.json();
+  if (searchData.files && searchData.files.length > 0) return searchData.files[0].id;
+
+  const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: safeName,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [rootFolderId],
+    }),
+  });
+  const createData = await createRes.json();
+  if (!createData.id) throw new Error('Failed to create doc folder');
+  return createData.id;
+}
+
+async function deleteDocSubmission(env, role, docId) {
+  if (!isManagement(role)) return json({ error: 'Management only' }, 403);
+  const docs = await sheetsRead(env, 'DocSubmissions');
+  const rowIdx = docs.findIndex(d => d.ID === docId);
+  if (rowIdx === -1) return json({ error: 'Not found' }, 404);
+  await sheetsDeleteRow(env, 'DocSubmissions', rowIdx + 2);
+  return json({ success: true });
+}
+
+// ══════════════════════════════════════════════════════════
+// RECURRING TASKS
+// ══════════════════════════════════════════════════════════
+
+async function getRecurringTasks(env, role) {
+  if (!isManagement(role)) return json({ error: 'Management only' }, 403);
+  const recurring = await sheetsRead(env, 'RecurringTasks');
+  const staff = await sheetsRead(env, 'Staff');
+  const enriched = recurring.map(r => ({
+    ...r,
+    assigneeName: staff.find(s => s.ID === r.AssigneeID)?.Name || '',
+  }));
+  return json(enriched);
+}
+
+async function addRecurringTask(request, env, role) {
+  if (!isManagement(role)) return json({ error: 'Management only' }, 403);
+  const { title, description, frequency, team, assigneeId } = await request.json();
+  if (!title?.trim() || !frequency) return json({ error: 'Title and frequency required' }, 400);
+
+  const id = 'REC-' + Date.now();
+  const row = [id, title.trim(), description?.trim() || '', frequency, team || 'Support Team', assigneeId || '', 'true', ''];
+  await sheetsAppend(env, 'RecurringTasks', row);
+  return json({ success: true, id });
+}
+
+async function updateRecurringTask(request, env, role, recId) {
+  if (!isManagement(role)) return json({ error: 'Management only' }, 403);
+  const body = await request.json();
+  const recurring = await sheetsRead(env, 'RecurringTasks');
+  const rowIdx = recurring.findIndex(r => r.ID === recId);
+  if (rowIdx === -1) return json({ error: 'Not found' }, 404);
+
+  const e = recurring[rowIdx];
+  const updated = [
+    e.ID,
+    body.title !== undefined ? body.title : e.Title,
+    body.description !== undefined ? body.description : e.Description,
+    body.frequency || e.Frequency,
+    body.team || e.Team,
+    body.assigneeId !== undefined ? body.assigneeId : e.AssigneeID,
+    body.active !== undefined ? String(body.active) : e.Active,
+    e.LastGenerated || '',
+  ];
+  await sheetsUpdateRow(env, 'RecurringTasks', rowIdx + 2, updated);
+  return json({ success: true });
+}
+
+async function deleteRecurringTask(env, role, recId) {
+  if (!isManagement(role)) return json({ error: 'Management only' }, 403);
+  const recurring = await sheetsRead(env, 'RecurringTasks');
+  const rowIdx = recurring.findIndex(r => r.ID === recId);
+  if (rowIdx === -1) return json({ error: 'Not found' }, 404);
+  await sheetsDeleteRow(env, 'RecurringTasks', rowIdx + 2);
+  return json({ success: true });
+}
+
+// Check if a recurring task is due based on frequency and last generation
+function isRecurringDue(frequency, lastGenerated) {
+  if (!lastGenerated) return true; // never generated → due now
+  const last = new Date(lastGenerated);
+  const now = new Date();
+  const freq = (frequency || '').toLowerCase();
+
+  if (freq === 'daily') {
+    // Due if last generation was on a previous day
+    return last.toISOString().slice(0, 10) !== now.toISOString().slice(0, 10);
+  }
+  if (freq === 'weekly') {
+    // Due if 7+ days since last generation
+    const days = (now - last) / (1000 * 60 * 60 * 24);
+    return days >= 7;
+  }
+  if (freq === 'monthly') {
+    // Due if last generation was in a previous month
+    return last.getFullYear() !== now.getFullYear() || last.getMonth() !== now.getMonth();
+  }
+  return false;
+}
+
+// Calculate a sensible due date based on frequency
+function recurringDueDate(frequency) {
+  const now = new Date();
+  const freq = (frequency || '').toLowerCase();
+  if (freq === 'daily') {
+    now.setDate(now.getDate() + 1);
+  } else if (freq === 'weekly') {
+    now.setDate(now.getDate() + 7);
+  } else if (freq === 'monthly') {
+    now.setMonth(now.getMonth() + 1);
+  }
+  return now.toISOString().slice(0, 10);
+}
+
+async function generateRecurringTasks(env, role) {
+  if (!isManagement(role)) return json({ error: 'Management only' }, 403);
+
+  const recurring = await sheetsRead(env, 'RecurringTasks');
+  const dueTasks = recurring.filter(r =>
+    r.Active?.toLowerCase() === 'true' && isRecurringDue(r.Frequency, r.LastGenerated)
+  );
+
+  if (!dueTasks.length) return json({ success: true, generated: 0, message: 'No tasks due' });
+
+  const tasks = await sheetsRead(env, 'Tasks');
+  // Base the counter on the highest existing TASK number, not the row count,
+  // so manual additions/deletions don't cause ID collisions.
+  let taskCounter = parseInt((nextTaskId(tasks).match(/\d+/) || ['0'])[0], 10) - 1;
+  let generated = 0;
+  const nowISO = new Date().toISOString();
+
+  for (const rec of dueTasks) {
+    try {
+      taskCounter++;
+      const taskId = 'TASK-' + String(taskCounter).padStart(3, '0');
+      const dueDate = recurringDueDate(rec.Frequency);
+
+      const taskRow = [
+        taskId,
+        '',                      // ProjectID
+        rec.Title,
+        'Recurring',             // Category
+        dueDate,
+        rec.Description || '',
+        'Pending',
+        rec.AssigneeID || '',
+        'true',
+        '',                      // EvidenceFile
+        '',                      // EvidenceLink
+        '',                      // EvidenceNote
+        nowISO,                  // CreatedAt
+        '',                      // EvidenceDate
+        'Medium',                // Priority
+      ];
+      await sheetsAppend(env, 'Tasks', taskRow);
+
+      // Update LastGenerated for this recurring template
+      const rowIdx = recurring.findIndex(r => r.ID === rec.ID);
+      if (rowIdx !== -1) {
+        await sheetsUpdate(env, 'RecurringTasks', rowIdx + 2, getColIndex('RecurringTasks', 'LastGenerated'), nowISO);
+      }
+
+      // Notify the assignee
+      if (rec.AssigneeID) {
+        try {
+          await createNotification(env, rec.AssigneeID, 'assigned',
+            'Recurring task generated',
+            `"${rec.Title}" (${rec.Frequency}) is due by ${dueDate}`,
+            taskId
+          );
+        } catch(e) {}
+      }
+
+      generated++;
+    } catch(e) {
+      console.error('Failed to generate recurring task:', rec.Title, e.message);
+    }
+  }
+
+  return json({ success: true, generated });
+}
+
+// Clear LastGenerated on all templates so they regenerate on next run
+async function resetRecurringGeneration(env, role) {
+  if (!isManagement(role)) return json({ error: 'Management only' }, 403);
+  const recurring = await sheetsRead(env, 'RecurringTasks');
+  for (let i = 0; i < recurring.length; i++) {
+    await sheetsUpdate(env, 'RecurringTasks', i + 2, getColIndex('RecurringTasks', 'LastGenerated'), '');
+  }
+  return json({ success: true, reset: recurring.length });
+}
+
+// Pre-load the 11 workflow templates
+async function seedRecurringTasks(env, role) {
+  if (!isAdmin(role)) return json({ error: 'Admin only' }, 403);
+
+  const existing = await sheetsRead(env, 'RecurringTasks');
+  if (existing.length > 0) return json({ error: 'Recurring tasks already exist. Delete them first to re-seed.' }, 400);
+
+  const templates = [
+    ['Financial Planning & Budgeting', 'Project financial planning, budget review & revision, cash forecast preparation', 'Monthly'],
+    ['Expense Monitoring & Cost Tracking', 'Day-to-day transaction recording, advance book (hard & soft), expenditure vs budget tracking', 'Daily'],
+    ['Payment Processing & Advance Management', 'Advance request preparation, withdrawal processing, claim & clearance, follow-up on pending advances', 'Weekly'],
+    ['Financial Reporting & Variance Analysis', 'Monthly financial report, variance analysis, monthly closing & summary report', 'Monthly'],
+    ['Documentation & Data Management', 'Document collection & finalization, scanning & Google Drive upload, cash book update, finance forms check', 'Weekly'],
+    ['Procurement & Asset Administration', 'Procurement tracker data entry, quotation process support, GRN & PO follow-up, asset code follow-up', 'Weekly'],
+    ['AhPhyay Sales & Production Support', 'Sale list collection & verification, data entry & stock record update, reconciliation, weekly production review', 'Weekly'],
+    ['Intern & Staff Administration', 'Timesheet collection & hour counting, staff salary advance preparation, leave list update', 'Monthly'],
+    ['Financial Coordination & Reporting Support', 'Document support to Finance Coordinator, collect & check supporting documents, scan & submit', 'Monthly'],
+    ['Team Meetings & Organizational Development', 'Monthly team meeting participation, meeting minutes, OD sessions', 'Monthly'],
+    ['Workspace & Office Management', 'Office cleaning & 5S ordering, finance forms stock check & replenishment', 'Weekly'],
+  ];
+
+  let seeded = 0;
+  for (let i = 0; i < templates.length; i++) {
+    const [title, desc, freq] = templates[i];
+    const id = 'REC-' + (Date.now() + i);
+    const row = [id, title, desc, freq, 'Support Team', '', 'true', ''];
+    await sheetsAppend(env, 'RecurringTasks', row);
+    seeded++;
+  }
+
+  return json({ success: true, seeded });
+}
+
+// ══════════════════════════════════════════════════════════
 // REQUESTS
 // ══════════════════════════════════════════════════════════
 
@@ -1345,7 +2222,7 @@ async function respondToRequest(request, env, staffId, staffName, requestId) {
     if (action === 'accept') {
       try {
         const tasks = await sheetsRead(env, 'Tasks');
-        taskId = 'TASK-' + String(tasks.length + 1).padStart(3, '0');
+        taskId = nextTaskId(tasks);
         const taskRow = [
           taskId,
           projectId || '',
@@ -1597,14 +2474,16 @@ async function initResumableUpload(request, env, role, staffId, targetStaffId) {
 // GOOGLE SHEETS HELPERS
 // ══════════════════════════════════════════════════════════
 const SHEET_HEADERS = {
-  Staff:    ['ID','Name','Username','Password','Role','Type','Email','Projects','Active','CreatedAt','PhotoURL','FolderID'],
+  Staff:    ['ID','Name','Username','Password','Role','Type','Email','Projects','Active','CreatedAt','PhotoURL','FolderID','Team'],
   Projects: ['ID','Name','ShortName','StartDate','EndDate','Status','Description','CreatedAt'],
-  Tasks:    ['ID','ProjectID','Name','Category','DueDate','Description','Status','AssigneeID','Active','EvidenceFile','EvidenceLink','EvidenceNote','CreatedAt','EvidenceDate','Priority'],
+  Tasks:    ['ID','ProjectID','Name','Category','DueDate','Description','Status','AssigneeID','Active','EvidenceFile','EvidenceLink','EvidenceNote','CreatedAt','EvidenceDate','Priority','LinkedDocID'],
   WorkLog:  ['ID','StaffID','ProjectID','TaskID','Date','Actual','Unit','Status','Note','CreatedAt'],
   Config:   ['Key','Value'],
   Comments:      ['ID','TaskID','StaffID','StaffName','Comment','CreatedAt'],
   Notifications: ['ID','StaffID','Type','Title','Message','TaskID','IsRead','CreatedAt'],
   Requests:      ['ID','RequesterID','RequesterName','AssigneeID','Title','Description','Status','Response','CreatedAt'],
+  RecurringTasks:['ID','Title','Description','Frequency','Team','AssigneeID','Active','LastGenerated'],
+  DocSubmissions:['ID','Title','ProjectID','RequestedFromID','RequestedByID','DocumentType','ActivityDate','DueDate','Status','Notes','CreatedAt','Files','SubmitLink'],
 };
 
 function getColIndex(sheet, colName) {
