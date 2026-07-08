@@ -601,7 +601,13 @@ tbody tr:hover td{background:#fafcfb;}
           <button class="task-tab" data-tab="Pending" onclick="setTaskTab('Pending')">Pending</button>
           <button class="task-tab" data-tab="overdue" onclick="setTaskTab('overdue')">Overdue</button>
           <button class="task-tab" data-tab="Done" onclick="setTaskTab('Done')">Done</button>
-          <div style="position:relative;flex:1;min-width:180px;max-width:280px;margin-left:auto;">
+          <select id="task-staff-filter" onchange="applyTaskFilters()" style="display:none;padding:7px 10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit;background:var(--white);cursor:pointer;outline:none;margin-left:auto;">
+            <option value="">All staff</option>
+          </select>
+          <select id="task-project-filter" onchange="applyTaskFilters()" style="display:none;padding:7px 10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit;background:var(--white);cursor:pointer;outline:none;">
+            <option value="">All projects</option>
+          </select>
+          <div style="position:relative;flex:1;min-width:160px;max-width:240px;">
             <i class="ti ti-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;"></i>
             <input id="task-search" placeholder="Search tasks…" oninput="applyTaskFilters()" style="width:100%;padding:7px 12px 7px 32px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit;outline:none;">
           </div>
@@ -2330,6 +2336,31 @@ async function loadTasks() {
   cache.tasks = tasks; cache.projects = projects; cache.staff = staff;
   if (staffNames) cache.staffNames = staffNames;
 
+  // Show staff + project filters for management/BOD (they can see all tasks)
+  const mgmtRoles = ['bod','developer','senior-impact','senior-biz','project-coordinator'];
+  const isMgmt = mgmtRoles.includes(user.role);
+  const staffFilter = document.getElementById('task-staff-filter');
+  const projFilter = document.getElementById('task-project-filter');
+  if (isMgmt) {
+    if (staffFilter) {
+      const cur = staffFilter.value;
+      const people = (staffNames || []).filter(s => s.Name)
+        .sort((a,b) => (a.Name||'').localeCompare(b.Name||''));
+      staffFilter.innerHTML = '<option value="">All staff</option>' +
+        people.map(s => `<option value="${s.ID}" ${s.ID===cur?'selected':''}>${s.Name} — ${roleLabel(s.Role)}</option>`).join('');
+      staffFilter.style.display = '';
+    }
+    if (projFilter) {
+      const cur = projFilter.value;
+      projFilter.innerHTML = '<option value="">All projects</option>' +
+        (projects||[]).map(p => `<option value="${p.ID}" ${p.ID===cur?'selected':''}>${p.Name}</option>`).join('');
+      projFilter.style.display = '';
+    }
+  } else {
+    if (staffFilter) staffFilter.style.display = 'none';
+    if (projFilter) projFilter.style.display = 'none';
+  }
+
   // Set default active tab
   setTaskTab(currentTaskTab, true);
 }
@@ -2349,8 +2380,19 @@ function applyTaskFilters() {
   const today = new Date(); today.setHours(0,0,0,0);
 
   const search = (document.getElementById('task-search')?.value || '').toLowerCase().trim();
+  const staffFilterVal = document.getElementById('task-staff-filter')?.value || '';
+  const projFilterVal = document.getElementById('task-project-filter')?.value || '';
 
   let filtered = tasks;
+
+  // Staff filter (management view) — tasks assigned to the chosen person
+  if (staffFilterVal) {
+    filtered = filtered.filter(t => (t.AssigneeID||'').split(',').map(s=>s.trim()).includes(staffFilterVal));
+  }
+  // Project filter — tasks belonging to the chosen project (handles multi-project)
+  if (projFilterVal) {
+    filtered = filtered.filter(t => (t.ProjectID||'').split(',').map(s=>s.trim()).includes(projFilterVal));
+  }
 
   // Apply the active tab filter
   if (currentTaskTab === 'mine') {
