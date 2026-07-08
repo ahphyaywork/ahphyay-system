@@ -1024,7 +1024,7 @@ tbody tr:hover td{background:#fafcfb;}
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-add-task')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveTask()">Save task</button>
+      <button class="btn btn-primary" id="btn-save-task" onclick="saveTask()">Save task</button>
     </div>
   </div>
 </div>
@@ -1366,7 +1366,7 @@ tbody tr:hover td{background:#fafcfb;}
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-doc')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveDoc()">Save</button>
+      <button class="btn btn-primary" id="btn-save-doc" onclick="saveDoc()">Save</button>
     </div>
   </div>
 </div>
@@ -2724,7 +2724,9 @@ function openEditTask(id) {
   openModal('modal-add-task');
 }
 
+let _savingTask = false;  // guard against double-submission
 async function saveTask() {
+  if (_savingTask) return;   // already saving — ignore repeat clicks
   const editId = document.getElementById('edit-task-id').value;
   const body = {
     name: document.getElementById('task-name').value.trim(),
@@ -2749,12 +2751,25 @@ async function saveTask() {
     }
   }
 
+  // Lock and disable the button while the request is in flight
+  _savingTask = true;
+  const saveBtn = document.getElementById('btn-save-task');
+  const originalLabel = saveBtn ? saveBtn.innerHTML : '';
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="ti ti-loader"></i> Saving…'; }
+
   let res;
-  if (editId) {
-    res = await api(`/tasks/${editId}`, { method: 'PUT', body: JSON.stringify(body) });
-  } else {
-    res = await api('/tasks', { method: 'POST', body: JSON.stringify(body) });
+  try {
+    if (editId) {
+      res = await api(`/tasks/${editId}`, { method: 'PUT', body: JSON.stringify(body) });
+    } else {
+      res = await api('/tasks', { method: 'POST', body: JSON.stringify(body) });
+    }
+  } finally {
+    // Always release the lock and restore the button
+    _savingTask = false;
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = originalLabel; }
   }
+
   if (res?.success) {
     closeModal('modal-add-task');
     showToast(editId ? 'Task updated' : 'Task added', 'success');
@@ -5142,7 +5157,9 @@ async function openEditDoc(id) {
   openModal('modal-doc');
 }
 
+let _savingDoc = false;
 async function saveDoc() {
+  if (_savingDoc) return;
   const id = document.getElementById('doc-id').value;
   const body = {
     title: document.getElementById('doc-title').value.trim(),
@@ -5157,9 +5174,20 @@ async function saveDoc() {
   if (!body.requestedFromId) { showToast('Select who owes the documents', 'error'); return; }
   if (!body.dueDate) { showToast('Due date is required', 'error'); return; }
 
-  const res = id
-    ? await api(`/docs/${id}`, { method:'PUT', body: JSON.stringify(body) })
-    : await api('/docs', { method:'POST', body: JSON.stringify(body) });
+  _savingDoc = true;
+  const btn = document.getElementById('btn-save-doc');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Saving…'; }
+
+  let res;
+  try {
+    res = id
+      ? await api(`/docs/${id}`, { method:'PUT', body: JSON.stringify(body) })
+      : await api('/docs', { method:'POST', body: JSON.stringify(body) });
+  } finally {
+    _savingDoc = false;
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
 
   if (res?.success) {
     closeModal('modal-doc');
