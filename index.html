@@ -3482,14 +3482,37 @@ function switchKpiTab(tab) {
   else if (tab === 'ranking') loadKpiRanking();
 }
 
+let _rankingMonth = null; // YYYY-MM, null = current month
+
+function monthLabel(ym) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-');
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return `${names[parseInt(m,10)-1]} ${y}`;
+}
+
+function changeRankingMonth(delta) {
+  const base = _rankingMonth ? new Date(_rankingMonth + '-01T00:00:00Z') : new Date();
+  base.setUTCMonth(base.getUTCMonth() + delta);
+  // Don't allow going into the future beyond current month
+  const now = new Date();
+  const nowKey = now.toISOString().slice(0,7);
+  const newKey = base.toISOString().slice(0,7);
+  _rankingMonth = newKey > nowKey ? nowKey : newKey;
+  loadKpiRanking();
+}
+
 async function loadKpiRanking() {
   const el = document.getElementById('kpi-content');
   el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Loading...</div>';
-  const data = await api('/kpi');
-  if (!data || !data.staffSummary) { el.innerHTML = '<div class="empty">No data.</div>'; return; }
+  const monthQ = _rankingMonth ? ('?month=' + _rankingMonth) : '';
+  const data = await api('/kpi' + monthQ);
+  if (!data || !data.monthlySummary) { el.innerHTML = '<div class="empty">No data.</div>'; return; }
 
-  const summary = data.staffSummary.slice().sort((a, b) => b.kpiScore - a.kpiScore);
-  const trends = data.trends || {};
+  _rankingMonth = data.month; // sync to what the server used
+  // Use MONTHLY summary + trend for this tab
+  const summary = data.monthlySummary.slice().sort((a, b) => b.kpiScore - a.kpiScore);
+  const trends = data.monthlyTrend || {};
 
   // Ranking table
   const medal = i => i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : (i+1);
@@ -3497,7 +3520,8 @@ async function loadKpiRanking() {
 
   // Trend arrow: compare latest snapshot to the previous one
   const trendFor = staffId => {
-    const series = trends[staffId] || [];
+    // Use only months that have a score (non-null), compare the two most recent
+    const series = (trends[staffId] || []).filter(p => p.score !== null && p.score !== undefined);
     if (series.length < 2) return { icon:'ti-minus', color:'#94A3B8', text:'—' };
     const latest = series[series.length-1].score;
     const prev = series[series.length-2].score;
@@ -3518,8 +3542,15 @@ async function loadKpiRanking() {
   summary.forEach(s => { dist[s.kpiLabel] = (dist[s.kpiLabel]||0) + 1; });
 
   let html = `
-    <div class="section-title" style="margin-bottom:8px;">Performance Ranking</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Ranked by KPI score. Trend compares the two most recent weekly snapshots. Use this to recognise strong performers and spot who needs support.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:10px;">
+      <div class="section-title" style="margin:0;">Performance Ranking</div>
+      <div style="display:flex;align-items:center;gap:8px;background:var(--white);border:1px solid var(--border2);border-radius:10px;padding:4px;">
+        <button onclick="changeRankingMonth(-1)" style="border:none;background:none;cursor:pointer;padding:6px 10px;color:var(--navy);border-radius:6px;font-size:14px;" title="Previous month"><i class="ti ti-chevron-left"></i></button>
+        <span style="font-size:13px;font-weight:600;color:var(--navy);min-width:120px;text-align:center;">${monthLabel(data.month)}</span>
+        <button onclick="changeRankingMonth(1)" ${data.month >= new Date().toISOString().slice(0,7) ? 'disabled style="opacity:0.35;cursor:not-allowed;border:none;background:none;padding:6px 10px;color:var(--navy);border-radius:6px;font-size:14px;"' : 'style="border:none;background:none;cursor:pointer;padding:6px 10px;color:var(--navy);border-radius:6px;font-size:14px;"'} title="Next month"><i class="ti ti-chevron-right"></i></button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Ranked by KPI score for <strong>${monthLabel(data.month)}</strong> — based only on tasks due this month. Trend compares recent months. Use this to recognise strong performers and spot who needs support.</div>
 
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
       <div style="background:#E8F5E9;border-radius:14px;padding:16px 18px;">
@@ -3592,17 +3623,17 @@ async function loadKpiRanking() {
       </table>
     </div>`;
 
-  // Trend chart (multi-line) if we have any snapshot history
-  const anyHistory = Object.values(trends).some(series => series.length >= 2);
+  // Monthly trend chart — show if any staff has 2+ months with scores
+  const anyHistory = Object.values(trends).some(series => series.filter(p => p.score !== null).length >= 2);
   if (anyHistory) {
-    html += `<div class="section-title" style="margin-bottom:12px;">Score Trends Over Time</div>
+    html += `<div class="section-title" style="margin-bottom:12px;">Monthly Score Trends (last 6 months)</div>
       <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;padding:18px;height:340px;">
         <canvas id="kpi-trend-chart"></canvas>
       </div>`;
   } else {
     html += `<div style="background:#EFF6FF;border-radius:12px;padding:20px;text-align:center;color:#1565C0;font-size:13px;">
       <i class="ti ti-chart-line" style="font-size:24px;"></i><br>
-      Trend history is being recorded weekly. Come back in a couple of weeks to see performance trends over time.
+      Not enough monthly history yet. Trends appear once staff have tasks due across two or more months.
     </div>`;
   }
 
@@ -3647,26 +3678,27 @@ async function loadKpiRanking() {
       } }
   });
 
-  // Render trend chart
+  // Render monthly trend chart
   if (anyHistory) {
     const staffMap = {};
-    data.staffSummary.forEach(s => staffMap[s.staffId] = s.name.split(' ')[0]);
-    const allWeeks = [...new Set(Object.values(trends).flatMap(series => series.map(p => p.week)))].sort();
+    data.monthlySummary.forEach(s => staffMap[s.staffId] = s.name.split(' ')[0]);
+    const allMonths = [...new Set(Object.values(trends).flatMap(series => series.map(p => p.month)))].sort();
     const palette = ['#1D9E75','#EF9F27','#E24B4A','#1565C0','#6A4AB7','#0F6E56','#C2410C','#0891B2','#BE185D','#4338CA'];
-    const datasets = Object.entries(trends).filter(([,series]) => series.length >= 2).map(([sid, series], idx) => {
-      const byWeek = {}; series.forEach(p => byWeek[p.week] = p.score);
+    const datasets = Object.entries(trends).filter(([,series]) => series.filter(p => p.score !== null).length >= 2).map(([sid, series], idx) => {
+      const byMonth = {}; series.forEach(p => byMonth[p.month] = p.score);
       return {
         label: staffMap[sid] || sid,
-        data: allWeeks.map(w => byWeek[w] ?? null),
+        data: allMonths.map(m => byMonth[m] ?? null),
         borderColor: palette[idx % palette.length],
         backgroundColor: 'transparent',
         tension: 0.3, spanGaps: true, borderWidth: 2, pointRadius: 3,
       };
     });
+    const shortMonth = ym => { const [y,m]=ym.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m,10)-1] + ' ' + y.slice(2); };
     const ctx = document.getElementById('kpi-trend-chart');
     if (ctx) new Chart(ctx, {
       type: 'line',
-      data: { labels: allWeeks, datasets },
+      data: { labels: allMonths.map(shortMonth), datasets },
       options: { responsive: true, maintainAspectRatio: false,
         scales: { y: { beginAtZero: true, max: 100 } },
         plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } } }
