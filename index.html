@@ -775,8 +775,8 @@ tbody tr:hover td{background:#fafcfb;}
         <div class="section-hd">
           <div class="section-title">Recurring Tasks</div>
           <div style="display:flex;gap:8px;">
-            <button class="btn btn-outline btn-sm" onclick="resetRecurringGen()" id="btn-reset-recurring" title="Clear generation timestamps so all active templates regenerate"><i class="ti ti-refresh"></i> Reset cycle</button>
-            <button class="btn btn-outline btn-sm" onclick="generateRecurring()" id="btn-generate-recurring"><i class="ti ti-player-play"></i> Generate due tasks</button>
+            <button class="btn btn-outline btn-sm" onclick="resetRecurringGen()" id="btn-reset-recurring" title="Clear the sent-history so templates can be re-sent this cycle (for testing)"><i class="ti ti-refresh"></i> Re-send this cycle</button>
+            <button class="btn btn-primary btn-sm" onclick="generateRecurring()" id="btn-generate-recurring" title="Manually create any tasks that are due to send today"><i class="ti ti-send"></i> Send due tasks now</button>
             <button class="btn btn-primary btn-sm" onclick="openAddRecurring()"><i class="ti ti-plus"></i> New Template</button>
           </div>
         </div>
@@ -1415,7 +1415,7 @@ tbody tr:hover td{background:#fafcfb;}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
           <label class="form-label">Frequency <span style="color:var(--red)">*</span></label>
-          <select class="form-input" id="recurring-frequency">
+          <select class="form-input" id="recurring-frequency" onchange="updateSendDayPicker()">
             <option value="Daily">Daily</option>
             <option value="Weekly">Weekly</option>
             <option value="Monthly">Monthly</option>
@@ -1429,6 +1429,11 @@ tbody tr:hover td{background:#fafcfb;}
             <option value="Management">Management</option>
           </select>
         </div>
+      </div>
+      <div class="form-group" id="send-day-group">
+        <label class="form-label" id="send-day-label">Send on</label>
+        <select class="form-input" id="recurring-sendday"></select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="send-day-hint"></div>
       </div>
       <div class="form-group">
         <label class="form-label">Assign to <span style="color:var(--muted);font-size:10px;">(optional — who owns this task)</span></label>
@@ -5809,6 +5814,18 @@ function renderRecurringCard(r) {
   const isActive = r.Active?.toLowerCase() === 'true';
   const lastGen = r.LastGenerated ? new Date(r.LastGenerated).toLocaleDateString('en-GB', {day:'numeric',month:'short'}) : 'Never';
 
+  // Human-readable send schedule
+  let schedule = 'Every day';
+  if (r.Frequency === 'Weekly') {
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const d = (r.SendDay !== undefined && r.SendDay !== '') ? parseInt(r.SendDay,10) : 1;
+    schedule = 'Every ' + (days[d] || 'Monday');
+  } else if (r.Frequency === 'Monthly') {
+    const dom = (r.SendDay !== undefined && r.SendDay !== '') ? parseInt(r.SendDay,10) : 1;
+    const suffix = (dom===1||dom===21)?'st':(dom===2||dom===22)?'nd':(dom===3||dom===23)?'rd':'th';
+    schedule = `Monthly on the ${dom}${suffix}`;
+  }
+
   return `<div style="background:var(--white);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;${!isActive ? 'opacity:0.55;' : ''}">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
       <div style="flex:1;min-width:0;">
@@ -5819,9 +5836,10 @@ function renderRecurringCard(r) {
         </div>
         ${r.Description ? `<div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:6px;">${r.Description}</div>` : ''}
         <div style="font-size:11px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;">
+          <span style="color:var(--teal);font-weight:600;"><i class="ti ti-calendar-event" style="font-size:11px;"></i> ${schedule}</span>
           <span><i class="ti ti-users" style="font-size:11px;"></i> ${r.Team}</span>
           <span><i class="ti ti-user" style="font-size:11px;"></i> ${r.assigneeName || 'Unassigned'}</span>
-          <span><i class="ti ti-clock" style="font-size:11px;"></i> Last: ${lastGen}</span>
+          <span><i class="ti ti-clock" style="font-size:11px;"></i> Last sent: ${lastGen}</span>
         </div>
       </div>
       <div style="display:flex;gap:4px;flex-shrink:0;">
@@ -5833,6 +5851,40 @@ function renderRecurringCard(r) {
   </div>`;
 }
 
+// Build the send-day picker based on the chosen frequency
+function updateSendDayPicker(selectedValue) {
+  const freq = document.getElementById('recurring-frequency').value;
+  const group = document.getElementById('send-day-group');
+  const label = document.getElementById('send-day-label');
+  const sel = document.getElementById('recurring-sendday');
+  const hint = document.getElementById('send-day-hint');
+
+  if (freq === 'Daily') {
+    group.style.display = 'none';
+    hint.textContent = '';
+    return;
+  }
+  group.style.display = 'block';
+
+  if (freq === 'Weekly') {
+    label.textContent = 'Send every';
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    sel.innerHTML = days.map((d, i) => `<option value="${i}">${d}</option>`).join('');
+    sel.value = (selectedValue !== undefined && selectedValue !== '') ? selectedValue : '1'; // default Monday
+    hint.textContent = 'The task will be created on this day each week.';
+  } else if (freq === 'Monthly') {
+    label.textContent = 'Send on day of month';
+    let opts = '';
+    for (let i = 1; i <= 28; i++) {
+      const suffix = (i===1||i===21)?'st':(i===2||i===22)?'nd':(i===3||i===23)?'rd':'th';
+      opts += `<option value="${i}">${i}${suffix}</option>`;
+    }
+    sel.innerHTML = opts;
+    sel.value = (selectedValue !== undefined && selectedValue !== '') ? selectedValue : '1'; // default 1st
+    hint.textContent = 'The task will be created on this day each month (1–28 to work in every month).';
+  }
+}
+
 function openAddRecurring() {
   document.getElementById('recurring-modal-title').textContent = 'New Recurring Template';
   document.getElementById('recurring-id').value = '';
@@ -5840,6 +5892,7 @@ function openAddRecurring() {
   document.getElementById('recurring-description').value = '';
   document.getElementById('recurring-frequency').value = 'Weekly';
   document.getElementById('recurring-team').value = 'Support Team';
+  updateSendDayPicker('1');
   populateRecurringAssignees('');
   openModal('modal-recurring');
 }
@@ -5853,6 +5906,7 @@ function openEditRecurring(id) {
   document.getElementById('recurring-description').value = data.Description || '';
   document.getElementById('recurring-frequency').value = data.Frequency;
   document.getElementById('recurring-team').value = data.Team || 'Support Team';
+  updateSendDayPicker(data.SendDay !== undefined ? data.SendDay : '');
   populateRecurringAssignees(data.AssigneeID || '');
   openModal('modal-recurring');
 }
@@ -5875,6 +5929,7 @@ async function saveRecurring() {
     frequency: document.getElementById('recurring-frequency').value,
     team: document.getElementById('recurring-team').value,
     assigneeId: document.getElementById('recurring-assignee').value,
+    sendDay: document.getElementById('recurring-frequency').value === 'Daily' ? '' : document.getElementById('recurring-sendday').value,
   };
   if (!body.title) { showToast('Title is required', 'error'); return; }
 
