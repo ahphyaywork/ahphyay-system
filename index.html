@@ -2182,7 +2182,13 @@ async function loadStaff() {
       <td style="color:var(--muted)">${s.Type}</td>
       <td style="color:var(--muted)">${s.Email||'—'}</td>
       <td style="color:var(--muted);font-size:11px">${s.Projects||'—'}</td>
-      <td><span class="badge ${s.Active?.toLowerCase()==='true'?'badge-done':'badge-late'}">${s.Active?.toLowerCase()==='true'?'Active':'Inactive'}</span></td>
+      <td>
+        <button onclick="toggleStaffActive('${s.ID}', ${s.Active?.toLowerCase()==='true'})" title="Click to toggle" style="border:none;background:none;cursor:pointer;padding:0;font-family:inherit;">
+          <span class="badge ${s.Active?.toLowerCase()==='true'?'badge-done':'badge-late'}" style="cursor:pointer;">
+            <span class="badge-dot"></span>${s.Active?.toLowerCase()==='true'?'Active':'Inactive'}
+          </span>
+        </button>
+      </td>
       <td>
         <div style="display:flex;gap:4px;">
           <button class="btn btn-outline btn-sm btn-icon" onclick="openEditStaff('${s.ID}')" title="Edit"><i class="ti ti-pencil"></i></button>
@@ -2190,6 +2196,22 @@ async function loadStaff() {
         </div>
       </td>
     </tr>`).join('');
+}
+
+async function toggleStaffActive(staffId, currentlyActive) {
+  const newActive = !currentlyActive;
+  const action = newActive ? 'activate' : 'deactivate';
+  const staffMember = (cache.staff || []).find(s => s.ID === staffId);
+  const name = staffMember ? staffMember.Name : 'this staff member';
+  if (!confirm(`${newActive ? 'Activate' : 'Deactivate'} ${name}?${newActive ? '' : ' They will no longer be able to log in.'}`)) return;
+
+  const res = await api(`/staff/${staffId}`, { method:'PUT', body: JSON.stringify({ active: newActive }) });
+  if (res?.success) {
+    showToast(`${name} ${newActive ? 'activated' : 'deactivated'} ✓`, 'success');
+    loadStaff();
+  } else {
+    showToast(res?.error || 'Failed to update status', 'error');
+  }
 }
 
 function openAddStaff() {
