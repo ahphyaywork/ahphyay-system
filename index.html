@@ -3464,17 +3464,58 @@ async function loadKpiRanking() {
     return { icon:'ti-minus', color:'#94A3B8', text:'steady' };
   };
 
+  // ── Summary cards ──
+  const withTasks = summary.filter(s => s.taskCount > 0);
+  const top = withTasks[0];
+  const needsSupport = withTasks.length ? withTasks[withTasks.length - 1] : null;
+  const teamAvg = summary.length ? Math.round(summary.reduce((a,s)=>a+s.kpiScore,0)/summary.length) : 0;
+
+  // Distribution counts
+  const dist = { Excellent:0, Strong:0, Developing:0, 'Needs attention':0 };
+  summary.forEach(s => { dist[s.kpiLabel] = (dist[s.kpiLabel]||0) + 1; });
+
   let html = `
     <div class="section-title" style="margin-bottom:8px;">Performance Ranking</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Ranked by KPI score. Trend compares the two most recent weekly snapshots. Use this to recognise strong performers and spot who needs support.</div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
+      <div style="background:#E8F5E9;border-radius:14px;padding:16px 18px;">
+        <div style="font-size:11px;color:#2E7D32;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-trophy"></i> Top performer</div>
+        <div style="font-size:18px;font-weight:700;color:var(--navy);margin-top:6px;">${top ? top.name : '—'}</div>
+        <div style="font-size:12px;color:var(--muted);">${top ? roleLabel(top.role) + ' · ' + top.kpiScore + ' pts' : ''}</div>
+      </div>
+      <div style="background:#FFF3E0;border-radius:14px;padding:16px 18px;">
+        <div style="font-size:11px;color:#E65100;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-lifebuoy"></i> Needs most support</div>
+        <div style="font-size:18px;font-weight:700;color:var(--navy);margin-top:6px;">${needsSupport ? needsSupport.name : '—'}</div>
+        <div style="font-size:12px;color:var(--muted);">${needsSupport ? roleLabel(needsSupport.role) + ' · ' + needsSupport.kpiScore + ' pts' : ''}</div>
+      </div>
+      <div style="background:#E3F2FD;border-radius:14px;padding:16px 18px;">
+        <div style="font-size:11px;color:#1565C0;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-users"></i> Team average</div>
+        <div style="font-size:28px;font-weight:700;color:${scoreColor(teamAvg)};margin-top:4px;line-height:1;">${teamAvg}</div>
+        <div style="font-size:12px;color:var(--muted);">across ${summary.length} staff</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+      <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;padding:16px;">
+        <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:10px;">Score distribution</div>
+        <div style="height:220px;"><canvas id="kpi-dist-chart"></canvas></div>
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;padding:16px;">
+        <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:10px;">Workload vs score <span style="font-size:10px;color:var(--muted);font-weight:400;">(spot over/under-loaded staff)</span></div>
+        <div style="height:220px;"><canvas id="kpi-scatter-chart"></canvas></div>
+      </div>
+    </div>
+
     <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;overflow:hidden;margin-bottom:24px;">
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead>
           <tr style="background:var(--off);">
             <th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--muted);width:50px;">Rank</th>
             <th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--muted);">Staff</th>
-            <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">KPI Score</th>
+            <th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--muted);min-width:150px;">KPI Score</th>
             <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">Trend</th>
+            <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">Completion</th>
             <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">On-time</th>
             <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">Overdue</th>
           </tr>
@@ -3482,19 +3523,24 @@ async function loadKpiRanking() {
         <tbody>
           ${summary.map((s, i) => {
             const t = trendFor(s.staffId);
+            const sc = scoreColor(s.kpiScore);
             return `<tr style="border-top:1px solid var(--border2);">
               <td style="padding:11px 14px;font-size:16px;">${medal(i)}</td>
               <td style="padding:11px 14px;">
                 <div style="font-weight:600;color:var(--navy);">${s.name}</div>
-                <div style="font-size:11px;color:var(--muted);">${roleLabel(s.role)}</div>
+                <div style="font-size:11px;color:var(--muted);">${roleLabel(s.role)} · ${s.taskCount} task${s.taskCount!==1?'s':''}</div>
               </td>
-              <td style="text-align:center;padding:11px 14px;">
-                <span style="font-size:17px;font-weight:700;color:${scoreColor(s.kpiScore)};">${s.kpiScore}</span>
-                <div style="font-size:9px;color:var(--muted);">${s.kpiLabel}</div>
+              <td style="padding:11px 14px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="flex:1;height:8px;background:#EEF1F4;border-radius:99px;overflow:hidden;min-width:70px;"><div style="height:100%;width:${s.kpiScore}%;background:${sc};"></div></div>
+                  <span style="font-size:15px;font-weight:700;color:${sc};width:28px;">${s.kpiScore}</span>
+                </div>
+                <div style="font-size:9px;color:var(--muted);margin-top:2px;">${s.kpiLabel}</div>
               </td>
               <td style="text-align:center;padding:11px 14px;color:${t.color};font-weight:600;font-size:12px;">
                 <i class="ti ${t.icon}"></i> ${t.text}
               </td>
+              <td style="text-align:center;padding:11px 14px;color:${scoreColor(s.avgPercentage)};font-weight:600;">${s.avgPercentage}%</td>
               <td style="text-align:center;padding:11px 14px;color:${s.onTimeRate===null?'#94A3B8':scoreColor(s.onTimeRate)};">${s.onTimeRate===null?'—':s.onTimeRate+'%'}</td>
               <td style="text-align:center;padding:11px 14px;color:${s.overdueCount>0?'#E24B4A':'#1D9E75'};font-weight:600;">${s.overdueCount}</td>
             </tr>`;
@@ -3518,6 +3564,45 @@ async function loadKpiRanking() {
   }
 
   el.innerHTML = html;
+
+  // Render score distribution chart (doughnut)
+  const distCtx = document.getElementById('kpi-dist-chart');
+  if (distCtx) new Chart(distCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Excellent (85+)', 'Strong (70–84)', 'Developing (50–69)', 'Needs attention (<50)'],
+      datasets: [{
+        data: [dist['Excellent'], dist['Strong'], dist['Developing'], dist['Needs attention']],
+        backgroundColor: ['#1D9E75', '#4CAF50', '#EF9F27', '#E24B4A'],
+        borderWidth: 0,
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } } } }
+  });
+
+  // Render workload vs score scatter
+  const scatterCtx = document.getElementById('kpi-scatter-chart');
+  if (scatterCtx) new Chart(scatterCtx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Staff',
+        data: summary.map(s => ({ x: s.taskCount, y: s.kpiScore, name: s.name })),
+        backgroundColor: summary.map(s => scoreColor(s.kpiScore)),
+        pointRadius: 6, pointHoverRadius: 8,
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { title: { display: true, text: 'Task count (workload)', font: { size: 11 } }, beginAtZero: true },
+        y: { title: { display: true, text: 'KPI score', font: { size: 11 } }, beginAtZero: true, max: 100 }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.raw.name}: ${ctx.raw.y} pts, ${ctx.raw.x} tasks` } }
+      } }
+  });
 
   // Render trend chart
   if (anyHistory) {
