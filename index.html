@@ -4769,6 +4769,114 @@ async function downloadKPIReport() {
       });
     }
 
+    // ══ Ranking & Trends page ═══════════════════════════
+    if (staffSummary.length) {
+      const ranked = staffSummary.slice().sort((a,b) => b.kpiScore - a.kpiScore);
+      const withTasks = ranked.filter(s => s.taskCount > 0);
+      const topPerf = withTasks[0];
+      const needsSup = withTasks.length ? withTasks[withTasks.length-1] : null;
+      const teamAvg = ranked.length ? Math.round(ranked.reduce((a,s)=>a+s.kpiScore,0)/ranked.length) : 0;
+
+      // Distribution
+      const dist = { Excellent:0, Strong:0, Developing:0, 'Needs attention':0 };
+      ranked.forEach(s => { dist[s.kpiLabel] = (dist[s.kpiLabel]||0)+1; });
+
+      const distImg = await chartToImage({
+        type: 'doughnut',
+        data: {
+          labels: ['Excellent', 'Strong', 'Developing', 'Needs attention'],
+          datasets: [{ data: [dist['Excellent'],dist['Strong'],dist['Developing'],dist['Needs attention']],
+            backgroundColor: [rgb(teal),'#4CAF50',rgb(amber),rgb(red)], borderWidth: 0 }]
+        },
+        options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 12 } } }, title: { display: true, text: 'Score Distribution', font: { size: 15, weight: 'bold' } } } }
+      }, 460, 340);
+
+      const scatterImg = await chartToImage({
+        type: 'scatter',
+        data: { datasets: [{ label: 'Staff',
+          data: ranked.map(s => ({ x: s.taskCount, y: s.kpiScore })),
+          backgroundColor: ranked.map(s => s.kpiScore>=70?rgb(teal):s.kpiScore>=50?rgb(amber):rgb(red)),
+          pointRadius: 6 }] },
+        options: { plugins: { legend: { display: false }, title: { display: true, text: 'Workload vs Score', font: { size: 15, weight: 'bold' } } },
+          scales: { x: { title: { display: true, text: 'Task count' }, beginAtZero: true }, y: { title: { display: true, text: 'KPI score' }, beginAtZero: true, max: 100 } } }
+      }, 560, 340);
+
+      doc.addPage();
+      doc.setFillColor(...navy); doc.rect(0, 0, W, 18, 'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(13); doc.setFont('helvetica','bold');
+      doc.text('Performance Ranking & Trends', M, 12);
+      doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...muted);
+      doc.text(`${fromDate} — ${toDate}`, W - M, 12, { align: 'right' });
+
+      // Summary cards
+      const rcards = [
+        ['Top performer', topPerf ? topPerf.name : '—', topPerf ? topPerf.kpiScore+' pts' : '', teal],
+        ['Needs most support', needsSup ? needsSup.name : '—', needsSup ? needsSup.kpiScore+' pts' : '', amber],
+        ['Team average', String(teamAvg), 'across '+ranked.length+' staff', navy],
+      ];
+      let rcx = M; const rcW = (W - 2*M - 2*4) / 3;
+      rcards.forEach(([lab, val, sub, col]) => {
+        doc.setFillColor(245,247,250); doc.roundedRect(rcx, 24, rcW, 24, 2, 2, 'F');
+        doc.setTextColor(...muted); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+        doc.text(lab.toUpperCase(), rcx + 4, 30);
+        doc.setTextColor(...col); doc.setFontSize(13); doc.setFont('helvetica','bold');
+        doc.text(String(val), rcx + 4, 39, { maxWidth: rcW - 8 });
+        doc.setTextColor(...muted); doc.setFontSize(8); doc.setFont('helvetica','normal');
+        doc.text(sub, rcx + 4, 45);
+        rcx += rcW + 4;
+      });
+
+      // Charts row
+      doc.addImage(distImg, 'PNG', M, 54, 82, 60);
+      doc.addImage(scatterImg, 'PNG', M + 88, 54, W - 2*M - 88, 60);
+
+      // Ranking table
+      doc.autoTable({
+        startY: 122,
+        head: [['#', 'Staff', 'Role', 'Tasks', 'KPI', 'Label', 'Complete', 'On-time', 'Overdue']],
+        body: ranked.map((s, i) => [
+          i+1, s.name, roleLabel(s.role), s.taskCount, s.kpiScore, s.kpiLabel,
+          s.avgPercentage + '%', s.onTimeRate===null?'—':s.onTimeRate+'%', s.overdueCount,
+        ]),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: navy, textColor: [255,255,255], fontStyle: 'bold' },
+        columnStyles: { 4: { halign: 'center', fontStyle: 'bold' }, 8: { halign: 'center' } },
+        didParseCell: (data) => {
+          if (data.column.index === 4 && data.section === 'body') {
+            const v = parseInt(data.cell.raw);
+            data.cell.styles.textColor = v>=70?teal:v>=50?amber:red;
+          }
+          if (data.column.index === 8 && data.section === 'body') {
+            const v = parseInt(data.cell.raw);
+            if (v > 0) data.cell.styles.textColor = red;
+          }
+        },
+      });
+
+      // Trend chart (if weekly snapshot history exists)
+      const trends = (kpiData && kpiData.trends) || {};
+      const anyHist = Object.values(trends).some(series => (series||[]).length >= 2);
+      if (anyHist) {
+        const nameMap = {};
+        ranked.forEach(s => nameMap[s.staffId] = (s.name||'').split(' ')[0]);
+        const allWeeks = [...new Set(Object.values(trends).flatMap(series => (series||[]).map(p => p.week)))].sort();
+        const palette = ['#1D9E75','#EF9F27','#E24B4A','#1565C0','#6A4AB7','#0F6E56','#C2410C','#0891B2'];
+        const datasets = Object.entries(trends).filter(([,series]) => (series||[]).length >= 2).map(([sid, series], idx) => {
+          const byWeek = {}; series.forEach(p => byWeek[p.week] = p.score);
+          return { label: nameMap[sid]||sid, data: allWeeks.map(w => byWeek[w] ?? null),
+            borderColor: palette[idx % palette.length], backgroundColor: 'transparent', tension: 0.3, spanGaps: true, borderWidth: 2, pointRadius: 3 };
+        });
+        const trendImg = await chartToImage({
+          type: 'line', data: { labels: allWeeks, datasets },
+          options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } }, title: { display: true, text: 'Score Trends Over Time', font: { size: 15, weight: 'bold' } } }, scales: { y: { beginAtZero: true, max: 100 } } }
+        }, 960, 340);
+        const ty = doc.lastAutoTable.finalY + 8;
+        // New page if not enough room
+        if (ty > 210) { doc.addPage(); doc.addImage(trendImg, 'PNG', M, 20, W - 2*M, 65); }
+        else { doc.addImage(trendImg, 'PNG', M, ty, W - 2*M, 65); }
+      }
+    }
+
     // ── Section 1: Overall Team Summary ──────────────────
     doc.addPage();
     doc.setFillColor(...navy); doc.rect(0, 0, W, 18, 'F');
