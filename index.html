@@ -3505,8 +3505,8 @@ function changeRankingMonth(delta) {
 async function loadKpiRanking() {
   const el = document.getElementById('kpi-content');
   el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Loading...</div>';
-  const monthQ = _rankingMonth ? ('?month=' + _rankingMonth) : '';
-  const data = await api('/kpi' + monthQ);
+  const monthQ = _rankingMonth ? ('&month=' + _rankingMonth) : '';
+  const data = await api('/kpi?rankingOnly=true' + monthQ);
   if (!data || !data.monthlySummary) { el.innerHTML = '<div class="empty">No data.</div>'; return; }
 
   _rankingMonth = data.month; // sync to what the server used
