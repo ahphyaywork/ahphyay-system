@@ -2168,13 +2168,15 @@ async function resetPermissions() {
 }
 
 async function loadStaff() {
-  const data = await api('/staff');
+  const data = await api('/staff?all=true');
   if (!data) return;
   cache.staff = data;
   const tbody = document.getElementById('staff-table-body');
   if (!data.length) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon"><i class="ti ti-users"></i></div>No staff yet.</div></td></tr>'; return; }
-  tbody.innerHTML = data.map(s => `
-    <tr>
+  tbody.innerHTML = data.map(s => {
+    const isActive = s.Active?.toLowerCase() === 'true';
+    return `
+    <tr style="${isActive ? '' : 'opacity:0.55;background:var(--off);'}">
       <td><strong>${s.Name}</strong></td>
       <td style="color:var(--muted)">${s.Username}</td>
       <td><span class="badge badge-${normalizeRoleKey(s.Role)}">${roleLabel(s.Role)}</span></td>
@@ -2195,7 +2197,8 @@ async function loadStaff() {
           ${['bod','developer'].includes(user.role)?`<button class="btn btn-outline btn-sm btn-icon" onclick="openResetPw('${s.ID}')" title="Reset password">🔑</button>`:''}
         </div>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 async function toggleStaffActive(staffId, currentlyActive) {
