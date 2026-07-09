@@ -869,6 +869,24 @@ tbody tr:hover td{background:#fafcfb;}
 <!-- ════════ MODALS ════════ -->
 
 <!-- Add Staff -->
+<div class="modal-overlay" id="modal-confirm" style="z-index:1200;">
+  <div class="modal" style="width:min(420px,92vw);">
+    <div class="modal-body" style="padding-top:24px;">
+      <div style="display:flex;gap:14px;align-items:flex-start;">
+        <div id="confirm-icon" style="width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;"></div>
+        <div style="flex:1;">
+          <div id="confirm-title" style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:6px;"></div>
+          <div id="confirm-message" style="font-size:13px;color:var(--muted);line-height:1.6;white-space:pre-wrap;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="confirm-cancel-btn" onclick="_resolveConfirm(false)">Cancel</button>
+      <button class="btn btn-primary" id="confirm-ok-btn" onclick="_resolveConfirm(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-add-staff">
   <div class="modal">
     <div class="modal-header">
@@ -2157,7 +2175,7 @@ async function savePermissions() {
 }
 
 async function resetPermissions() {
-  if (!confirm('Reset all permissions to the original defaults? This undoes all your changes.')) return;
+  if (!(await confirmDialog({ title:'Reset permissions?', message:'Reset all permissions to the original defaults? This undoes all your changes.', confirmText:'Reset', danger:true }))) return;
   const res = await api('/permissions/reset', { method:'POST', body: JSON.stringify({}) });
   if (res?.success) {
     showToast('Permissions reset to defaults', 'success');
@@ -2206,7 +2224,7 @@ async function toggleStaffActive(staffId, currentlyActive) {
   const action = newActive ? 'activate' : 'deactivate';
   const staffMember = (cache.staff || []).find(s => s.ID === staffId);
   const name = staffMember ? staffMember.Name : 'this staff member';
-  if (!confirm(`${newActive ? 'Activate' : 'Deactivate'} ${name}?${newActive ? '' : ' They will no longer be able to log in.'}`)) return;
+  if (!(await confirmDialog({ title:`${newActive ? 'Activate' : 'Deactivate'} staff?`, message:`${newActive ? 'Activate' : 'Deactivate'} ${name}?${newActive ? '' : ' They will no longer be able to log in.'}`, confirmText:newActive?'Activate':'Deactivate', danger:!newActive }))) return;
 
   const res = await api(`/staff/${staffId}`, { method:'PUT', body: JSON.stringify({ active: newActive }) });
   if (res?.success) {
@@ -2942,7 +2960,7 @@ async function saveTask() {
   if (body.status === 'Done' && body.linkedDocId) {
     const linkedDoc = (cache._allDocs || []).find(d => d.ID === body.linkedDocId);
     if (linkedDoc && linkedDoc.Status !== 'Verified') {
-      if (!confirm(`The linked document "${linkedDoc.Title}" has not been verified yet (currently: ${linkedDoc.Status}).\n\nThis task is supposed to complete only when its document is verified. Mark it Done anyway?`)) {
+      if (!(await confirmDialog({ title:'Document not verified', message:`The linked document "${linkedDoc.Title}" has not been verified yet (currently: ${linkedDoc.Status}).\n\nThis task is supposed to complete only when its document is verified. Mark it Done anyway?`, confirmText:'Mark Done', danger:true }))) {
         return;
       }
     }
@@ -3058,7 +3076,7 @@ async function saveWorklog() {
 }
 
 async function deleteWorklog(id) {
-  if (!confirm('Delete this log entry?')) return;
+  if (!(await confirmDialog({ title:'Delete log entry?', message:'This will permanently remove this work log entry.', confirmText:'Delete', danger:true }))) return;
   const res = await api(`/worklog/${id}`, { method:'DELETE' });
   if (res?.success) { showToast('Log deleted', 'success'); loadWorklog(); }
   else showToast(res?.error || 'Error', 'error');
@@ -4460,7 +4478,7 @@ async function submitStorageUpload() {
 }
 
 async function deleteStorageFile(fileId, fileName) {
-  if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+  if (!(await confirmDialog({ title:'Delete file?', message:`Delete "${fileName}"? This cannot be undone.`, confirmText:'Delete', danger:true }))) return;
   const res = await api(`/storage/file/${fileId}`, { method: 'DELETE' });
   if (res?.success) {
     showToast('File deleted', 'success');
@@ -5402,7 +5420,7 @@ async function confirmDeleteTask(taskId, taskName) {
   // Close the menu first
   document.querySelectorAll('.task-dropdown').forEach(el => el.style.display = 'none');
 
-  if (!confirm(`Delete "${taskName}"?\n\nThis will permanently remove the task and all its comments. This cannot be undone.`)) {
+  if (!(await confirmDialog({ title:'Delete task?', message:`Delete "${taskName}"?\n\nThis will permanently remove the task and all its comments. This cannot be undone.`, confirmText:'Delete', danger:true }))) {
     return;
   }
 
@@ -5862,7 +5880,7 @@ async function submitFlagIncomplete() {
 }
 
 async function deleteDoc(id, title) {
-  if (!confirm(`Delete document request "${title}"?`)) return;
+  if (!(await confirmDialog({ title:'Delete document request?', message:`Delete document request "${title}"?`, confirmText:'Delete', danger:true }))) return;
   const res = await api(`/docs/${id}`, { method:'DELETE' });
   if (res?.success) {
     showToast('Deleted', 'success');
@@ -6178,7 +6196,7 @@ async function toggleRecurringActive(id, currentActive) {
 }
 
 async function deleteRecurring(id, title) {
-  if (!confirm(`Delete recurring template "${title}"?\n\nThis won't delete tasks already generated from it.`)) return;
+  if (!(await confirmDialog({ title:'Delete recurring template?', message:`Delete recurring template "${title}"?\n\nThis won't delete tasks already generated from it.`, confirmText:'Delete', danger:true }))) return;
   const res = await api(`/recurring/${id}`, { method:'DELETE' });
   if (res?.success) {
     showToast('Template deleted', 'success');
@@ -6216,7 +6234,7 @@ async function seedRecurring() {
 }
 
 async function resetRecurringGen() {
-  if (!confirm('Reset generation cycle?\n\nThis clears the "last generated" timestamp on all templates so they will generate fresh tasks on the next Generate. Use this after changing assignees. Existing tasks are not deleted.')) return;
+  if (!(await confirmDialog({ title:'Re-send this cycle?', message:'This clears the "last sent" timestamp on all templates so they can be re-sent on the next send. Use this after changing assignees. Existing tasks are not deleted.', confirmText:'Re-send' }))) return;
   const btn = document.getElementById('btn-reset-recurring');
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Resetting…';
   const res = await api('/recurring/reset-generation', { method:'POST' });
@@ -6238,6 +6256,32 @@ async function autoGenerateRecurring() {
 }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
+
+// ── Styled confirmation dialog (replaces browser confirm()) ──
+let _confirmResolver = null;
+function _resolveConfirm(result) {
+  document.getElementById('modal-confirm').classList.remove('open');
+  if (_confirmResolver) { _confirmResolver(result); _confirmResolver = null; }
+}
+// Usage: if (await confirmDialog({ title, message, confirmText, danger })) { ... }
+function confirmDialog({ title = 'Are you sure?', message = '', confirmText = 'Confirm', cancelText = 'Cancel', danger = false } = {}) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-message').textContent = message;
+  const okBtn = document.getElementById('confirm-ok-btn');
+  okBtn.textContent = confirmText;
+  okBtn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+  document.getElementById('confirm-cancel-btn').textContent = cancelText;
+  const iconEl = document.getElementById('confirm-icon');
+  if (danger) {
+    iconEl.style.background = '#FCEBEB'; iconEl.style.color = '#C62828';
+    iconEl.innerHTML = '<i class="ti ti-alert-triangle"></i>';
+  } else {
+    iconEl.style.background = 'var(--teal-lt, #E2EDE8)'; iconEl.style.color = '#0F6E56';
+    iconEl.innerHTML = '<i class="ti ti-help-circle"></i>';
+  }
+  document.getElementById('modal-confirm').classList.add('open');
+  return new Promise(resolve => { _confirmResolver = resolve; });
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
 document.addEventListener('click', e => {
