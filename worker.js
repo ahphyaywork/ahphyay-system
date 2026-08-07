@@ -53,6 +53,123 @@ const ROLE_LABELS = {
   'production-intern':    'Production Intern',
 };
 
+// ═══════════════════════════════════════════════════════════════
+// PERMISSION SYSTEM — config-driven, editable by BOD
+// ═══════════════════════════════════════════════════════════════
+
+// The features/capabilities that can be toggled per role.
+// Each maps to a real permission check used across the worker.
+const PERMISSION_KEYS = {
+  // Tab visibility
+  'tab.dashboard':   'See Dashboard tab',
+  'tab.tasks':       'See Tasks tab',
+  'tab.storage':     'See Storage tab',
+  'tab.documents':   'See Documents tab',
+  'tab.kpi':         'See KPI / My KPIs tab',
+  'tab.worklog':     'See Work Log tab',
+  'tab.projects':    'See Projects tab',
+  'tab.recurring':   'See Recurring Tasks tab',
+  'tab.staff':       'See Staff Management tab',
+  'tab.access':      'See Access Control tab',
+  // Feature capabilities
+  'staff.manage':    'Add / edit / remove staff',
+  'tasks.assign':    'Assign tasks to others',
+  'tasks.deleteAny': 'Delete any task',
+  'kpi.viewAll':     'View all staff KPIs',
+  'projects.manage': 'Create / edit projects',
+  'docs.fullAccess': 'Full document tracker access',
+  'docs.verify':     'Verify / flag documents',
+  'recurring.manage':'Manage recurring task templates',
+};
+
+// Default permission matrix — the safe baseline (mirrors the original hardcoded rules).
+// true = allowed. Anything not listed for a role defaults to false.
+function defaultPermissions() {
+  const mgmt = ['bod','developer','senior-impact','senior-biz','project-coordinator'];
+  const admin = ['bod','developer'];
+  const all = Object.values(ROLES);
+  const staffLevel = ['production-lead','senior-admin','project-officer','network-catalyst','page-admin','admin-assistant','production-intern'];
+
+  const perms = {};
+  all.forEach(r => {
+    perms[r] = {
+      'tab.dashboard': true,
+      'tab.tasks': true,
+      'tab.storage': true,
+      'tab.documents': true,
+      'tab.kpi': true,
+      'tab.worklog': mgmt.includes(r),
+      'tab.projects': mgmt.includes(r),
+      'tab.recurring': mgmt.includes(r),
+      'tab.staff': admin.includes(r),
+      'tab.access': r === 'bod' || r === 'developer',
+      'staff.manage': admin.includes(r),
+      'tasks.assign': mgmt.includes(r),
+      'tasks.deleteAny': mgmt.includes(r),
+      'kpi.viewAll': mgmt.includes(r),
+      'projects.manage': mgmt.includes(r),
+      'docs.fullAccess': mgmt.includes(r),
+      'docs.verify': mgmt.includes(r),
+      'recurring.manage': mgmt.includes(r),
+    };
+  });
+  return perms;
+}
+
+// Cache the merged permission matrix per request to avoid repeated sheet reads
+let _permCache = null;
+async function getPermissions(env) {
+  if (_permCache) return _permCache;
+  const defaults = defaultPermissions();
+  try {
+    const config = await sheetsRead(env, 'Config');
+    const row = config.find(c => c.Key === 'permissions');
+    if (row && row.Value) {
+      const overrides = JSON.parse(row.Value);
+      // Merge overrides onto defaults (per role, per key)
+      for (const role in overrides) {
+        if (!defaults[role]) defaults[role] = {};
+        for (const key in overrides[role]) {
+          defaults[role][key] = overrides[role][key] === true;
+        }
+      }
+    }
+  } catch (e) { /* fall back to defaults */ }
+
+  // ANTI-LOCKOUT GUARDRAIL: BOD always keeps the Access Control tab and staff management.
+  if (defaults['bod']) {
+    defaults['bod']['tab.access'] = true;
+    defaults['bod']['staff.manage'] = true;
+  }
+
+  _permCache = defaults;
+  return _permCache;
+}
+
+// Check a single permission for a role
+async function can(env, role, key) {
+  const perms = await getPermissions(env);
+  return !!(perms[role] && perms[role][key]);
+}
+
+// Save permission overrides (BOD only) — enforces the anti-lockout rail
+async function savePermissions(env, overrides) {
+  // Force BOD's critical access on before saving
+  if (!overrides['bod']) overrides['bod'] = {};
+  overrides['bod']['tab.access'] = true;
+  overrides['bod']['staff.manage'] = true;
+
+  const config = await sheetsRead(env, 'Config');
+  const rowIdx = config.findIndex(c => c.Key === 'permissions');
+  const value = JSON.stringify(overrides);
+  if (rowIdx === -1) {
+    await sheetsAppend(env, 'Config', ['permissions', value]);
+  } else {
+    await sheetsUpdate(env, 'Config', rowIdx + 2, getColIndex('Config', 'Value'), value);
+  }
+  _permCache = null; // invalidate cache
+}
+
 // Legacy role mapping — converts old role names to new ones on login
 function normalizeRole(role) {
   if (!role) return 'project-officer';
@@ -118,13 +235,34 @@ export default {
       const { role, staffId } = auth;
 
       // Auth
-      if (path === '/auth/me')                                    return json(auth);
+      if (path === '/auth/me') {
+        const allPerms = await getPermissions(env);
+        return json({ ...auth, permissions: allPerms[role] || {} });
+      }
       if (path === '/auth/change-password' && request.method === 'POST')
         return await changePassword(request, env, staffId);
 
       // Staff management — admin only
       if (path === '/staff/names' && request.method === 'GET')     return await getStaffNames(env);
-      if (path === '/staff' && request.method === 'GET')          return await getStaff(env, role, staffId);
+
+      // ── Access Control (permissions) — BOD only ──
+      if (path === '/permissions' && request.method === 'GET') {
+        if (!(await can(env, role, 'tab.access'))) return json({ error: 'Access denied' }, 403);
+        const perms = await getPermissions(env);
+        return json({ permissions: perms, keys: PERMISSION_KEYS, roles: ROLE_LABELS, defaults: defaultPermissions() });
+      }
+      if (path === '/permissions' && request.method === 'POST') {
+        if (!(await can(env, role, 'tab.access'))) return json({ error: 'Access denied' }, 403);
+        const body = await request.json();
+        await savePermissions(env, body.permissions || {});
+        return json({ success: true });
+      }
+      if (path === '/permissions/reset' && request.method === 'POST') {
+        if (!(await can(env, role, 'tab.access'))) return json({ error: 'Access denied' }, 403);
+        await savePermissions(env, defaultPermissions());
+        return json({ success: true });
+      }
+      if (path === '/staff' && request.method === 'GET')          return await getStaff(env, role, staffId, url);
       if (path === '/staff' && request.method === 'POST')         return await addStaff(request, env, role);
       if (path.match(/^\/staff\/[\w-]+$/) && request.method === 'PUT')
         return await updateStaff(request, env, role, path.split('/')[2]);
@@ -260,6 +398,10 @@ async function handleLogin(request, env) {
     projects: user.Projects,
   }, env.JWT_SECRET);
 
+  // Include this user's effective permissions so the frontend renders the right tabs
+  const allPerms = await getPermissions(env);
+  const myPerms = allPerms[role] || {};
+
   return json({
     token,
     user: {
@@ -269,6 +411,7 @@ async function handleLogin(request, env) {
       email: user.Email,
       projects: user.Projects,
       team: user.Team || 'Program Team',
+      permissions: myPerms,
     }
   });
 }
@@ -307,13 +450,16 @@ async function resetPassword(request, env, role, targetId) {
 // ══════════════════════════════════════════════════════════
 // STAFF
 // ══════════════════════════════════════════════════════════
-async function getStaff(env, role, staffId) {
+async function getStaff(env, role, staffId, url) {
   const staff = await sheetsRead(env, 'Staff');
   if (isStaffLevel(role)) {
     const me = staff.find(r => r.ID === staffId);
     return json(me ? [sanitizeStaff(me)] : []);
   }
-  return json(staff.filter(r => r.Active?.toLowerCase() === 'true').map(sanitizeStaff));
+  // ?all=true returns inactive staff too (for the Staff Management panel, admin only)
+  const includeAll = url && url.searchParams.get('all') === 'true' && isAdmin(role);
+  const list = includeAll ? staff : staff.filter(r => r.Active?.toLowerCase() === 'true');
+  return json(list.map(sanitizeStaff));
 }
 
 // Returns minimal staff list (ID + Name only) — safe for all roles to look up assignee names
@@ -697,12 +843,18 @@ function computeStaffKpi(staffTasks, todayStr) {
   }).filter(d => d > 0);
   const avgDaysLate = lateDaysArr.length ? Math.round(lateDaysArr.reduce((a,b)=>a+b,0) / lateDaysArr.length) : 0;
 
-  // Weighted score
+  // Weighted score — softened so overdue tasks aren't triple-counted.
+  // Reliability weight reduced from 15% to 8% (roughly halved); the freed weight
+  // goes to Completion (43%) and Timeliness (34%), which reward positive work.
+  const W_COMPLETION = 0.43;
+  const W_TIMELINESS = 0.34;
+  const W_EVIDENCE   = 0.15;
+  const W_RELIABILITY= 0.08;
   const kpiScore = Math.round(
-    0.40 * completionPct +
-    0.30 * timelinessPct +
-    0.15 * evidencePct +
-    0.15 * overduePct
+    W_COMPLETION  * completionPct +
+    W_TIMELINESS  * timelinessPct +
+    W_EVIDENCE    * evidencePct +
+    W_RELIABILITY * overduePct
   );
   const kpiLabel = kpiScore >= 85 ? 'Excellent'
                  : kpiScore >= 70 ? 'Strong'
@@ -720,12 +872,56 @@ function computeStaffKpi(staffTasks, todayStr) {
     kpiScore,
     kpiLabel,
     kpiBreakdown: {
-      completion: { pct: completionPct, weight: 40, points: Math.round(0.40 * completionPct) },
-      timeliness: { pct: timelinessPct, weight: 30, points: Math.round(0.30 * timelinessPct) },
-      evidence:   { pct: evidencePct,   weight: 15, points: Math.round(0.15 * evidencePct) },
-      reliability:{ pct: overduePct,    weight: 15, points: Math.round(0.15 * overduePct) },
+      completion: { pct: completionPct, weight: Math.round(W_COMPLETION*100), points: Math.round(W_COMPLETION * completionPct) },
+      timeliness: { pct: timelinessPct, weight: Math.round(W_TIMELINESS*100), points: Math.round(W_TIMELINESS * timelinessPct) },
+      evidence:   { pct: evidencePct,   weight: Math.round(W_EVIDENCE*100),   points: Math.round(W_EVIDENCE * evidencePct) },
+      reliability:{ pct: overduePct,    weight: Math.round(W_RELIABILITY*100),points: Math.round(W_RELIABILITY * overduePct) },
     },
   };
+}
+
+// Get the Monday (week start) date string for a given date
+function weekStart(dateStr) {
+  const d = new Date(dateStr);
+  const day = d.getUTCDay(); // 0=Sun
+  const diff = (day === 0 ? -6 : 1) - day; // move back to Monday
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+// Capture a weekly KPI snapshot for all active staff (once per week max).
+// Called opportunistically when management loads the KPI page.
+async function captureKpiSnapshots(env, staffSummary, todayStr) {
+  try {
+    const thisWeek = weekStart(todayStr);
+    const snaps = await sheetsRead(env, 'KpiSnapshots');
+    // Already captured this week? (check any row)
+    const already = snaps.some(s => s.WeekOf === thisWeek);
+    if (already) return;
+
+    for (const s of staffSummary) {
+      const id = 'SNAP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+      const b = s.kpiBreakdown || {};
+      await sheetsAppend(env, 'KpiSnapshots', [
+        id, s.staffId, thisWeek, s.kpiScore,
+        b.completion?.pct ?? '', b.timeliness?.pct ?? '', b.evidence?.pct ?? '', b.reliability?.pct ?? '',
+        s.taskCount, new Date().toISOString(),
+      ]);
+    }
+  } catch (e) { /* snapshotting is best-effort, never blocks KPI */ }
+}
+
+// Build per-staff trend series (monthly display from weekly snapshots)
+async function getKpiTrends(env) {
+  const snaps = await sheetsRead(env, 'KpiSnapshots');
+  const byStaff = {};
+  for (const s of snaps) {
+    if (!byStaff[s.StaffID]) byStaff[s.StaffID] = [];
+    byStaff[s.StaffID].push({ week: s.WeekOf, score: parseInt(s.KpiScore) || 0 });
+  }
+  // Sort each staff's series by week
+  for (const id in byStaff) byStaff[id].sort((a, b) => a.week.localeCompare(b.week));
+  return byStaff;
 }
 
 async function getKPI(url, env, role, staffId) {
@@ -737,6 +933,7 @@ async function getKPI(url, env, role, staffId) {
 
   const { filterStaffId, projectId } = Object.fromEntries(url.searchParams);
   const targetStaffId = isStaffLevel(role) ? staffId : (filterStaffId || null);
+  const rankingOnly = url.searchParams.get('rankingOnly') === 'true';
 
   let relevantTasks = tasks.filter(t => t.Active?.toLowerCase() === 'true');
   if (projectId)     relevantTasks = relevantTasks.filter(t => taskInProject(t.ProjectID, projectId));
@@ -788,7 +985,7 @@ async function getKPI(url, env, role, staffId) {
   };
 
   let staffSummary = [];
-  if (isManagement(role)) {
+  if (isManagement(role) && !rankingOnly) {
     const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRole(s.Role) !== 'developer');
     staffSummary = activeStaff.map(s => {
       const staffTasks = relevantTasks.filter(t => isAssigned(t.AssigneeID, s.ID));
@@ -805,7 +1002,7 @@ async function getKPI(url, env, role, staffId) {
 
   // Per-project metrics
   let projectSummary = [];
-  if (isManagement(role)) {
+  if (isManagement(role) && !rankingOnly) {
     const activeProjects = projects.filter(p => p.Status?.toLowerCase() === 'active' || !p.Status);
     projectSummary = activeProjects.map(p => {
       const pTasks = relevantTasks.filter(t => taskInProject(t.ProjectID, p.ID));
@@ -854,12 +1051,78 @@ async function getKPI(url, env, role, staffId) {
 
   // Personal KPI for the requesting staff member (for their own "My KPIs" view)
   let myKpi = null;
-  if (staffId) {
+  if (staffId && !rankingOnly) {
     const myTasks = relevantTasks.filter(t => isAssigned(t.AssigneeID, staffId));
     myKpi = computeStaffKpi(myTasks, todayStr);
   }
 
-  return json({ kpis, staffSummary, projectSummary, myKpi });
+  // Management: capture weekly snapshot (best-effort) and return trends.
+  // Skipped in rankingOnly mode — the ranking tab uses monthlyTrend, not snapshots,
+  // so we avoid the slow sheet read/write on that load.
+  let trends = null;
+  if (!rankingOnly) {
+    if (isManagement(role) && staffSummary.length) {
+      await captureKpiSnapshots(env, staffSummary, todayStr);
+      trends = await getKpiTrends(env);
+    } else if (staffId) {
+      const all = await getKpiTrends(env);
+      trends = all[staffId] ? { [staffId]: all[staffId] } : {};
+    }
+  }
+
+  // ── Monthly ranking (scoped to tasks due within the requested month) ──
+  // month param format: YYYY-MM. Defaults to current month.
+  let monthlySummary = null;
+  let monthlyTrend = null;
+  const monthParam = url.searchParams.get('month');
+  if (isManagement(role)) {
+    const month = monthParam || todayStr.slice(0, 7); // YYYY-MM
+    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRole(s.Role) !== 'developer');
+
+    // The 6 months we display (selected month + 5 prior)
+    const months = [];
+    const base = new Date(month + '-01T00:00:00Z');
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(base); d.setUTCMonth(d.getUTCMonth() - i);
+      months.push(d.toISOString().slice(0, 7));
+    }
+    const monthsSet = new Set(months);
+    const activeStaffIds = new Set(activeStaff.map(s => s.ID));
+
+    // Single pass: bucket tasks by staffId → month → [tasks].
+    // Turns O(staff × months × tasks) into O(tasks + staff × months).
+    const buckets = {};
+    for (const id of activeStaffIds) buckets[id] = {};
+    for (const t of tasks) {
+      if (t.Active?.toLowerCase() !== 'true' || !t.DueDate) continue;
+      const ym = t.DueDate.slice(0, 7);
+      if (!monthsSet.has(ym)) continue;
+      const ids = (t.AssigneeID || '').split(',');
+      for (let raw of ids) {
+        const aid = raw.trim();
+        if (!aid || !activeStaffIds.has(aid)) continue;
+        (buckets[aid][ym] = buckets[aid][ym] || []).push(t);
+      }
+    }
+
+    // Selected-month summary — direct bucket lookup
+    monthlySummary = activeStaff.map(s => {
+      const monthTasks = buckets[s.ID][month] || [];
+      const k = computeStaffKpi(monthTasks, todayStr);
+      return { staffId: s.ID, name: s.Name, role: normalizeRole(s.Role), ...k };
+    });
+
+    // 6-month trend — reuse the same buckets
+    monthlyTrend = {};
+    activeStaff.forEach(s => {
+      monthlyTrend[s.ID] = months.map(m => {
+        const mTasks = buckets[s.ID][m] || [];
+        return { month: m, score: mTasks.length ? computeStaffKpi(mTasks, todayStr).kpiScore : null };
+      });
+    });
+  }
+
+  return json({ kpis, staffSummary, projectSummary, myKpi, trends, monthlySummary, monthlyTrend, month: monthParam || todayStr.slice(0,7) });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1958,11 +2221,11 @@ async function getRecurringTasks(env, role) {
 
 async function addRecurringTask(request, env, role) {
   if (!isManagement(role)) return json({ error: 'Management only' }, 403);
-  const { title, description, frequency, team, assigneeId } = await request.json();
+  const { title, description, frequency, team, assigneeId, sendDay } = await request.json();
   if (!title?.trim() || !frequency) return json({ error: 'Title and frequency required' }, 400);
 
   const id = 'REC-' + Date.now();
-  const row = [id, title.trim(), description?.trim() || '', frequency, team || 'Support Team', assigneeId || '', 'true', ''];
+  const row = [id, title.trim(), description?.trim() || '', frequency, team || 'Support Team', assigneeId || '', 'true', '', sendDay !== undefined ? String(sendDay) : ''];
   await sheetsAppend(env, 'RecurringTasks', row);
   return json({ success: true, id });
 }
@@ -1984,6 +2247,7 @@ async function updateRecurringTask(request, env, role, recId) {
     body.assigneeId !== undefined ? body.assigneeId : e.AssigneeID,
     body.active !== undefined ? String(body.active) : e.Active,
     e.LastGenerated || '',
+    body.sendDay !== undefined ? String(body.sendDay) : (e.SendDay || ''),
   ];
   await sheetsUpdateRow(env, 'RecurringTasks', rowIdx + 2, updated);
   return json({ success: true });
@@ -1999,25 +2263,44 @@ async function deleteRecurringTask(env, role, recId) {
 }
 
 // Check if a recurring task is due based on frequency and last generation
-function isRecurringDue(frequency, lastGenerated) {
-  if (!lastGenerated) return true; // never generated → due now
-  const last = new Date(lastGenerated);
+function isRecurringDue(frequency, lastGenerated, sendDay) {
   const now = new Date();
   const freq = (frequency || '').toLowerCase();
+  const todayStr = now.toISOString().slice(0, 10);
+
+  // Prevent generating the same template twice on the same day
+  if (lastGenerated) {
+    const lastStr = new Date(lastGenerated).toISOString().slice(0, 10);
+    if (lastStr === todayStr) return false;
+  }
 
   if (freq === 'daily') {
-    // Due if last generation was on a previous day
-    return last.toISOString().slice(0, 10) !== now.toISOString().slice(0, 10);
+    // Every day — due if not already generated today (checked above)
+    return true;
   }
+
   if (freq === 'weekly') {
-    // Due if 7+ days since last generation
-    const days = (now - last) / (1000 * 60 * 60 * 24);
-    return days >= 7;
+    // sendDay = weekday number 0(Sun)–6(Sat). Default Monday (1) if unset.
+    const targetDow = (sendDay !== undefined && sendDay !== null && sendDay !== '')
+      ? parseInt(sendDay, 10) : 1;
+    if (now.getDay() !== targetDow) return false;      // only on the chosen weekday
+    // Due if we haven't generated in the last 6 days (i.e., not already this week)
+    if (!lastGenerated) return true;
+    const days = (now - new Date(lastGenerated)) / (1000 * 60 * 60 * 24);
+    return days >= 6;
   }
+
   if (freq === 'monthly') {
+    // sendDay = day of month 1–28. Default 1 if unset.
+    const targetDom = (sendDay !== undefined && sendDay !== null && sendDay !== '')
+      ? parseInt(sendDay, 10) : 1;
+    if (now.getDate() !== targetDom) return false;     // only on the chosen day of month
     // Due if last generation was in a previous month
+    if (!lastGenerated) return true;
+    const last = new Date(lastGenerated);
     return last.getFullYear() !== now.getFullYear() || last.getMonth() !== now.getMonth();
   }
+
   return false;
 }
 
@@ -2040,7 +2323,7 @@ async function generateRecurringTasks(env, role) {
 
   const recurring = await sheetsRead(env, 'RecurringTasks');
   const dueTasks = recurring.filter(r =>
-    r.Active?.toLowerCase() === 'true' && isRecurringDue(r.Frequency, r.LastGenerated)
+    r.Active?.toLowerCase() === 'true' && isRecurringDue(r.Frequency, r.LastGenerated, r.SendDay)
   );
 
   if (!dueTasks.length) return json({ success: true, generated: 0, message: 'No tasks due' });
@@ -2482,8 +2765,9 @@ const SHEET_HEADERS = {
   Comments:      ['ID','TaskID','StaffID','StaffName','Comment','CreatedAt'],
   Notifications: ['ID','StaffID','Type','Title','Message','TaskID','IsRead','CreatedAt'],
   Requests:      ['ID','RequesterID','RequesterName','AssigneeID','Title','Description','Status','Response','CreatedAt'],
-  RecurringTasks:['ID','Title','Description','Frequency','Team','AssigneeID','Active','LastGenerated'],
+  RecurringTasks:['ID','Title','Description','Frequency','Team','AssigneeID','Active','LastGenerated','SendDay'],
   DocSubmissions:['ID','Title','ProjectID','RequestedFromID','RequestedByID','DocumentType','ActivityDate','DueDate','Status','Notes','CreatedAt','Files','SubmitLink'],
+  KpiSnapshots:  ['ID','StaffID','WeekOf','KpiScore','Completion','Timeliness','Evidence','Reliability','TaskCount','CreatedAt'],
 };
 
 function getColIndex(sheet, colName) {
