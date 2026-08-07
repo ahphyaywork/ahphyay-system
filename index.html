@@ -3201,6 +3201,89 @@ function jdChip(jd, opts) {
     </span>`;
 }
 
+// Collapsible "how JD scoring works" section for the My KPIs view
+function toggleJdExplainer() {
+  const el = document.getElementById('jd-explainer-body');
+  const chev = document.getElementById('jd-explainer-chev');
+  if (!el) return;
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  if (chev) chev.className = open ? 'ti ti-chevron-down' : 'ti ti-chevron-up';
+}
+
+function jdExplainerSection(my) {
+  const tasks = my.jdTasks || [];
+  const roleAreas = my.jdRoleAreas || [];
+  const startNice = '8 August 2026';
+
+  // Split tasks by JD status, and note which ones are in the scored window
+  const scored = tasks.filter(t => t.scored);
+  const inJd = scored.filter(t => t.jdStatus === 'in-jd');
+  const offJd = scored.filter(t => t.jdStatus === 'off-jd');
+  const uncat = scored.filter(t => t.jdStatus === 'uncategorised');
+  const preCutoff = tasks.filter(t => !t.scored).length;
+
+  const statusPill = (st) => {
+    if (st === 'in-jd')  return '<span style="background:#E8F5E9;color:#2E7D32;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:600;">In JD</span>';
+    if (st === 'off-jd') return '<span style="background:#FCEBEB;color:#C62828;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:600;">Off JD</span>';
+    return '<span style="background:#F1F5F9;color:#64748B;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:600;">Uncategorised</span>';
+  };
+
+  const taskRow = (t) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border2);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div>
+        <div style="font-size:10px;color:var(--muted);">${t.category || 'no category'}${t.areaLabel ? ' → ' + t.areaLabel : ''} · due ${t.dueDate || '—'}</div>
+      </div>
+      ${statusPill(t.jdStatus)}
+    </div>`;
+
+  return `
+    <div style="margin-top:14px;border:1px solid var(--border2);border-radius:12px;overflow:hidden;">
+      <button onclick="toggleJdExplainer()" style="width:100%;display:flex;align-items:center;justify-content:space-between;background:var(--white);border:none;padding:12px 16px;cursor:pointer;font-family:inherit;">
+        <span style="font-size:13px;font-weight:600;color:var(--navy);"><i class="ti ti-id-badge-2" style="color:var(--teal);"></i> How JD alignment affects my score</span>
+        <i id="jd-explainer-chev" class="ti ti-chevron-down" style="color:var(--muted);"></i>
+      </button>
+      <div id="jd-explainer-body" style="display:none;padding:16px;background:var(--off);font-size:12px;line-height:1.6;">
+
+        <div style="background:var(--white);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+          <div style="font-weight:600;color:var(--navy);margin-bottom:6px;">How it works</div>
+          <div style="color:var(--muted);">
+            Your KPI score is first calculated from your <strong>completion, timeliness, evidence and overdue record</strong> — that's your <strong>base score</strong>.
+            From ${startNice}, the system also checks whether each task falls within <strong>your role's job description</strong>.
+            The share of your JD-relevant tasks that are actually within your role becomes an <strong>alignment %</strong>,
+            which gently adjusts your base score by a multiplier between <strong>0.85 and 1.00</strong>.
+            Staying fully in-role means no reduction; a lot of off-role work nudges the score down, but never below 85% of your base.
+          </div>
+        </div>
+
+        <div style="background:var(--white);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+          <div style="font-weight:600;color:var(--navy);margin-bottom:8px;">Your role covers these areas</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${roleAreas.length ? roleAreas.map(a => `<span style="background:#E8F5E9;color:#2E7D32;border-radius:99px;padding:3px 10px;font-size:11px;">${a.label}</span>`).join('') : '<span style="color:var(--muted);">No areas defined for your role.</span>'}
+          </div>
+          <div style="color:var(--muted);margin-top:8px;font-size:11px;">A task counts as <strong>In JD</strong> when its category maps to one of these areas. Anything else is <strong>Off JD</strong> (neutral — it just lowers the in-role share, it isn't a penalty on its own). Tasks with no clear category are <strong>Uncategorised</strong> and are ignored entirely.</div>
+        </div>
+
+        ${scored.length ? `
+        <div style="background:var(--white);border-radius:10px;padding:12px 14px;">
+          <div style="font-weight:600;color:var(--navy);margin-bottom:2px;">Your tasks counted from ${startNice}</div>
+          <div style="color:var(--muted);font-size:11px;margin-bottom:8px;">${inJd.length} in JD · ${offJd.length} off JD · ${uncat.length} uncategorised (ignored)${preCutoff ? ` · ${preCutoff} before the cutoff (not counted)` : ''}</div>
+          ${offJd.length ? `<div style="font-size:11px;font-weight:600;color:#C62828;margin-top:6px;margin-bottom:2px;">Off-JD tasks lowering your alignment</div>${offJd.map(taskRow).join('')}` : '<div style="color:#2E7D32;font-size:11px;padding:6px 0;">All your scored tasks are within your role — full marks on alignment.</div>'}
+          ${uncat.length ? `<div style="font-size:11px;font-weight:600;color:#64748B;margin-top:10px;margin-bottom:2px;">Uncategorised (not counted either way)</div>${uncat.map(taskRow).join('')}` : ''}
+          ${inJd.length ? `<div style="font-size:11px;font-weight:600;color:#2E7D32;margin-top:10px;margin-bottom:2px;">In-JD tasks</div>${inJd.map(taskRow).join('')}` : ''}
+        </div>` : `
+        <div style="background:var(--white);border-radius:10px;padding:12px 14px;color:var(--muted);">
+          You have no tasks due on or after ${startNice} yet, so JD alignment isn't affecting your score. It begins once you have tasks due from that date.
+        </div>`}
+
+        <div style="color:var(--muted);font-size:10px;margin-top:12px;">
+          If a task looks mislabelled — wrong category, or it should count for your role — mention it to your coordinator. The role-to-area mapping is maintained by management and can be corrected.
+        </div>
+      </div>
+    </div>`;
+}
+
 function toggleKpiBreakdown(staffId) {
   const el = document.getElementById('kpi-breakdown-' + staffId);
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
@@ -3291,6 +3374,7 @@ async function loadKPI() {
           </div>` : `
           <div style="margin-top:5px;color:var(--muted);font-size:10px;">No JD-scored tasks yet (from 8 Aug 2026) — your score isn't adjusted.</div>`}
         </div>
+        ${my.jdTasks ? jdExplainerSection(my) : ''}
       </div>` : '';
     el.innerHTML = myScoreCard + '<div class="section-title" style="margin-bottom:12px;">Your tasks</div>' + kpis.map(k => `
       <div style="background:var(--white);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:10px;">
