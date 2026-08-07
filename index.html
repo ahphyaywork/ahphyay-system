@@ -546,6 +546,18 @@ tbody tr:hover td{background:#fafcfb;}
           <i class="ti ti-info-circle"></i> Toggle what each role can see and do. Changes take effect the next time a user logs in. BOD always keeps access to this tab and staff management (anti-lockout safeguard).
         </div>
         <div id="access-matrix" style="overflow-x:auto;"></div>
+
+        <div class="section-hd" style="margin-top:34px;">
+          <div class="section-title">JD Scope</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="resetJdScope()"><i class="ti ti-refresh"></i> Reset to JD defaults</button>
+            <button class="btn btn-primary btn-sm" onclick="saveJdScope()" id="btn-save-jd"><i class="ti ti-device-floppy"></i> Save JD scope</button>
+          </div>
+        </div>
+        <div style="background:#EFF6FF;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#1565C0;">
+          <i class="ti ti-info-circle"></i> Which work areas belong to each role, taken from the 2026 job descriptions. This drives the <strong>JD alignment %</strong> shown on KPI cards &mdash; a separate diagnostic that does <strong>not</strong> affect anyone's KPI score. Tick an area to bring it inside that role's JD.
+        </div>
+        <div id="jd-scope-matrix" style="overflow-x:auto;"></div>
       </div>
 
       <div class="panel" id="panel-staff">
@@ -2093,6 +2105,78 @@ async function loadDashboard() {
 let _permData = null;      // { permissions, keys, roles, defaults }
 let _permEdits = null;     // working copy being edited
 
+// ── JD Scope editor ──
+let _jdData = null;   // { scope, areas, roles, defaults }
+let _jdEdits = null;
+
+async function loadJdScope() {
+  const box = document.getElementById('jd-scope-matrix');
+  if (!box) return;
+  box.innerHTML = '<div class="empty" style="padding:20px;">Loading JD scope…</div>';
+  const data = await api('/jd-scope');
+  if (!data || !data.scope) {
+    box.innerHTML = '<div class="empty" style="padding:20px;">Could not load JD scope.</div>';
+    return;
+  }
+  _jdData = data;
+  _jdEdits = JSON.parse(JSON.stringify(data.scope));
+  renderJdMatrix();
+}
+
+function renderJdMatrix() {
+  const box = document.getElementById('jd-scope-matrix');
+  const areas = _jdData.areas;          // { key: label }
+  const roleLabels = _jdData.roles;     // { roleKey: label }
+  const roleKeys = Object.keys(roleLabels);
+
+  box.innerHTML = `
+    <table style="border-collapse:collapse;min-width:100%;font-size:12px;">
+      <thead>
+        <tr>
+          <th style="position:sticky;left:0;background:var(--off);text-align:left;padding:10px 12px;font-size:11px;color:var(--muted);border-right:1px solid var(--border2);">Work area</th>
+          ${roleKeys.map(rk => `<th style="padding:10px 6px;font-size:10px;color:var(--navy);font-weight:600;text-align:center;min-width:70px;">${roleLabels[rk]}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>
+        ${Object.entries(areas).map(([key, label]) => `
+          <tr>
+            <td style="position:sticky;left:0;background:var(--white);font-size:12px;color:var(--navy);padding:8px 12px;white-space:nowrap;border-right:1px solid var(--border2);border-top:1px solid var(--border2);">${label}</td>
+            ${roleKeys.map(rk => {
+              const on = (_jdEdits[rk] || []).includes(key);
+              return `<td style="text-align:center;padding:6px;border-top:1px solid var(--border2);">
+                <input type="checkbox" ${on?'checked':''} onchange="toggleJdArea('${rk}','${key}',this.checked)" style="width:17px;height:17px;cursor:pointer;">
+              </td>`;
+            }).join('')}
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function toggleJdArea(roleKey, areaKey, value) {
+  if (!_jdEdits[roleKey]) _jdEdits[roleKey] = [];
+  const arr = _jdEdits[roleKey];
+  const i = arr.indexOf(areaKey);
+  if (value && i === -1) arr.push(areaKey);
+  if (!value && i !== -1) arr.splice(i, 1);
+}
+
+async function saveJdScope() {
+  const btn = document.getElementById('btn-save-jd');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Saving…';
+  const res = await api('/jd-scope', { method:'POST', body: JSON.stringify({ scope: _jdEdits }) });
+  btn.disabled = false; btn.innerHTML = orig;
+  if (res?.success) showToast('JD scope saved — alignment recalculates on next KPI load', 'success');
+  else showToast(res?.error || 'Failed to save', 'error');
+}
+
+async function resetJdScope() {
+  if (!(await confirmDialog({ title:'Reset JD scope?', message:'Restore the scope areas taken from the 2026 job descriptions. This undoes your changes.', confirmText:'Reset', danger:true }))) return;
+  const res = await api('/jd-scope/reset', { method:'POST', body: JSON.stringify({}) });
+  if (res?.success) { showToast('JD scope reset to defaults', 'success'); loadJdScope(); }
+  else showToast(res?.error || 'Failed to reset', 'error');
+}
+
 async function loadAccessControl() {
   const box = document.getElementById('access-matrix');
   box.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-loader"></i></div>Loading permissions…</div>';
@@ -2105,6 +2189,7 @@ async function loadAccessControl() {
   // Deep copy for editing
   _permEdits = JSON.parse(JSON.stringify(data.permissions));
   renderAccessMatrix();
+  loadJdScope();
 }
 
 function renderAccessMatrix() {
@@ -3098,6 +3183,24 @@ function getPeriodRange(period) {
 // ════════════════════════════════════════════════════════
 // KPI
 // ════════════════════════════════════════════════════════
+// JD alignment chip — shown alongside (never inside) the KPI score
+function jdChip(jd, opts) {
+  opts = opts || {};
+  if (!jd || jd.alignmentPct === null || jd.alignmentPct === undefined) {
+    return `<span style="font-size:11px;color:var(--muted);">JD alignment —</span>`;
+  }
+  const p = jd.alignmentPct;
+  const col = p >= 80 ? '#1D9E75' : p >= 50 ? '#EF9F27' : '#E24B4A';
+  const bg  = p >= 80 ? '#E8F5E9' : p >= 50 ? '#FFF3E0' : '#FCEBEB';
+  const detail = jd.offScope > 0
+    ? `${jd.offScope} of ${jd.classified} task${jd.classified!==1?'s':''} outside this role's JD`
+    : `all ${jd.classified} classified task${jd.classified!==1?'s':''} within the JD`;
+  const unclass = jd.unclassified > 0 ? ` · ${jd.unclassified} uncategorised` : '';
+  return `<span title="${detail}${unclass}" style="display:inline-flex;align-items:center;gap:5px;background:${bg};color:${col};border-radius:99px;padding:3px 9px;font-size:11px;font-weight:600;">
+      <i class="ti ti-id-badge-2" style="font-size:12px;"></i>JD ${p}%${opts.showCount && jd.offScope>0 ? ` · ${jd.offScope} off-scope` : ''}
+    </span>`;
+}
+
 function toggleKpiBreakdown(staffId) {
   const el = document.getElementById('kpi-breakdown-' + staffId);
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
@@ -3140,7 +3243,8 @@ async function loadKPI() {
     const kpis = data.kpis || [];
     if (!kpis.length) { el.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-chart-bar"></i></div>No tasks assigned yet.</div>'; return; }
     const my = data.myKpi;
-    const scoreColor = my ? (my.kpiScore>=70?'#1D9E75':my.kpiScore>=50?'#EF9F27':'#E24B4A') : '#64748B';
+    const myDisplayScore = my ? (my.jdScore ?? my.kpiScore) : 0;
+    const scoreColor = my ? (myDisplayScore>=70?'#1D9E75':myDisplayScore>=50?'#EF9F27':'#E24B4A') : '#64748B';
     const myScoreCard = my ? `
       <div style="background:var(--white);border:1px solid var(--border2);border-radius:16px;padding:20px 22px;margin-bottom:18px;">
         <div style="display:flex;align-items:center;gap:18px;">
@@ -3149,17 +3253,19 @@ async function loadKPI() {
               <circle cx="36" cy="36" r="30" fill="none" stroke="#E2EDE8" stroke-width="6"/>
               <circle cx="36" cy="36" r="30" fill="none" stroke="${scoreColor}" stroke-width="6"
                 stroke-dasharray="${(my.kpiScore/100)*188.5} 188.5" stroke-linecap="round" transform="rotate(-90 36 36)"/>
-              <text x="36" y="41" text-anchor="middle" font-size="20" font-weight="bold" fill="${scoreColor}">${my.kpiScore}</text>
+              <text x="36" y="41" text-anchor="middle" font-size="20" font-weight="bold" fill="${scoreColor}">${myDisplayScore}</text>
             </svg>
           </div>
           <div style="flex:1;">
             <div style="font-size:13px;color:var(--muted);">Your KPI Score</div>
             <div style="display:flex;align-items:baseline;gap:8px;">
-              <span style="font-size:28px;font-weight:700;color:${scoreColor};">${my.kpiScore}</span>
+              <span style="font-size:28px;font-weight:700;color:${scoreColor};">${myDisplayScore}</span>
               <span style="font-size:14px;color:var(--muted);">/ 100</span>
-              <span class="badge ${my.kpiScore>=70?'badge-done':my.kpiScore>=50?'badge-prog':'badge-late'}" style="margin-left:4px;"><span class="badge-dot"></span>${my.kpiLabel}</span>
+              <span class="badge ${myDisplayScore>=70?'badge-done':myDisplayScore>=50?'badge-prog':'badge-late'}" style="margin-left:4px;"><span class="badge-dot"></span>${my.jdLabel ?? my.kpiLabel}</span>
+              ${my.jdScore!==undefined && my.jdScore!==my.baseKpiScore ? `<span style="font-size:11px;color:var(--muted);">base ${my.baseKpiScore} × ${my.jdMultiplier}</span>` : ''}
             </div>
             <div style="font-size:11px;color:var(--muted);margin-top:2px;">${my.doneCount} of ${my.taskCount} tasks done · ${my.overdueCount} overdue</div>
+            <div style="margin-top:6px;">${jdChip(my.jdAlignment)}</div>
           </div>
           <button onclick="toggleKpiBreakdown('me')" style="background:none;border:1px solid var(--border2);border-radius:8px;padding:8px 12px;color:var(--teal);font-size:12px;cursor:pointer;font-family:inherit;align-self:flex-start;"><i class="ti ti-info-circle"></i> How is this calculated?</button>
         </div>
@@ -3172,9 +3278,18 @@ async function loadKPI() {
               <span style="width:36px;text-align:right;color:var(--navy);font-weight:600;">${b.pct}%</span>
               <span style="width:80px;text-align:right;color:var(--muted);">× ${b.weight}% = ${b.points} pts</span>
             </div>`).join('')}
-          <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-weight:700;color:var(--navy);">
-            <span>Total KPI Score</span><span>${my.kpiScore} / 100</span>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-weight:600;color:var(--navy);">
+            <span>Base KPI Score</span><span>${my.baseKpiScore ?? my.kpiScore} / 100</span>
           </div>
+          ${my.jdScore!==undefined && my.jdScoredAlignment && my.jdScoredAlignment.alignmentPct!==null ? `
+          <div style="display:flex;justify-content:space-between;margin-top:5px;color:var(--muted);">
+            <div><div style="color:var(--navy);font-weight:600;">JD alignment (from 8 Aug)</div><div style="font-size:9px;">${my.jdScoredAlignment.inScope} of ${my.jdScoredAlignment.classified} scored tasks match your role</div></div>
+            <span>${my.jdScoredAlignment.alignmentPct}% → ×${my.jdMultiplier}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-weight:700;color:var(--navy);">
+            <span>Final KPI Score</span><span>${my.jdScore} / 100</span>
+          </div>` : `
+          <div style="margin-top:5px;color:var(--muted);font-size:10px;">No JD-scored tasks yet (from 8 Aug 2026) — your score isn't adjusted.</div>`}
         </div>
       </div>` : '';
     el.innerHTML = myScoreCard + '<div class="section-title" style="margin-bottom:12px;">Your tasks</div>' + kpis.map(k => `
@@ -3267,33 +3382,35 @@ async function loadKPI() {
               <svg width="48" height="48" viewBox="0 0 48 48">
                 <circle cx="24" cy="24" r="20" fill="none" stroke="#E2EDE8" stroke-width="4"/>
                 <circle cx="24" cy="24" r="20" fill="none"
-                  stroke="${s.kpiScore>=70?'#1D9E75':s.kpiScore>=50?'#EF9F27':'#E24B4A'}"
+                  stroke="${(s.jdScore??s.kpiScore)>=70?'#1D9E75':(s.jdScore??s.kpiScore)>=50?'#EF9F27':'#E24B4A'}"
                   stroke-width="4"
-                  stroke-dasharray="${(s.kpiScore/100)*125.7} 125.7"
+                  stroke-dasharray="${((s.jdScore??s.kpiScore)/100)*125.7} 125.7"
                   stroke-linecap="round"
                   transform="rotate(-90 24 24)"/>
                 <text x="24" y="28" text-anchor="middle" font-size="11" font-weight="bold"
-                  fill="${s.kpiScore>=70?'#1D9E75':s.kpiScore>=50?'#EF9F27':'#E24B4A'}">${s.kpiScore}</text>
+                  fill="${(s.jdScore??s.kpiScore)>=70?'#1D9E75':(s.jdScore??s.kpiScore)>=50?'#EF9F27':'#E24B4A'}">${s.jdScore??s.kpiScore}</text>
               </svg>
             </div>
             <div style="flex:1;">
               <div class="s-name">${s.name}</div>
               <div class="s-role">${s.role} · ${s.taskCount} tasks</div>
             </div>
-            <span class="badge ${s.kpiScore>=70?'badge-done':s.kpiScore>=50?'badge-prog':'badge-late'}" style="margin-left:auto">
-              <span class="badge-dot"></span>${s.kpiLabel}
+            <span class="badge ${(s.jdScore??s.kpiScore)>=70?'badge-done':(s.jdScore??s.kpiScore)>=50?'badge-prog':'badge-late'}" style="margin-left:auto">
+              <span class="badge-dot"></span>${s.jdLabel??s.kpiLabel}
             </span>
           </div>
           <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
             <span style="font-size:13px;color:var(--muted);">KPI Score</span>
-            <span style="font-size:20px;font-weight:700;color:${s.kpiScore>=70?'#1D9E75':s.kpiScore>=50?'#EF9F27':'#E24B4A'};">${s.kpiScore}</span>
+            <span style="font-size:20px;font-weight:700;color:${(s.jdScore??s.kpiScore)>=70?'#1D9E75':(s.jdScore??s.kpiScore)>=50?'#EF9F27':'#E24B4A'};">${s.jdScore??s.kpiScore}</span>
             <span style="font-size:12px;color:var(--muted);">/ 100</span>
+            ${s.jdScore!==undefined && s.jdScore!==s.baseKpiScore ? `<span style="font-size:11px;color:var(--muted);">(base ${s.baseKpiScore} × ${s.jdMultiplier})</span>` : ''}
             <button onclick="toggleKpiBreakdown('${s.staffId}')" style="margin-left:auto;background:none;border:none;color:var(--teal);font-size:11px;cursor:pointer;font-family:inherit;"><i class="ti ti-info-circle"></i> How?</button>
           </div>
           <div class="prog-wrap" style="margin-bottom:8px;">
-            <div class="prog-bar"><div class="prog-fill ${s.kpiScore>=70?'prog-green':s.kpiScore>=50?'prog-amber':'prog-red'}" style="width:${Math.min(s.kpiScore,100)}%"></div></div>
-            <span class="prog-pct">${s.kpiScore}</span>
+            <div class="prog-bar"><div class="prog-fill ${(s.jdScore??s.kpiScore)>=70?'prog-green':(s.jdScore??s.kpiScore)>=50?'prog-amber':'prog-red'}" style="width:${Math.min(s.jdScore??s.kpiScore,100)}%"></div></div>
+            <span class="prog-pct">${s.jdScore??s.kpiScore}</span>
           </div>
+          <div style="margin-bottom:10px;">${jdChip(s.jdAlignment, {showCount:true})}</div>
           <div id="kpi-breakdown-${s.staffId}" style="display:none;background:var(--off);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;">
             <div style="font-weight:600;color:var(--navy);margin-bottom:6px;">Score breakdown</div>
             ${[['Completion',s.kpiBreakdown.completion],['Timeliness',s.kpiBreakdown.timeliness],['Evidence',s.kpiBreakdown.evidence],['Reliability',s.kpiBreakdown.reliability]].map(([label,b]) => `
@@ -3303,9 +3420,17 @@ async function loadKPI() {
                 <span style="width:34px;text-align:right;color:var(--navy);">${b.pct}%</span>
                 <span style="width:54px;text-align:right;color:var(--muted);">×${b.weight}% = ${b.points}</span>
               </div>`).join('')}
-            <div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);font-weight:700;color:var(--navy);">
-              <span>Total KPI Score</span><span>${s.kpiScore} / 100</span>
+            <div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);font-weight:600;color:var(--navy);">
+              <span>Base KPI Score</span><span>${s.baseKpiScore ?? s.kpiScore} / 100</span>
             </div>
+            ${s.jdScore!==undefined && s.jdScoredAlignment && s.jdScoredAlignment.alignmentPct!==null ? `
+            <div style="display:flex;justify-content:space-between;margin-top:4px;color:var(--muted);">
+              <span>JD alignment (from 8 Aug)</span><span>${s.jdScoredAlignment.alignmentPct}% → ×${s.jdMultiplier}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);font-weight:700;color:var(--navy);">
+              <span>Final KPI Score</span><span>${s.jdScore} / 100</span>
+            </div>` : `
+            <div style="margin-top:4px;color:var(--muted);font-size:10px;">No JD-scored tasks yet (from 8 Aug) — score unadjusted.</div>`}
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
             <span class="badge badge-done"><span class="badge-dot"></span>${s.doneCount} done</span>
@@ -3435,8 +3560,8 @@ async function loadKPI() {
       type: 'bar',
       data: {
         labels: summary.map(s => s.name.split(' ')[0]),
-        datasets: [{ data: summary.map(s => s.kpiScore),
-          backgroundColor: summary.map(s => s.kpiScore>=70?'#1D9E75':s.kpiScore>=50?'#EF9F27':'#E24B4A'),
+        datasets: [{ data: summary.map(s => s.jdScore ?? s.kpiScore),
+          backgroundColor: summary.map(s => (s.jdScore??s.kpiScore)>=70?'#1D9E75':(s.jdScore??s.kpiScore)>=50?'#EF9F27':'#E24B4A'),
           borderRadius: 6, borderWidth: 0 }]
       },
       options: {
@@ -3511,7 +3636,7 @@ async function loadKpiRanking() {
 
   _rankingMonth = data.month; // sync to what the server used
   // Use MONTHLY summary + trend for this tab
-  const summary = data.monthlySummary.slice().sort((a, b) => b.kpiScore - a.kpiScore);
+  const summary = data.monthlySummary.slice().sort((a, b) => (b.jdScore ?? b.kpiScore) - (a.jdScore ?? a.kpiScore));
   const trends = data.monthlyTrend || {};
 
   // Ranking table
@@ -3535,11 +3660,11 @@ async function loadKpiRanking() {
   const withTasks = summary.filter(s => s.taskCount > 0);
   const top = withTasks[0];
   const needsSupport = withTasks.length ? withTasks[withTasks.length - 1] : null;
-  const teamAvg = summary.length ? Math.round(summary.reduce((a,s)=>a+s.kpiScore,0)/summary.length) : 0;
+  const teamAvg = summary.length ? Math.round(summary.reduce((a,s)=>a+(s.jdScore ?? s.kpiScore),0)/summary.length) : 0;
 
   // Distribution counts
   const dist = { Excellent:0, Strong:0, Developing:0, 'Needs attention':0 };
-  summary.forEach(s => { dist[s.kpiLabel] = (dist[s.kpiLabel]||0) + 1; });
+  summary.forEach(s => { const lbl = s.jdLabel ?? s.kpiLabel; dist[lbl] = (dist[lbl]||0) + 1; });
 
   let html = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:10px;">
@@ -3550,18 +3675,18 @@ async function loadKpiRanking() {
         <button onclick="changeRankingMonth(1)" ${data.month >= new Date().toISOString().slice(0,7) ? 'disabled style="opacity:0.35;cursor:not-allowed;border:none;background:none;padding:6px 10px;color:var(--navy);border-radius:6px;font-size:14px;"' : 'style="border:none;background:none;cursor:pointer;padding:6px 10px;color:var(--navy);border-radius:6px;font-size:14px;"'} title="Next month"><i class="ti ti-chevron-right"></i></button>
       </div>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Ranked by KPI score for <strong>${monthLabel(data.month)}</strong> — based only on tasks due this month. Trend compares recent months. Use this to recognise strong performers and spot who needs support.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Ranked by JD-adjusted KPI score for <strong>${monthLabel(data.month)}</strong> — tasks due this month, adjusted for job-description alignment (from 8 Aug 2026). Base scores shown beneath each. Trend compares recent months.</div>
 
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
       <div style="background:#E8F5E9;border-radius:14px;padding:16px 18px;">
         <div style="font-size:11px;color:#2E7D32;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-trophy"></i> Top performer</div>
         <div style="font-size:18px;font-weight:700;color:var(--navy);margin-top:6px;">${top ? top.name : '—'}</div>
-        <div style="font-size:12px;color:var(--muted);">${top ? roleLabel(top.role) + ' · ' + top.kpiScore + ' pts' : ''}</div>
+        <div style="font-size:12px;color:var(--muted);">${top ? roleLabel(top.role) + ' · ' + (top.jdScore ?? top.kpiScore) + ' pts' : ''}</div>
       </div>
       <div style="background:#FFF3E0;border-radius:14px;padding:16px 18px;">
         <div style="font-size:11px;color:#E65100;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-lifebuoy"></i> Needs most support</div>
         <div style="font-size:18px;font-weight:700;color:var(--navy);margin-top:6px;">${needsSupport ? needsSupport.name : '—'}</div>
-        <div style="font-size:12px;color:var(--muted);">${needsSupport ? roleLabel(needsSupport.role) + ' · ' + needsSupport.kpiScore + ' pts' : ''}</div>
+        <div style="font-size:12px;color:var(--muted);">${needsSupport ? roleLabel(needsSupport.role) + ' · ' + (needsSupport.jdScore ?? needsSupport.kpiScore) + ' pts' : ''}</div>
       </div>
       <div style="background:#E3F2FD;border-radius:14px;padding:16px 18px;">
         <div style="font-size:11px;color:#1565C0;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-users"></i> Team average</div>
@@ -3590,6 +3715,7 @@ async function loadKpiRanking() {
             <th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--muted);min-width:150px;">KPI Score</th>
             <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">Trend</th>
             <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">Completion</th>
+            <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">JD fit</th>
             <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">On-time</th>
             <th style="text-align:center;padding:12px 14px;font-size:11px;color:var(--muted);">Overdue</th>
           </tr>
@@ -3597,7 +3723,8 @@ async function loadKpiRanking() {
         <tbody>
           ${summary.map((s, i) => {
             const t = trendFor(s.staffId);
-            const sc = scoreColor(s.kpiScore);
+            const dispScore = s.jdScore ?? s.kpiScore;
+            const sc = scoreColor(dispScore);
             return `<tr style="border-top:1px solid var(--border2);">
               <td style="padding:11px 14px;font-size:16px;">${medal(i)}</td>
               <td style="padding:11px 14px;">
@@ -3606,15 +3733,16 @@ async function loadKpiRanking() {
               </td>
               <td style="padding:11px 14px;">
                 <div style="display:flex;align-items:center;gap:8px;">
-                  <div style="flex:1;height:8px;background:#EEF1F4;border-radius:99px;overflow:hidden;min-width:70px;"><div style="height:100%;width:${s.kpiScore}%;background:${sc};"></div></div>
-                  <span style="font-size:15px;font-weight:700;color:${sc};width:28px;">${s.kpiScore}</span>
+                  <div style="flex:1;height:8px;background:#EEF1F4;border-radius:99px;overflow:hidden;min-width:70px;"><div style="height:100%;width:${dispScore}%;background:${sc};"></div></div>
+                  <span style="font-size:15px;font-weight:700;color:${sc};width:28px;">${dispScore}</span>
                 </div>
-                <div style="font-size:9px;color:var(--muted);margin-top:2px;">${s.kpiLabel}</div>
+                <div style="font-size:9px;color:var(--muted);margin-top:2px;">${s.jdLabel ?? s.kpiLabel}${s.jdScore!==undefined && s.jdScore!==s.baseKpiScore ? ` · base ${s.baseKpiScore}` : ''}</div>
               </td>
               <td style="text-align:center;padding:11px 14px;color:${t.color};font-weight:600;font-size:12px;">
                 <i class="ti ${t.icon}"></i> ${t.text}
               </td>
               <td style="text-align:center;padding:11px 14px;color:${scoreColor(s.avgPercentage)};font-weight:600;">${s.avgPercentage}%</td>
+              <td style="text-align:center;padding:11px 14px;">${jdChip(s.jdAlignment)}</td>
               <td style="text-align:center;padding:11px 14px;color:${s.onTimeRate===null?'#94A3B8':scoreColor(s.onTimeRate)};">${s.onTimeRate===null?'—':s.onTimeRate+'%'}</td>
               <td style="text-align:center;padding:11px 14px;color:${s.overdueCount>0?'#E24B4A':'#1D9E75'};font-weight:600;">${s.overdueCount}</td>
             </tr>`;
@@ -3662,8 +3790,8 @@ async function loadKpiRanking() {
     data: {
       datasets: [{
         label: 'Staff',
-        data: summary.map(s => ({ x: s.taskCount, y: s.kpiScore, name: s.name })),
-        backgroundColor: summary.map(s => scoreColor(s.kpiScore)),
+        data: summary.map(s => ({ x: s.taskCount, y: (s.jdScore ?? s.kpiScore), name: s.name })),
+        backgroundColor: summary.map(s => scoreColor(s.jdScore ?? s.kpiScore)),
         pointRadius: 6, pointHoverRadius: 8,
       }]
     },
@@ -4824,15 +4952,15 @@ async function downloadKPIReport() {
 
     // ══ Ranking & Trends page ═══════════════════════════
     if (staffSummary.length) {
-      const ranked = staffSummary.slice().sort((a,b) => b.kpiScore - a.kpiScore);
+      const ranked = staffSummary.slice().sort((a,b) => (b.jdScore ?? b.kpiScore) - (a.jdScore ?? a.kpiScore));
       const withTasks = ranked.filter(s => s.taskCount > 0);
       const topPerf = withTasks[0];
       const needsSup = withTasks.length ? withTasks[withTasks.length-1] : null;
-      const teamAvg = ranked.length ? Math.round(ranked.reduce((a,s)=>a+s.kpiScore,0)/ranked.length) : 0;
+      const teamAvg = ranked.length ? Math.round(ranked.reduce((a,s)=>a+(s.jdScore ?? s.kpiScore),0)/ranked.length) : 0;
 
       // Distribution
       const dist = { Excellent:0, Strong:0, Developing:0, 'Needs attention':0 };
-      ranked.forEach(s => { dist[s.kpiLabel] = (dist[s.kpiLabel]||0)+1; });
+      ranked.forEach(s => { const lbl = s.jdLabel ?? s.kpiLabel; dist[lbl] = (dist[lbl]||0)+1; });
 
       const distImg = await chartToImage({
         type: 'doughnut',
@@ -4847,8 +4975,8 @@ async function downloadKPIReport() {
       const scatterImg = await chartToImage({
         type: 'scatter',
         data: { datasets: [{ label: 'Staff',
-          data: ranked.map(s => ({ x: s.taskCount, y: s.kpiScore })),
-          backgroundColor: ranked.map(s => s.kpiScore>=70?rgb(teal):s.kpiScore>=50?rgb(amber):rgb(red)),
+          data: ranked.map(s => ({ x: s.taskCount, y: (s.jdScore ?? s.kpiScore) })),
+          backgroundColor: ranked.map(s => (s.jdScore ?? s.kpiScore)>=70?rgb(teal):(s.jdScore ?? s.kpiScore)>=50?rgb(amber):rgb(red)),
           pointRadius: 6 }] },
         options: { plugins: { legend: { display: false }, title: { display: true, text: 'Workload vs Score', font: { size: 15, weight: 'bold' } } },
           scales: { x: { title: { display: true, text: 'Task count' }, beginAtZero: true }, y: { title: { display: true, text: 'KPI score' }, beginAtZero: true, max: 100 } } }
@@ -4863,8 +4991,8 @@ async function downloadKPIReport() {
 
       // Summary cards
       const rcards = [
-        ['Top performer', topPerf ? topPerf.name : '—', topPerf ? topPerf.kpiScore+' pts' : '', teal],
-        ['Needs most support', needsSup ? needsSup.name : '—', needsSup ? needsSup.kpiScore+' pts' : '', amber],
+        ['Top performer', topPerf ? topPerf.name : '—', topPerf ? (topPerf.jdScore ?? topPerf.kpiScore)+' pts' : '', teal],
+        ['Needs most support', needsSup ? needsSup.name : '—', needsSup ? (needsSup.jdScore ?? needsSup.kpiScore)+' pts' : '', amber],
         ['Team average', String(teamAvg), 'across '+ranked.length+' staff', navy],
       ];
       let rcx = M; const rcW = (W - 2*M - 2*4) / 3;
@@ -4888,7 +5016,7 @@ async function downloadKPIReport() {
         startY: 122,
         head: [['#', 'Staff', 'Role', 'Tasks', 'KPI', 'Label', 'Complete', 'On-time', 'Overdue']],
         body: ranked.map((s, i) => [
-          i+1, s.name, roleLabel(s.role), s.taskCount, s.kpiScore, s.kpiLabel,
+          i+1, s.name, roleLabel(s.role), s.taskCount, (s.jdScore ?? s.kpiScore), (s.jdLabel ?? s.kpiLabel),
           s.avgPercentage + '%', s.onTimeRate===null?'—':s.onTimeRate+'%', s.overdueCount,
         ]),
         styles: { fontSize: 8, cellPadding: 2 },
