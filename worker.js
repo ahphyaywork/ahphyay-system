@@ -54,6 +54,209 @@ const ROLE_LABELS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// JD SCOPE SYSTEM — maps tasks to each role's job description
+// Derived from the 2026 staff JD documents. Editable by BOD via Config.
+// ═══════════════════════════════════════════════════════════════
+
+// Standardised scope areas drawn from the JD responsibility sections
+const JD_AREAS = {
+  production:   'Production & Tailoring',
+  quality:      'Quality Control',
+  finance:      'Finance & Accounting',
+  procurement:  'Procurement, Inventory & Logistics',
+  admin:        'Admin, Office & Facilities',
+  program:      'Program & Project Implementation',
+  training:     'Training & Capacity Building',
+  meal:         'M&E, Learning & Reporting',
+  docs:         'Documentation & Data',
+  digital:      'Digital Platform & Web',
+  content:      'Content, Media & Social',
+  sales:        'Sales, Orders & Customers',
+  community:    'Community & Network Engagement',
+  partnership:  'Partnerships, Donors & Business Dev',
+  coordination: 'Coordination & Meetings',
+  hr:           'HR & People',
+  system:       'System Development',
+};
+
+// Maps a free-text task Category to a scope area.
+// Keys are lowercase; matching is exact first, then substring.
+const CATEGORY_TO_AREA = {
+  'production': 'production', 'production team': 'production', 'sewing': 'production',
+  'tailoring': 'production', 'design': 'production', 'pattern': 'production',
+  'quality control': 'quality', 'qc': 'quality', 'montly qc form': 'quality', 'monthly qc form': 'quality',
+  'finance': 'finance', 'accounting': 'finance', 'budget': 'finance', 'payment': 'finance',
+  'procurement': 'procurement', 'purchase': 'procurement', 'inventory': 'procurement',
+  'logistics': 'procurement', 'stock': 'procurement',
+  'admin': 'admin', 'operations': 'admin', 'operation': 'admin', 'office': 'admin', 'facilities': 'admin',
+  'program': 'program', 'project': 'program', 'implementation': 'program',
+  'training': 'training', 'coaching session': 'training', 'coaching': 'training',
+  'lean management training': 'training', 'workshop': 'training',
+  'm&e': 'meal', 'meal': 'meal', 'reporting': 'meal', 'monitoring': 'meal', 'evaluation': 'meal',
+  'documentation': 'docs', 'data entry': 'docs', 'filing': 'docs', 'setup': 'docs', 'data': 'docs',
+  'digital': 'digital', 'web': 'digital', 'website': 'digital', 'platform': 'digital', 'app': 'digital',
+  'content': 'content', 'social': 'content', 'media': 'content', 'social media': 'content',
+  'sales': 'sales', 'order': 'sales', 'orders': 'sales', 'customer': 'sales',
+  'networking': 'community', 'network': 'community', 'community': 'community', 'outreach': 'community',
+  'partnership': 'partnership', 'donor': 'partnership', 'grant': 'partnership', 'business development': 'partnership',
+  'coordination': 'coordination', 'coordination meeting': 'coordination', 'meeting': 'coordination', 'agenda': 'coordination',
+  'hr': 'hr', 'od': 'hr', 'people': 'hr', 'recruitment': 'hr',
+  'development': 'system', 'bug fix': 'system', 'system improvement': 'system',
+  'ahphyay-system': 'system', 'system': 'system',
+};
+
+// Resolve a task Category to a scope area key, or null if unrecognised
+function categoryToArea(category) {
+  const c = (category || '').trim().toLowerCase();
+  if (!c) return null;
+  if (CATEGORY_TO_AREA[c]) return CATEGORY_TO_AREA[c];
+  // Substring fallback: longest matching key wins
+  let best = null, bestLen = 0;
+  for (const key in CATEGORY_TO_AREA) {
+    if (c.includes(key) && key.length > bestLen) { best = CATEGORY_TO_AREA[key]; bestLen = key.length; }
+  }
+  return best;
+}
+
+// Default JD scope per role — which areas fall inside each role's job description.
+// Sourced from the 2026 JD documents.
+function defaultJdScope() {
+  const allAreas = Object.keys(JD_AREAS);
+  return {
+    'bod':                 allAreas.slice(),
+    'developer':           ['system','digital','docs'],
+    'senior-impact':       ['production','quality','program','training','meal','docs','coordination','hr','finance','community'],
+    'senior-biz':          ['procurement','finance','admin','program','partnership','coordination','docs','meal','hr','production','quality'],
+    'project-coordinator': ['program','digital','training','community','docs','meal','coordination'],
+    'production-lead':     ['production','quality','procurement'],
+    'senior-admin':        ['admin','procurement','finance','docs','coordination'],
+    'project-officer':     ['production','quality','finance','procurement','program','coordination','docs','meal'],
+    'network-catalyst':    ['community','digital','content','docs','meal'],
+    'page-admin':          ['content','digital','sales','procurement','coordination'],
+    'admin-assistant':     ['finance','procurement','docs','admin'],
+    'production-intern':   ['production','quality'],
+  };
+}
+
+// Load the JD scope, merging any BOD overrides stored in Config
+let _jdScopeCache = null;
+async function getJdScope(env) {
+  if (_jdScopeCache) return _jdScopeCache;
+  const scope = defaultJdScope();
+  try {
+    const config = await sheetsRead(env, 'Config');
+    const row = config.find(c => c.Key === 'jdScope');
+    if (row && row.Value) {
+      const overrides = JSON.parse(row.Value);
+      for (const role in overrides) {
+        if (Array.isArray(overrides[role])) scope[role] = overrides[role];
+      }
+    }
+  } catch (e) { /* fall back to defaults */ }
+  _jdScopeCache = scope;
+  return _jdScopeCache;
+}
+
+async function saveJdScope(env, overrides) {
+  const config = await sheetsRead(env, 'Config');
+  const rowIdx = config.findIndex(c => c.Key === 'jdScope');
+  const value = JSON.stringify(overrides);
+  if (rowIdx === -1) {
+    await sheetsAppend(env, 'Config', ['jdScope', value]);
+  } else {
+    await sheetsUpdate(env, 'Config', rowIdx + 2, getColIndex('Config', 'Value'), value);
+  }
+  _jdScopeCache = null;
+}
+
+// Compute how much of a staff member's work sits inside their JD.
+// Returns null when there is nothing to measure, so the UI can show "—" rather than 0%.
+function computeJdAlignment(staffTasks, role, scopeMap) {
+  const allowed = new Set(scopeMap[role] || []);
+  let inScope = 0, offScope = 0, unclassified = 0;
+  const offScopeAreas = {};
+  for (const t of staffTasks) {
+    const area = categoryToArea(t.Category);
+    if (!area) { unclassified++; continue; }
+    if (allowed.has(area)) inScope++;
+    else { offScope++; offScopeAreas[area] = (offScopeAreas[area] || 0) + 1; }
+  }
+  const classified = inScope + offScope;
+  return {
+    inScope, offScope, unclassified,
+    classified,
+    alignmentPct: classified ? Math.round((inScope / classified) * 100) : null,
+    offScopeAreas: Object.entries(offScopeAreas)
+      .sort((a, b) => b[1] - a[1])
+      .map(([area, count]) => ({ area, label: JD_AREAS[area] || area, count })),
+  };
+}
+
+// Date from which JD alignment starts affecting KPI scores.
+// Only tasks due on/after this date are scored against the JD.
+const JD_KPI_START_DATE = '2026-08-08';
+
+// Alignment scoped to the JD-effective window (tasks due on/after the start date).
+// Uncategorised tasks are excluded; off-JD tasks are neutral (not misses),
+// they only lower the in-JD proportion.
+function computeJdAlignmentScored(staffTasks, role, scopeMap) {
+  const scoped = staffTasks.filter(t => t.DueDate && t.DueDate >= JD_KPI_START_DATE);
+  return computeJdAlignment(scoped, role, scopeMap);
+}
+
+// Turn an alignment% into the KPI multiplier: 0.85 → 1.00, floored at 0.85.
+// No classifiable tasks in the window → multiplier 1.00 (no data, no penalty).
+function jdMultiplier(alignmentPct) {
+  if (alignmentPct === null || alignmentPct === undefined) return 1.0;
+  return 0.85 + 0.15 * (alignmentPct / 100);
+}
+
+// Enrich a base KPI object with the JD-adjusted score, keeping the base intact.
+// The base kpiScore/kpiLabel are preserved; jdScore/jdLabel/jdMultiplier are added.
+function applyJdAdjustment(kpiObj, staffTasks, role, scopeMap) {
+  const jdScored = computeJdAlignmentScored(staffTasks, role, scopeMap);
+  const mult = jdMultiplier(jdScored.alignmentPct);
+  const jdScore = Math.round(kpiObj.kpiScore * mult);
+  const jdLabel = jdScore >= 85 ? 'Excellent'
+                : jdScore >= 70 ? 'Strong'
+                : jdScore >= 50 ? 'Developing'
+                : 'Needs attention';
+  return {
+    ...kpiObj,
+    baseKpiScore: kpiObj.kpiScore,   // preserve the pre-JD score explicitly
+    jdScore,
+    jdLabel,
+    jdMultiplier: Math.round(mult * 100) / 100,
+    jdScoredAlignment: jdScored,     // alignment computed on the JD-effective window
+  };
+}
+
+// Classify each of a staff member's tasks for the My KPIs JD breakdown.
+// Returns a list with per-task JD status so staff can see exactly what counts.
+function classifyTasksForJd(staffTasks, role, scopeMap) {
+  const allowed = new Set(scopeMap[role] || []);
+  return staffTasks.map(t => {
+    const area = categoryToArea(t.Category);
+    const scored = !!(t.DueDate && t.DueDate >= JD_KPI_START_DATE); // does it count toward JD alignment?
+    let status;
+    if (!area) status = 'uncategorised';
+    else if (allowed.has(area)) status = 'in-jd';
+    else status = 'off-jd';
+    return {
+      id: t.ID,
+      name: t.Name,
+      category: t.Category || '',
+      dueDate: t.DueDate || '',
+      taskStatus: t.Status || 'Pending',
+      area: area || null,
+      areaLabel: area ? (JD_AREAS[area] || area) : null,
+      jdStatus: status,   // 'in-jd' | 'off-jd' | 'uncategorised'
+      scored,             // whether it's in the JD-effective window (due >= 8 Aug)
+    };
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
 // PERMISSION SYSTEM — config-driven, editable by BOD
 // ═══════════════════════════════════════════════════════════════
 
@@ -244,6 +447,23 @@ export default {
 
       // Staff management — admin only
       if (path === '/staff/names' && request.method === 'GET')     return await getStaffNames(env);
+
+      // ── JD Scope (which task areas belong to each role) ──
+      if (path === '/jd-scope' && request.method === 'GET') {
+        const scope = await getJdScope(env);
+        return json({ scope, areas: JD_AREAS, roles: ROLE_LABELS, defaults: defaultJdScope() });
+      }
+      if (path === '/jd-scope' && request.method === 'POST') {
+        if (!(await can(env, role, 'tab.access'))) return json({ error: 'Access denied' }, 403);
+        const body = await request.json();
+        await saveJdScope(env, body.scope || {});
+        return json({ success: true });
+      }
+      if (path === '/jd-scope/reset' && request.method === 'POST') {
+        if (!(await can(env, role, 'tab.access'))) return json({ error: 'Access denied' }, 403);
+        await saveJdScope(env, defaultJdScope());
+        return json({ success: true });
+      }
 
       // ── Access Control (permissions) — BOD only ──
       if (path === '/permissions' && request.method === 'GET') {
@@ -984,17 +1204,22 @@ async function getKPI(url, env, role, staffId) {
     return Math.max(0, Math.round((new Date(todayStr) - new Date(t.DueDate)) / 86400000));
   };
 
+  const jdScopeMap = await getJdScope(env);
+
   let staffSummary = [];
   if (isManagement(role) && !rankingOnly) {
     const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRole(s.Role) !== 'developer');
     staffSummary = activeStaff.map(s => {
       const staffTasks = relevantTasks.filter(t => isAssigned(t.AssigneeID, s.ID));
-      const k = computeStaffKpi(staffTasks, todayStr);
+      const kBase = computeStaffKpi(staffTasks, todayStr);
+      const k = applyJdAdjustment(kBase, staffTasks, normalizeRole(s.Role), jdScopeMap);
+      const jd = computeJdAlignment(staffTasks, normalizeRole(s.Role), jdScopeMap);
       return {
         staffId: s.ID,
         name: s.Name,
         role: normalizeRole(s.Role),
         ...k,
+        jdAlignment: jd,
         overallStatus: k.avgPercentage >= 80 ? 'on-track' : k.avgPercentage >= 40 ? 'at-risk' : 'behind',
       };
     });
@@ -1054,6 +1279,12 @@ async function getKPI(url, env, role, staffId) {
   if (staffId && !rankingOnly) {
     const myTasks = relevantTasks.filter(t => isAssigned(t.AssigneeID, staffId));
     myKpi = computeStaffKpi(myTasks, todayStr);
+    myKpi.jdAlignment = computeJdAlignment(myTasks, role, jdScopeMap);
+    myKpi = applyJdAdjustment(myKpi, myTasks, role, jdScopeMap);
+    // Per-task JD classification + this role's JD areas, for the My KPIs explainer
+    myKpi.jdTasks = classifyTasksForJd(myTasks, role, jdScopeMap);
+    myKpi.jdRoleAreas = (jdScopeMap[role] || []).map(a => ({ area: a, label: JD_AREAS[a] || a }));
+    myKpi.jdStartDate = JD_KPI_START_DATE;
   }
 
   // Management: capture weekly snapshot (best-effort) and return trends.
@@ -1108,8 +1339,10 @@ async function getKPI(url, env, role, staffId) {
     // Selected-month summary — direct bucket lookup
     monthlySummary = activeStaff.map(s => {
       const monthTasks = buckets[s.ID][month] || [];
-      const k = computeStaffKpi(monthTasks, todayStr);
-      return { staffId: s.ID, name: s.Name, role: normalizeRole(s.Role), ...k };
+      const kBase = computeStaffKpi(monthTasks, todayStr);
+      const k = applyJdAdjustment(kBase, monthTasks, normalizeRole(s.Role), jdScopeMap);
+      const jd = computeJdAlignment(monthTasks, normalizeRole(s.Role), jdScopeMap);
+      return { staffId: s.ID, name: s.Name, role: normalizeRole(s.Role), ...k, jdAlignment: jd };
     });
 
     // 6-month trend — reuse the same buckets
@@ -1117,7 +1350,12 @@ async function getKPI(url, env, role, staffId) {
     activeStaff.forEach(s => {
       monthlyTrend[s.ID] = months.map(m => {
         const mTasks = buckets[s.ID][m] || [];
-        return { month: m, score: mTasks.length ? computeStaffKpi(mTasks, todayStr).kpiScore : null };
+        if (!mTasks.length) return { month: m, score: null };
+        const base = computeStaffKpi(mTasks, todayStr);
+        // Months from the JD start month onward use the JD-adjusted score; earlier months use base
+        const jdActive = (m + '-31') >= JD_KPI_START_DATE;
+        const adj = jdActive ? applyJdAdjustment(base, mTasks, normalizeRole(s.Role), jdScopeMap) : base;
+        return { month: m, score: jdActive ? adj.jdScore : base.kpiScore };
       });
     });
   }
