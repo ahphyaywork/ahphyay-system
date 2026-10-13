@@ -301,6 +301,7 @@ tbody tr:hover td{background:#fafcfb;}
 .badge-page-admin{background:#F3E5F5;color:#6A1B9A;}
 .badge-admin-assistant{background:#FFF8E1;color:#F57F17;}
 .badge-production-intern{background:#FCE4EC;color:#880E4F;}
+.badge-collaborator{background:#E0F7FA;color:#00695C;border:1px solid #80DEEA;}
 
 /* ── Progress bar ── */
 .prog-wrap{display:flex;align-items:center;gap:8px;}
@@ -926,7 +927,7 @@ tbody tr:hover td{background:#fafcfb;}
         </div>
         <div class="form-group">
           <label class="form-label">Role *</label>
-          <select class="form-input" id="staff-role">
+          <select class="form-input" id="staff-role" onchange="toggleCollabFields()">
             <option value="project-officer">Project Officer</option>
             <option value="admin-assistant">Admin &amp; Finance Assistant</option>
             <option value="senior-admin">Senior Admin &amp; Finance Assistant</option>
@@ -939,6 +940,7 @@ tbody tr:hover td{background:#fafcfb;}
             <option value="senior-biz">Senior Business Development Coordinator</option>
             <option value="bod">BOD</option>
             <option value="developer">Developer</option>
+            <option value="collaborator">Collaborator (SN@IL incubation)</option>
           </select>
         </div>
         <div class="form-group">
@@ -957,9 +959,23 @@ tbody tr:hover td{background:#fafcfb;}
           <option value="Management">Management</option>
         </select>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="staff-projects-group">
         <label class="form-label">Assigned projects</label>
         <input class="form-input" id="staff-projects" placeholder="e.g. PROJ-001,PROJ-002 or ALL">
+      </div>
+      <!-- Collaborator business profile (SN@IL) — shown only when role = collaborator -->
+      <div id="collab-profile" style="display:none;border-top:1px dashed var(--border2);padding-top:14px;margin-top:4px;">
+        <div style="font-size:12px;font-weight:600;color:#00695C;margin-bottom:10px;"><i class="ti ti-building-store"></i> Business profile (SN@IL incubation)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Business name *</label><input class="form-input" id="collab-business" placeholder="e.g. Shwe Yi Textiles"></div>
+          <div class="form-group"><label class="form-label">Owner</label><input class="form-input" id="collab-owner" placeholder="Defaults to full name"></div>
+          <div class="form-group"><label class="form-label">Location</label><input class="form-input" id="collab-location" placeholder="Township / village"></div>
+          <div class="form-group"><label class="form-label">Business stage</label><select class="form-input" id="collab-stage"><option value="">—</option><option>Idea Stage</option><option>Start-up</option><option>Early Growth</option><option>Growing Enterprise</option><option>Established Enterprise</option></select></div>
+          <div class="form-group"><label class="form-label">Mentor</label><select class="form-input" id="collab-mentor"><option value="">Any BOD</option></select></div>
+          <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Core product</label><input class="form-input" id="collab-product" placeholder="e.g. Hand-woven bags and pouches"></div>
+          <div class="form-group"><label class="form-label">Target customer</label><input class="form-input" id="collab-customer"></div>
+          <div class="form-group"><label class="form-label">Sales channels</label><input class="form-input" id="collab-channels" placeholder="e.g. Facebook, local market"></div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1588,6 +1604,7 @@ const ROLE_LABELS = {
   'page-admin':           'Page Admin',
   'admin-assistant':      'Admin & Finance Assistant',
   'production-intern':    'Production Intern',
+  'collaborator':         'Collaborator',
 };
 
 // Normalize old role names to new keys (mirrors worker normalizeRole)
@@ -1716,6 +1733,8 @@ function doLogout() {
 // APP SETUP
 // ════════════════════════════════════════════════════════
 function showApp() {
+  // SN@IL collaborators live in the incubation hub, not the staff system
+  if (user.role === 'collaborator') { window.location.href = '/incu/'; return; }
   document.getElementById('view-login').classList.remove('active');
   document.getElementById('view-app').classList.add('active');
 
@@ -1751,6 +1770,7 @@ function buildNav() {
     { panel:'worklog',   icon:'<i class="ti ti-clipboard-list"></i>', label:'Work Log',    roles: mgmtRoles, perm:'tab.worklog' },
     { panel:'kpi',       icon:'<i class="ti ti-chart-bar"></i>', label:'KPI Overview',roles: mgmtRoles, perm:'tab.kpi', mgmtKpi:true },
     { panel:'recurring', icon:'<i class="ti ti-repeat"></i>', label:'Recurring',    roles: mgmtRoles, perm:'tab.recurring' },
+    { link:'/incu/',     icon:'<i class="ti ti-plant-2"></i>', label:'SN@IL Incubation', roles: mgmtRoles },
     { sep:'Organisation',                                roles: mgmtRoles },
     { panel:'staff',     icon:'<i class="ti ti-users"></i>', label:'Staff',       roles: ['bod','developer'], perm:'tab.staff' },
     { panel:'access',    icon:'<i class="ti ti-shield-lock"></i>', label:'Access Control', roles: ['bod','developer'], perm:'tab.access' },
@@ -1778,6 +1798,13 @@ function buildNav() {
       if (!item.roles.includes(role) && !isSupportTeam) return;
     } else {
       if (!item.roles.includes(role)) return;
+    }
+    if (item.link) {
+      const a = document.createElement('a');
+      a.className = 'nav-item'; a.href = item.link; a.style.textDecoration = 'none';
+      a.innerHTML = `<span class="nav-icon">${item.icon}</span><span class="nav-label">${item.label}</span>`;
+      nav.appendChild(a);
+      return;
     }
     if (item.sep) {
       const sep = document.createElement('div');
@@ -2270,17 +2297,20 @@ async function resetPermissions() {
   }
 }
 
+let _collabByStaff = {};   // StaffID → Collaborators row (for the staff table + edit modal)
 async function loadStaff() {
-  const data = await api('/staff?all=true');
+  const [data, collabs] = await Promise.all([api('/staff?all=true'), api('/incu/collaborators')]);
   if (!data) return;
   cache.staff = data;
+  _collabByStaff = {};
+  (collabs?.collaborators || []).forEach(c => { _collabByStaff[c.StaffID] = c; });
   const tbody = document.getElementById('staff-table-body');
   if (!data.length) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon"><i class="ti ti-users"></i></div>No staff yet.</div></td></tr>'; return; }
   tbody.innerHTML = data.map(s => {
     const isActive = s.Active?.toLowerCase() === 'true';
     return `
     <tr style="${isActive ? '' : 'opacity:0.55;background:var(--off);'}">
-      <td><strong>${s.Name}</strong></td>
+      <td><strong>${s.Name}</strong>${normalizeRoleKey(s.Role)==='collaborator' && _collabByStaff[s.ID] ? `<br><span style="font-size:11px;color:#00695C;"><i class="ti ti-building-store" style="font-size:11px;"></i> ${_collabByStaff[s.ID].BusinessName}</span>` : ''}</td>
       <td style="color:var(--muted)">${s.Username}</td>
       <td><span class="badge badge-${normalizeRoleKey(s.Role)}">${roleLabel(s.Role)}</span></td>
       <td style="font-size:11px;">${s.Team ? `<span style="background:${s.Team==='Support Team'?'#E3F2FD':s.Team==='Management'?'#F3E5F5':'#E8F5E9'};color:${s.Team==='Support Team'?'#1565C0':s.Team==='Management'?'#6A1B9A':'#2E7D32'};padding:2px 8px;border-radius:99px;">${s.Team}</span>` : '—'}</td>
@@ -2327,7 +2357,49 @@ function openAddStaff() {
   document.getElementById('staff-role').value = 'project-officer';
   document.getElementById('staff-type').value = 'Full-time';
   document.getElementById('staff-team').value = 'Program Team';
+  fillCollabFields(null);
+  toggleCollabFields();
   openModal('modal-add-staff');
+}
+
+// Show the business-profile block only for the collaborator role
+function toggleCollabFields() {
+  const isCollab = document.getElementById('staff-role').value === 'collaborator';
+  document.getElementById('collab-profile').style.display = isCollab ? 'block' : 'none';
+  document.getElementById('staff-projects-group').style.display = isCollab ? 'none' : 'block';
+  const teamSel = document.getElementById('staff-team');
+  teamSel.disabled = isCollab;
+  if (isCollab) {
+    // Ensure a "Collaborator" option exists so the select shows the right value
+    if (!teamSel.querySelector('option[value="Collaborator"]')) { const o = document.createElement('option'); o.value = 'Collaborator'; o.textContent = 'Collaborator'; teamSel.appendChild(o); }
+    teamSel.value = 'Collaborator';
+    const mentorSel = document.getElementById('collab-mentor');
+    const cur = mentorSel.value;
+    mentorSel.innerHTML = '<option value="">Any BOD</option>' + (cache.staff || []).filter(s => ['bod','developer'].includes(normalizeRoleKey(s.Role))).map(s => `<option value="${s.ID}" ${s.ID===cur?'selected':''}>${s.Name}</option>`).join('');
+  }
+}
+function fillCollabFields(c) {
+  document.getElementById('collab-business').value = c?.BusinessName || '';
+  document.getElementById('collab-owner').value = c?.Owner || '';
+  document.getElementById('collab-location').value = c?.Location || '';
+  document.getElementById('collab-stage').value = c?.BusinessStage || '';
+  document.getElementById('collab-product').value = c?.CoreProduct || '';
+  document.getElementById('collab-customer').value = c?.TargetCustomer || '';
+  document.getElementById('collab-channels').value = c?.SalesChannels || '';
+  const mentorSel = document.getElementById('collab-mentor');
+  mentorSel.innerHTML = `<option value="${c?.MentorID || ''}"></option>`; mentorSel.value = c?.MentorID || '';
+}
+function readCollabFields() {
+  return {
+    businessName: document.getElementById('collab-business').value.trim(),
+    owner: document.getElementById('collab-owner').value.trim() || document.getElementById('staff-name').value.trim(),
+    location: document.getElementById('collab-location').value.trim(),
+    businessStage: document.getElementById('collab-stage').value,
+    coreProduct: document.getElementById('collab-product').value.trim(),
+    targetCustomer: document.getElementById('collab-customer').value.trim(),
+    salesChannels: document.getElementById('collab-channels').value.trim(),
+    mentorId: document.getElementById('collab-mentor').value,
+  };
 }
 
 function openEditStaff(id) {
@@ -2343,6 +2415,8 @@ function openEditStaff(id) {
   document.getElementById('staff-type').value = s.Type;
   document.getElementById('staff-team').value = s.Team || 'Program Team';
   document.getElementById('staff-projects').value = s.Projects || '';
+  fillCollabFields(_collabByStaff[id] || null);
+  toggleCollabFields();
   openModal('modal-add-staff');
 }
 
@@ -2359,6 +2433,11 @@ async function saveStaff() {
     projects: document.getElementById('staff-projects').value.trim(),
   };
   if (!body.name || !body.username) { showToast('Name and username are required', 'error'); return; }
+  if (body.staffRole === 'collaborator') {
+    body.collaborator = readCollabFields();
+    body.team = 'Collaborator'; body.projects = '';
+    if (!body.collaborator.businessName) { showToast('Business name is required for a collaborator', 'error'); return; }
+  }
 
   let res;
   if (editId) {

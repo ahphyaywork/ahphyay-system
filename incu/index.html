@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SN@IL Incubation — AhPhyay</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{--navy:#1C3461;--navy-d:#142849;--teal:#1D9E75;--teal-lt:#E1F5EE;--teal-mid:#5DCAA5;--amber:#EF9F27;--amber-lt:#FAEEDA;--red:#E24B4A;--red-lt:#FCEBEB;--purple:#534AB7;--purple-lt:#EEEDFE;--blue:#1565C0;--blue-lt:#E3F2FD;--white:#fff;--off:#F6FAF8;--text:#1A2E25;--muted:#6B8C7D;--border2:#E2EDE8;--sidebar:220px;--header:58px;}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--off);color:var(--text);min-height:100vh}
+button{cursor:pointer;font-family:inherit}
+input,textarea,select{font-family:inherit}
+.view{display:none}
+/* login */
+#view-login{min-height:100vh;grid-template-columns:1fr 1fr}
+#view-login.active{display:grid}
+.login-left{background:var(--navy-d);display:flex;flex-direction:column;justify-content:space-between;padding:48px;position:relative;overflow:hidden}
+.login-left::before{content:'';position:absolute;top:-80px;right:-80px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(29,158,117,.15),transparent 70%)}
+.login-brand h1{font-size:30px;font-weight:800;color:#fff;margin-bottom:6px}
+.login-brand .sub{font-size:14px;color:var(--teal-mid);margin-bottom:10px;font-weight:600}
+.login-brand p{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6;max-width:300px}
+.login-logo{width:72px;height:72px;border-radius:16px;overflow:hidden;margin-bottom:24px;background:var(--teal)}
+.login-logo img{width:100%;height:100%;object-fit:cover}
+.login-feat{display:flex;align-items:center;gap:12px;margin-bottom:14px}.feat-dot{width:8px;height:8px;border-radius:50%;background:var(--teal)}.feat-text{font-size:12px;color:rgba(255,255,255,.55)}
+.login-right{display:flex;align-items:center;justify-content:center;padding:48px;background:#fff}
+.login-form-wrap{width:100%;max-width:380px}.login-form-wrap h2{font-size:26px;font-weight:700;color:var(--navy);margin-bottom:4px}.login-form-wrap p{font-size:13px;color:var(--muted);margin-bottom:32px}
+.form-group{margin-bottom:16px}.form-label{font-size:12px;font-weight:500;color:var(--navy);margin-bottom:6px;display:block}
+.form-input{width:100%;padding:11px 14px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;color:var(--text);background:var(--off);outline:none;transition:border .15s}
+.form-input:focus{border-color:var(--teal);background:#fff}
+.login-btn{width:100%;padding:13px;border-radius:10px;background:var(--navy);border:none;color:#fff;font-size:15px;font-weight:600;margin-top:8px}.login-btn:hover{background:var(--teal)}.login-btn:disabled{opacity:.6}
+.login-error{background:var(--red-lt);border:1px solid var(--red);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:14px;display:none}.login-error.show{display:block}
+@media(max-width:768px){#view-login.active{grid-template-columns:1fr}.login-left{display:none}.login-right{min-height:100vh}}
+/* shell */
+#view-app.active{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar);flex-shrink:0;background:var(--navy-d);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;transition:transform .25s}
+.sidebar-brand{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.06)}
+.sidebar-logo-row{display:flex;align-items:center;gap:10px}.sidebar-logo{width:36px;height:36px;border-radius:10px;overflow:hidden;background:var(--teal);flex-shrink:0}.sidebar-logo img{width:100%;height:100%;object-fit:cover}
+.sidebar-name{font-size:17px;font-weight:700;color:#fff}.sidebar-tagline{font-size:10px;color:var(--teal-mid);letter-spacing:.05em;text-transform:uppercase;margin-top:2px}
+.sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13px;color:rgba(255,255,255,.55);border:none;background:none;width:100%;text-align:left;margin-bottom:1px;transition:all .15s}
+.nav-item:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.85)}.nav-item.active{background:rgba(29,158,117,.15);color:var(--teal-mid)}
+.nav-item i{font-size:16px;width:20px;text-align:center}
+.nav-badge{margin-left:auto;font-size:10px;padding:1px 6px;border-radius:99px;background:var(--red);color:#fff;font-weight:600}
+.sidebar-user{padding:14px;border-top:1px solid rgba(255,255,255,.06)}.user-card{display:flex;align-items:center;gap:10px}
+.user-avatar{width:34px;height:34px;border-radius:50%;background:var(--teal-lt);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--navy)}
+.user-name{font-size:13px;font-weight:500;color:#fff}.user-role{font-size:10px;color:rgba(255,255,255,.35)}
+.logout-btn{margin-left:auto;background:none;border:none;color:rgba(255,255,255,.3);font-size:16px}.logout-btn:hover{color:var(--red)}
+.main{margin-left:var(--sidebar);flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{height:var(--header);background:#fff;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:40}
+.topbar-title{font-size:17px;font-weight:700;color:var(--navy)}.topbar-date{font-size:12px;color:var(--muted)}
+.page-content{padding:24px;flex:1;max-width:1180px;width:100%}
+.panel{display:none}.panel.active{display:block}
+.sidebar-toggle{display:none;width:36px;height:36px;border-radius:8px;background:var(--navy);border:none;color:#fff;font-size:18px;align-items:center;justify-content:center}
+@media(max-width:768px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.main{margin-left:0}.sidebar-toggle{display:flex}.page-content{padding:14px}}
+/* components */
+.card{background:#fff;border:1px solid var(--border2);border-radius:14px;padding:18px 20px}
+.section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap}
+.section-title{font-size:15px;font-weight:700;color:var(--navy)}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}@media(max-width:900px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+.stat-label{font-size:11px;color:var(--muted);margin-bottom:6px}.stat-val{font-size:28px;font-weight:700;color:var(--navy)}.stat-sub{font-size:11px;color:var(--muted);margin-top:3px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;border:none;transition:all .15s;text-decoration:none}
+.btn-primary{background:var(--navy);color:#fff}.btn-primary:hover{background:var(--teal)}
+.btn-outline{background:transparent;color:var(--navy);border:1.5px solid var(--border2)}.btn-outline:hover{border-color:var(--teal);color:var(--teal)}
+.btn-danger{background:var(--red-lt);color:var(--red);border:1px solid var(--red)}.btn-danger:hover{background:var(--red);color:#fff}
+.btn-sm{padding:5px 12px;font-size:12px}.btn:disabled{opacity:.6;cursor:not-allowed}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:3px 9px;border-radius:99px}
+.b-draft{background:var(--off);color:var(--muted);border:1px solid var(--border2)}.b-submitted{background:var(--blue-lt);color:var(--blue)}.b-reviewed{background:var(--teal-lt);color:#085041}
+.b-pqr{background:#FFF3E0;color:#E65100}.b-brand{background:var(--purple-lt);color:var(--purple)}.b-lean{background:#E0F7FA;color:#00695C}
+.table-wrap{background:#fff;border:1px solid var(--border2);border-radius:14px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}thead th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:10px 14px;text-align:left;background:var(--off);border-bottom:1px solid var(--border2)}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--border2);vertical-align:middle}tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:#fafcfb}
+.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px}.empty i{font-size:34px;opacity:.5;display:block;margin-bottom:8px}
+.loading{text-align:center;padding:40px;color:var(--muted);font-size:13px}.spinner{width:24px;height:24px;border:2.5px solid var(--border2);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;margin-bottom:8px}@keyframes spin{to{transform:rotate(360deg)}}
+.prog-bar{height:6px;background:var(--border2);border-radius:99px;overflow:hidden;flex:1}.prog-fill{height:100%;border-radius:99px;transition:width .4s}
+.modal-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(20,40,73,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center}.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:18px;width:min(520px,92vw);max-height:90vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.18)}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between}.modal-title{font-size:17px;font-weight:700;color:var(--navy)}
+.modal-close{width:30px;height:30px;border-radius:8px;border:none;background:var(--off);color:var(--muted);font-size:18px}.modal-body{padding:20px 24px}.modal-footer{padding:14px 24px 20px;display:flex;justify-content:flex-end;gap:8px}
+.toast{position:fixed;bottom:24px;right:24px;z-index:300;background:var(--navy);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.15);transform:translateY(80px);opacity:0;transition:all .3s}.toast.show{transform:none;opacity:1}.toast.success{background:var(--teal)}.toast.error{background:var(--red)}
+/* forms */
+.type-card{display:flex;flex-direction:column;gap:10px;border-top:4px solid var(--teal)}
+.type-card.pqr{border-top-color:#E65100}.type-card.brand{border-top-color:var(--purple)}.type-card.lean{border-top-color:#00695C}
+.type-card h3{font-size:15px;color:var(--navy)}.type-card .desc{font-size:12px;color:var(--muted);line-height:1.5}
+.score-big{font-size:34px;font-weight:800;line-height:1}
+.fsection{background:#fff;border:1px solid var(--border2);border-radius:14px;margin-bottom:14px;overflow:hidden}
+.fsection-hd{background:var(--off);padding:12px 18px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.fsection-hd .t{font-size:14px;font-weight:700;color:var(--navy)}.fsection-hd .m{font-size:11px;color:var(--muted)}
+.fsection-body{padding:14px 18px}
+.q{padding:10px 0;border-bottom:1px solid var(--border2)}.q:last-child{border-bottom:none}
+.q-label{font-size:13px;color:var(--navy);font-weight:500;margin-bottom:6px}.q-hint{font-size:11px;color:var(--muted);margin-bottom:6px}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{padding:6px 12px;border-radius:99px;border:1.5px solid var(--border2);background:#fff;font-size:12px;color:var(--text)}
+.opt.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.opt.stage{border-radius:10px;text-align:left;max-width:100%;white-space:normal;line-height:1.4}
+.stars button{background:none;border:none;font-size:22px;color:#D9E3DD;padding:0 2px}.stars button.on{color:var(--amber)}
+.num-row{display:flex;align-items:center;gap:10px}.num-row input{width:110px;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:14px;outline:none}.num-row input:focus{border-color:var(--teal)}
+.num-row .unit{font-size:12px;color:var(--muted)}
+.scale-hint{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.scale-hint span{font-size:10px;padding:2px 7px;border-radius:99px;background:var(--off);color:var(--muted);border:1px solid var(--border2)}
+.override{margin-top:6px;padding:8px 10px;background:#FFF8E1;border:1px dashed #E0B94B;border-radius:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+.override input[type=number]{width:80px;padding:5px 8px;border:1px solid #E0B94B;border-radius:6px}.override input[type=text]{flex:1;min-width:140px;padding:5px 8px;border:1px solid #E0B94B;border-radius:6px}
+.ans-ro{font-size:13px;color:var(--text);background:var(--off);padding:6px 10px;border-radius:8px;display:inline-block}
+.area-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px}.area-row .lbl{width:190px;color:var(--navy)}.area-row .val{width:60px;text-align:right;font-weight:600;color:var(--navy)}
+.sticky-actions{position:sticky;bottom:0;background:rgba(246,250,248,.95);backdrop-filter:blur(4px);padding:12px 0;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid var(--border2)}
+.ev-list{display:flex;flex-direction:column;gap:4px;margin-top:8px}.ev-item{display:flex;align-items:center;gap:8px;font-size:12px;background:var(--off);padding:6px 10px;border-radius:8px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.mentor-note{background:#FFF8E1;border-left:3px solid var(--amber);padding:10px 14px;border-radius:8px;font-size:13px;white-space:pre-wrap}
+.coll-card{cursor:pointer;transition:transform .1s}.coll-card:hover{transform:translateY(-2px);border-color:var(--teal)}
+</style>
+</head>
+<body>
+
+<div id="view-login" class="view active">
+  <div class="login-left">
+    <div class="login-brand">
+      <div class="login-logo"><img src="../ahphyaylogo.png" alt="" onerror="this.style.display='none'"></div>
+      <h1>SN@IL Incubation</h1>
+      <div class="sub">The Incubation Trends · AhPhyay Social Development</div>
+      <p>Self-assessment and mentoring hub for home-based women producers — product quality, branding, and Lean progress in one place.</p>
+    </div>
+    <div>
+      <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">Product Quality Report — 100-point QC standard</span></div>
+      <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">Branding &amp; Market Positioning assessment</span></div>
+      <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">Lean KPI baseline and endline tracking</span></div>
+      <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">Mentor review and MEALA reporting</span></div>
+    </div>
+  </div>
+  <div class="login-right">
+    <div class="login-form-wrap">
+      <h2>Welcome</h2>
+      <p>Sign in with your AhPhyay account</p>
+      <div class="login-error" id="login-error"></div>
+      <div class="form-group"><label class="form-label">Username</label><input class="form-input" id="login-username" autocomplete="username"></div>
+      <div class="form-group"><label class="form-label">Password</label><input class="form-input" type="password" id="login-password" autocomplete="current-password"></div>
+      <button class="login-btn" id="login-btn" onclick="doLogin()">Sign in</button>
+    </div>
+  </div>
+</div>
+
+<div id="view-app" class="view">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo-row"><div class="sidebar-logo"><img src="../ahphyaylogo.png" alt="" onerror="this.style.display='none'"></div><span class="sidebar-name">SN@IL</span></div>
+      <div class="sidebar-tagline">Incubation hub</div>
+    </div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user"><div class="user-card">
+      <div class="user-avatar" id="user-avatar"></div>
+      <div><div class="user-name" id="user-name"></div><div class="user-role" id="user-role"></div></div>
+      <button class="logout-btn" onclick="doLogout()" title="Sign out">⏻</button>
+    </div></div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;"><button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button><div class="topbar-title" id="topbar-title">Home</div></div>
+      <span class="topbar-date" id="topbar-date"></span>
+    </div>
+    <div class="page-content">
+      <div class="panel" id="panel-home"></div>
+      <div class="panel" id="panel-assessments"></div>
+      <div class="panel" id="panel-form"></div>
+      <div class="panel" id="panel-dashboard"></div>
+      <div class="panel" id="panel-collaborators"></div>
+      <div class="panel" id="panel-queue"></div>
+      <div class="panel" id="panel-account">
+        <div class="card" style="max-width:480px;">
+          <div class="section-title" style="margin-bottom:14px;">Change password</div>
+          <div class="form-group"><label class="form-label">Current password</label><input class="form-input" type="password" id="old-password"></div>
+          <div class="form-group"><label class="form-label">New password</label><input class="form-input" type="password" id="new-password" placeholder="Min. 6 characters"></div>
+          <div class="form-group"><label class="form-label">Confirm new password</label><input class="form-input" type="password" id="confirm-password"></div>
+          <button class="btn btn-primary" onclick="changePassword()">Update password</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New assessment modal -->
+<div class="modal-overlay" id="modal-new">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="new-title">New assessment</div><button class="modal-close" onclick="closeModal('modal-new')"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="new-type"><input type="hidden" id="new-collab">
+      <div id="new-fields"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-new')">Cancel</button><button class="btn btn-primary" onclick="createAssessment()">Start</button></div>
+  </div>
+</div>
+
+<!-- Confirm -->
+<div class="modal-overlay" id="modal-confirm" style="z-index:1200;">
+  <div class="modal" style="width:min(420px,92vw);">
+    <div class="modal-body" style="padding-top:24px;"><div id="confirm-title" style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:6px;"></div><div id="confirm-message" style="font-size:13px;color:var(--muted);line-height:1.6;white-space:pre-wrap;"></div></div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="_resolveConfirm(false)">Cancel</button><button class="btn btn-primary" id="confirm-ok-btn" onclick="_resolveConfirm(true)">Confirm</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// CONFIG & STATE  (shares login with ahphyay.work)
+// ════════════════════════════════════════════════════════
+const API = '/api';
+let token = localStorage.getItem('ahphyay_token');
+let user  = JSON.parse(localStorage.getItem('ahphyay_user') || 'null');
+let FORMS = null, BUSINESS_STAGES = [], PRODUCT_CATEGORIES = [];
+let me = null;            // collaborator profile (collaborator role)
+let isMentorUser = false; // bod/developer
+let isMgmt = false;       // any management role (read-only unless mentor)
+let cache = { assessments: null, collaborators: null, staffNames: null };
+let cur = null;           // assessment currently open in the form panel
+let curAnswers = {};
+let curOverrides = {};    // mentor overrides { qid: {value, note} }
+let returnTo = 'assessments';
+let charts = [];
+
+const TYPE_META = {
+  pqr:   { label:'Product Quality Report', icon:'ti-shirt', cls:'pqr',   desc:'Score one product against the 100-point quality standard. QC standard is met at 80 and above.' },
+  brand: { label:'Branding & Positioning', icon:'ti-tag',   cls:'brand', desc:'Checklist of brand maturity, market positioning and digital presence. The six weighted areas are scored automatically.' },
+  lean:  { label:'Lean KPI',               icon:'ti-chart-arrows', cls:'lean', desc:'Seven workplace KPIs. Record a Baseline first, then an Endline after Lean practice to measure the change.' },
+};
+const STATUS_CLS = { Draft:'b-draft', Submitted:'b-submitted', Reviewed:'b-reviewed' };
+const scoreColor = s => s === null || s === undefined ? '#94A3B8' : s >= 80 ? '#1D9E75' : s >= 60 ? '#EF9F27' : '#E24B4A';
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '—';
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  if (token && user) showApp();
+  ['login-username','login-password'].forEach(id => document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); }));
+});
+
+// ════════════════════════════════════════════════════════
+// AUTH
+// ════════════════════════════════════════════════════════
+async function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error'); const btn = document.getElementById('login-btn');
+  errEl.classList.remove('show');
+  if (!username || !password) { errEl.textContent = 'Please enter username and password.'; errEl.classList.add('show'); return; }
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    const res = await fetch(`${API}/auth/login`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ username, password }) });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Invalid credentials.'; errEl.classList.add('show'); }
+    else { token = data.token; user = data.user; localStorage.setItem('ahphyay_token', token); localStorage.setItem('ahphyay_user', JSON.stringify(user)); showApp(); }
+  } catch (e) { errEl.textContent = 'Cannot connect to server.'; errEl.classList.add('show'); }
+  btn.disabled = false; btn.textContent = 'Sign in';
+}
+function doLogout() {
+  localStorage.removeItem('ahphyay_token'); localStorage.removeItem('ahphyay_user');
+  token = null; user = null; me = null; cache = { assessments:null, collaborators:null, staffNames:null };
+  document.getElementById('view-app').classList.remove('active'); document.getElementById('view-login').classList.add('active');
+}
+async function api(path, opts = {}) {
+  if (!token) { doLogout(); return null; }
+  try {
+    const res = await fetch(`${API}${path}`, { ...opts, headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, ...(opts.headers||{}) } });
+    if (res.status === 401) { doLogout(); return null; }
+    return res.json();
+  } catch (e) { showToast('Connection error. Please try again.', 'error'); return null; }
+}
+
+// ════════════════════════════════════════════════════════
+// APP SETUP
+// ════════════════════════════════════════════════════════
+async function showApp() {
+  document.getElementById('view-login').classList.remove('active'); document.getElementById('view-app').classList.add('active');
+  document.getElementById('user-avatar').textContent = user.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('user-name').textContent = user.name;
+  document.getElementById('user-role').textContent = user.role === 'collaborator' ? 'Collaborator' : user.role === 'bod' ? 'Mentor (BOD)' : user.role;
+
+  const f = await api('/incu/forms');
+  if (!f || f.error) {
+    document.querySelector('.page-content').innerHTML = `<div class="empty"><i class="ti ti-lock"></i>${esc(f?.error || 'This hub is for incubation collaborators and mentors.')}<br><br><a class="btn btn-outline" href="../">Back to staff system</a></div>`;
+    return;
+  }
+  FORMS = f.forms; BUSINESS_STAGES = f.businessStages; PRODUCT_CATEGORIES = f.productCategories;
+  isMentorUser = f.isMentor; isMgmt = user.role !== 'collaborator';
+  if (!isMgmt) {
+    const m = await api('/incu/me');
+    if (!m || m.error) { document.querySelector('.page-content').innerHTML = `<div class="empty"><i class="ti ti-user-off"></i>${esc(m?.error || 'No collaborator profile found.')}</div>`; return; }
+    me = m.collaborator;
+  }
+  buildNav();
+  navigateTo(isMgmt ? 'dashboard' : 'home');
+}
+
+function buildNav() {
+  const nav = document.getElementById('sidebar-nav');
+  const items = isMgmt ? [
+    { panel:'dashboard', icon:'ti-layout-dashboard', label:'Dashboard' },
+    { panel:'queue', icon:'ti-inbox', label:'Review queue', badge:'queue-badge' },
+    { panel:'collaborators', icon:'ti-building-store', label:'Collaborators' },
+    { panel:'assessments', icon:'ti-list-check', label:'All assessments' },
+    { link:'../', icon:'ti-arrow-back-up', label:'Staff system' },
+  ] : [
+    { panel:'home', icon:'ti-home', label:'Home' },
+    { panel:'assessments', icon:'ti-list-check', label:'My assessments' },
+    { panel:'account', icon:'ti-user-circle', label:'My account' },
+  ];
+  nav.innerHTML = items.map(it => it.link
+    ? `<a class="nav-item" href="${it.link}" style="text-decoration:none;"><i class="ti ${it.icon}"></i>${it.label}</a>`
+    : `<button class="nav-item" data-panel="${it.panel}" onclick="navigateTo('${it.panel}')"><i class="ti ${it.icon}"></i>${it.label}${it.badge ? `<span class="nav-badge" id="${it.badge}" style="display:none;"></span>` : ''}</button>`).join('');
+  if (isMgmt) refreshQueueBadge();
+}
+const TITLES = { home:'Home', assessments: () => isMgmt ? 'All assessments' : 'My assessments', form:'Assessment', dashboard:'MEALA Dashboard', collaborators:'Collaborators', queue:'Review queue', account:'My account' };
+function navigateTo(panel, opts) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + panel)?.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.panel === panel));
+  const t = TITLES[panel]; document.getElementById('topbar-title').textContent = typeof t === 'function' ? t() : (t || '');
+  document.getElementById('sidebar').classList.remove('open');
+  window.scrollTo(0, 0);
+  if (panel === 'home') loadHome();
+  else if (panel === 'assessments') loadAssessments(opts);
+  else if (panel === 'dashboard') loadDashboard();
+  else if (panel === 'collaborators') loadCollaborators();
+  else if (panel === 'queue') loadQueue();
+}
+async function refreshQueueBadge() {
+  const d = await api('/incu/assessments?status=Submitted');
+  const n = d?.assessments?.length || 0; const b = document.getElementById('queue-badge');
+  if (b) { b.style.display = n ? 'inline' : 'none'; b.textContent = n; }
+}
+
+// ════════════════════════════════════════════════════════
+// COLLABORATOR HOME
+// ════════════════════════════════════════════════════════
+async function loadHome() {
+  const el = document.getElementById('panel-home');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const d = await api('/incu/assessments'); if (!d) return;
+  cache.assessments = d.assessments;
+  const latest = type => (d.assessments.filter(a => a.Type === type && a.Status !== 'Draft').sort((a,b) => (b.SubmittedAt||'').localeCompare(a.SubmittedAt||''))).find(a => a.Status === 'Reviewed') || d.assessments.find(a => a.Type === type && a.Status !== 'Draft');
+  const drafts = type => d.assessments.filter(a => a.Type === type && a.Status === 'Draft').length;
+  const pending = d.assessments.filter(a => a.Status === 'Submitted').length;
+
+  const typeCard = type => {
+    const m = TYPE_META[type]; const l = latest(type);
+    const score = l ? (l.Status === 'Reviewed' ? l.finalScore : l.selfScore) : null;
+    const leanInfo = type === 'lean' ? (() => {
+      const b = d.assessments.some(a => a.Type==='lean' && a.Period==='Baseline' && a.Status!=='Draft');
+      const e = d.assessments.some(a => a.Type==='lean' && a.Period==='Endline' && a.Status!=='Draft');
+      return `<div style="display:flex;gap:6px;"><span class="badge ${b?'b-reviewed':'b-draft'}">Baseline ${b?'✓':'—'}</span><span class="badge ${e?'b-reviewed':'b-draft'}">Endline ${e?'✓':'—'}</span></div>`;
+    })() : '';
+    return `<div class="card type-card ${m.cls}">
+      <div style="display:flex;align-items:center;gap:10px;"><i class="ti ${m.icon}" style="font-size:22px;color:var(--navy);"></i><h3>${m.label}</h3></div>
+      <div class="desc">${m.desc}</div>
+      ${leanInfo}
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:auto;">
+        <div>${l ? `<div class="score-big" style="color:${scoreColor(score)}">${score ?? '—'}</div><div style="font-size:11px;color:var(--muted);margin-top:4px;">${esc(l.Rating||'')} · ${l.Status === 'Reviewed' ? 'final' : 'awaiting mentor'}${l.ProductName ? ' · ' + esc(l.ProductName) : ''}</div>` : `<div style="font-size:12px;color:var(--muted);">Not assessed yet</div>`}</div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+          <button class="btn btn-primary btn-sm" onclick="openNew('${type}')"><i class="ti ti-plus"></i> New</button>
+          ${drafts(type) ? `<span style="font-size:11px;color:var(--amber);">${drafts(type)} draft${drafts(type)>1?'s':''} saved</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+  };
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:18px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+      <div style="width:54px;height:54px;border-radius:14px;background:var(--teal-lt);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--navy);"><i class="ti ti-building-store"></i></div>
+      <div style="flex:1;min-width:200px;">
+        <div style="font-size:18px;font-weight:700;color:var(--navy);">${esc(me.BusinessName)}</div>
+        <div style="font-size:12px;color:var(--muted);">${esc(me.Owner||user.name)}${me.Location ? ' · ' + esc(me.Location) : ''}${me.BusinessStage ? ' · ' + esc(me.BusinessStage) : ''}</div>
+        ${me.CoreProduct ? `<div style="font-size:12px;color:var(--text);margin-top:4px;">${esc(me.CoreProduct)}</div>` : ''}
+      </div>
+      ${pending ? `<span class="badge b-submitted"><i class="ti ti-clock"></i> ${pending} awaiting mentor review</span>` : ''}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">${['pqr','brand','lean'].map(typeCard).join('')}</div>`;
+}
+
+// ════════════════════════════════════════════════════════
+// NEW ASSESSMENT
+// ════════════════════════════════════════════════════════
+async function openNew(type, collabId) {
+  document.getElementById('new-type').value = type; document.getElementById('new-collab').value = collabId || '';
+  document.getElementById('new-title').textContent = 'New ' + TYPE_META[type].label;
+  let html = '';
+  if (isMgmt && !collabId) {
+    if (!cache.collaborators) { const c = await api('/incu/collaborators'); cache.collaborators = c?.collaborators || []; }
+    html += `<div class="form-group"><label class="form-label">Collaborator</label><select class="form-input" id="new-collab-sel">${cache.collaborators.map(c => `<option value="${c.ID}">${esc(c.BusinessName)}</option>`).join('')}</select></div>`;
+  }
+  if (type === 'pqr') html += `<div class="form-group"><label class="form-label">Product name *</label><input class="form-input" id="new-product" placeholder="e.g. Tote bag — indigo"></div>
+    <div class="form-group"><label class="form-label">Product category</label><select class="form-input" id="new-category">${PRODUCT_CATEGORIES.map(c => `<option>${c}</option>`).join('')}</select></div>`;
+  if (type === 'lean') html += `<div class="form-group"><label class="form-label">Period *</label><select class="form-input" id="new-period"><option>Baseline</option><option>Endline</option></select><div style="font-size:11px;color:var(--muted);margin-top:4px;">Endline is compared against your most recent submitted Baseline.</div></div>`;
+  else html += `<div class="form-group"><label class="form-label">Period label <span style="color:var(--muted);font-size:10px;">(optional — e.g. 2026-10, Pre-expo)</span></label><input class="form-input" id="new-period" value="${new Date().toISOString().slice(0,7)}"></div>`;
+  document.getElementById('new-fields').innerHTML = html;
+  openModal('modal-new');
+}
+async function createAssessment() {
+  const type = document.getElementById('new-type').value;
+  const body = { type, period: document.getElementById('new-period')?.value || '', answers: {}, submit: false,
+    productName: document.getElementById('new-product')?.value.trim() || '', productCategory: document.getElementById('new-category')?.value || '',
+    collaboratorId: document.getElementById('new-collab').value || document.getElementById('new-collab-sel')?.value || '' };
+  if (type === 'pqr' && !body.productName) { showToast('Product name is required', 'error'); return; }
+  const r = await api('/incu/assessments', { method:'POST', body: JSON.stringify(body) });
+  if (r?.success) { closeModal('modal-new'); cache.assessments = null; openAssessment(r.id); }
+  else showToast(r?.error || 'Failed', 'error');
+}
+
+// ════════════════════════════════════════════════════════
+// ASSESSMENT LIST
+// ════════════════════════════════════════════════════════
+async function loadAssessments(opts = {}) {
+  const el = document.getElementById('panel-assessments');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const q = new URLSearchParams(); if (opts.collaboratorId) q.set('collaboratorId', opts.collaboratorId);
+  const d = await api('/incu/assessments?' + q); if (!d) return;
+  const list = d.assessments;
+  const filt = document.getElementById('asm-type-filter')?.value || '';
+  el.innerHTML = `
+    <div class="section-hd">
+      <div class="section-title">${opts.title ? esc(opts.title) : (isMgmt ? 'All assessments' : 'My assessments')} <span style="font-size:12px;color:var(--muted);font-weight:400;">${list.length}</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <select class="form-input" id="asm-type-filter" style="width:auto;padding:6px 10px;font-size:12px;" onchange="renderAsmTable()"><option value="">All types</option><option value="pqr">Product Quality</option><option value="brand">Branding</option><option value="lean">Lean KPI</option></select>
+        <select class="form-input" id="asm-status-filter" style="width:auto;padding:6px 10px;font-size:12px;" onchange="renderAsmTable()"><option value="">All statuses</option><option>Draft</option><option>Submitted</option><option>Reviewed</option></select>
+        ${!isMgmt || opts.collaboratorId ? `<div style="display:flex;gap:4px;">${['pqr','brand','lean'].map(t => `<button class="btn btn-primary btn-sm" onclick="openNew('${t}','${opts.collaboratorId||''}')"><i class="ti ti-plus"></i> ${t==='pqr'?'Product':t==='brand'?'Branding':'Lean'}</button>`).join('')}</div>` : ''}
+      </div>
+    </div>
+    <div class="table-wrap"><table><thead><tr>${isMgmt ? '<th>Collaborator</th>' : ''}<th>Type</th><th>Product / Period</th><th>Status</th><th>Self</th><th>Final</th><th>Rating</th><th>Date</th><th></th></tr></thead><tbody id="asm-tbody"></tbody></table></div>`;
+  cache._list = list; renderAsmTable();
+}
+function renderAsmTable() {
+  const t = document.getElementById('asm-type-filter')?.value || '', s = document.getElementById('asm-status-filter')?.value || '';
+  const rows = (cache._list||[]).filter(a => (!t || a.Type===t) && (!s || a.Status===s));
+  const tb = document.getElementById('asm-tbody');
+  if (!rows.length) { tb.innerHTML = `<tr><td colspan="9"><div class="empty"><i class="ti ti-clipboard-off"></i>No assessments yet</div></td></tr>`; return; }
+  tb.innerHTML = rows.map(a => `<tr>
+    ${isMgmt ? `<td><strong>${esc(a.businessName)}</strong></td>` : ''}
+    <td><span class="badge b-${a.Type}">${TYPE_META[a.Type].label}</span></td>
+    <td>${esc(a.ProductName || a.Period || '—')}${a.ProductName && a.Period ? `<div style="font-size:10px;color:var(--muted);">${esc(a.Period)}</div>` : ''}</td>
+    <td><span class="badge ${STATUS_CLS[a.Status]}">${a.Status}</span></td>
+    <td style="font-weight:600;color:${scoreColor(a.selfScore)}">${a.selfScore ?? '—'}</td>
+    <td style="font-weight:700;color:${scoreColor(a.finalScore)}">${a.finalScore ?? '—'}</td>
+    <td style="font-size:12px;">${esc(a.Rating||'—')}</td>
+    <td style="font-size:11px;color:var(--muted);">${fmtDate(a.ReviewedAt || a.SubmittedAt || a.CreatedAt)}</td>
+    <td style="white-space:nowrap;"><button class="btn btn-outline btn-sm" onclick="openAssessment('${a.ID}')">${a.Status==='Draft' ? 'Continue' : (isMentorUser && a.Status==='Submitted' ? 'Review' : 'View')}</button>
+      ${(a.Status==='Draft' || isMentorUser) ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteAssessment('${a.ID}')" title="Delete"><i class="ti ti-trash"></i></button>` : ''}</td>
+  </tr>`).join('');
+}
+async function deleteAssessment(id) {
+  if (!(await confirmDialog({ title:'Delete assessment?', message:'This cannot be undone.', confirmText:'Delete', danger:true }))) return;
+  const r = await api(`/incu/assessments/${id}`, { method:'DELETE' });
+  if (r?.success) { showToast('Deleted', 'success'); cache.assessments = null; navigateTo(returnTo === 'home' ? 'home' : 'assessments'); if (isMgmt) refreshQueueBadge(); }
+  else showToast(r?.error || 'Failed', 'error');
+}
+
+// ════════════════════════════════════════════════════════
+// FORM PANEL — render / edit / review
+// ════════════════════════════════════════════════════════
+async function openAssessment(id) {
+  returnTo = document.querySelector('.panel.active')?.id.replace('panel-','') || 'assessments';
+  const el = document.getElementById('panel-form');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); el.classList.add('active');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const d = await api(`/incu/assessments/${id}`); if (!d || d.error) { showToast(d?.error || 'Not found', 'error'); navigateTo('assessments'); return; }
+  cur = d.assessment; cur.collaborator = d.collaborator; curAnswers = { ...cur.answers }; curOverrides = { ...cur.mentorAnswers };
+  document.getElementById('topbar-title').textContent = TYPE_META[cur.Type].label;
+  renderForm();
+}
+
+// Editing rules: collaborator edits own Draft; mentor can edit a Draft/Submitted or override scored fields while reviewing
+function editable() { return cur.Status !== 'Reviewed' && (!isMgmt || isMentorUser); }
+function reviewing() { return isMentorUser && cur.Status === 'Submitted'; }
+
+function renderForm() {
+  const el = document.getElementById('panel-form');
+  const m = TYPE_META[cur.Type];
+  const head = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+      <button class="btn btn-outline btn-sm" onclick="navigateTo(returnTo)"><i class="ti ti-arrow-left"></i> Back</button>
+      <span class="badge b-${cur.Type}">${m.label}</span><span class="badge ${STATUS_CLS[cur.Status]}">${cur.Status}</span>
+      <span style="font-size:13px;color:var(--navy);font-weight:600;">${esc(cur.businessName || cur.collaborator?.BusinessName || '')}</span>
+      <span style="font-size:12px;color:var(--muted);">${esc(cur.ProductName ? cur.ProductName + (cur.ProductCategory ? ' (' + cur.ProductCategory + ')' : '') : '')} ${esc(cur.Period||'')}</span>
+      ${cur.Status === 'Reviewed' ? `<span style="font-size:11px;color:var(--muted);margin-left:auto;">Finalised ${fmtDate(cur.ReviewedAt)}</span>` : cur.SubmittedAt ? `<span style="font-size:11px;color:var(--muted);margin-left:auto;">Submitted ${fmtDate(cur.SubmittedAt)}</span>` : ''}
+    </div>`;
+  const body = cur.Type === 'pqr' ? renderPqr() : cur.Type === 'brand' ? renderBrand() : renderLean();
+  const scorePanel = renderScorePanel();
+  const actions = `
+    <div class="sticky-actions">
+      ${editable() && !reviewing() ? `<button class="btn btn-outline" onclick="saveAssessment(false)"><i class="ti ti-device-floppy"></i> Save draft</button>` : ''}
+      ${editable() && cur.Status === 'Draft' ? `<button class="btn btn-primary" onclick="saveAssessment(true)"><i class="ti ti-send"></i> Submit for review</button>` : ''}
+      ${reviewing() ? `<button class="btn btn-outline" onclick="saveAssessment(false)"><i class="ti ti-calculator"></i> Recalculate</button><button class="btn btn-primary" onclick="finaliseReview()"><i class="ti ti-circle-check"></i> Finalise score</button>` : ''}
+      ${isMentorUser && cur.Status === 'Reviewed' ? `<button class="btn btn-outline" onclick="reopenReview()"><i class="ti ti-lock-open"></i> Reopen</button>` : ''}
+    </div>`;
+  el.innerHTML = head + `<div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start;" class="form-grid">
+      <div>${body}</div>
+      <div style="position:sticky;top:72px;">${scorePanel}</div>
+    </div>` + actions + `<style>@media(max-width:900px){.form-grid{grid-template-columns:1fr!important}}</style>`;
+}
+
+// ── Score / breakdown side panel ──
+function renderScorePanel() {
+  const b = cur.breakdown || {};
+  const final = cur.Status === 'Reviewed';
+  const score = final ? cur.finalScore : (b.score ?? cur.selfScore);
+  let areas = '';
+  if (cur.Type === 'lean') {
+    areas = (b.kpis||[]).map(k => `<div class="area-row"><span class="lbl">${esc(k.label)}</span>
+      <span class="val" style="color:${k.met===true?'#1D9E75':k.met===false?'#E24B4A':'var(--muted)'}">${k.met===true?'✓':k.met===false?'✗':'·'} ${k.value ?? '—'}${k.changePct!==undefined&&k.changePct!==null?` <small>(${k.changePct>0?'+':''}${k.changePct}%)</small>`:''}</span></div>`).join('');
+  } else {
+    areas = (b.areas||[]).map(a => `<div class="area-row"><span class="lbl">${esc(a.label)}</span><div class="prog-bar"><div class="prog-fill" style="width:${a.max?Math.round(a.score/a.max*100):0}%;background:var(--teal)"></div></div><span class="val">${a.score}/${a.max}</span></div>`).join('');
+  }
+  const mentorNotes = cur.MentorNotes ? `<div style="margin-top:12px;"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Mentor notes</div><div class="mentor-note">${esc(cur.MentorNotes)}</div></div>` : '';
+  const overrideCount = Object.keys(curOverrides).length;
+  return `<div class="card">
+    <div style="font-size:11px;color:var(--muted);">${final ? 'Final score' : cur.Type==='lean' && cur.Period==='Baseline' ? 'Baseline' : 'System score'}</div>
+    <div style="display:flex;align-items:baseline;gap:8px;margin:4px 0 2px;"><span class="score-big" style="color:${scoreColor(score)}">${score ?? '—'}</span>${score!==null&&score!==undefined ? '<span style="font-size:13px;color:var(--muted);">/ 100</span>' : ''}</div>
+    <div style="font-size:13px;font-weight:600;color:var(--navy);">${esc(b.rating || cur.Rating || '')}</div>
+    ${b.ratingDesc ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5;">${esc(b.ratingDesc)}</div>` : ''}
+    ${cur.Type==='pqr' && b.score!==undefined ? `<div style="margin-top:8px;"><span class="badge ${b.qcMet?'b-reviewed':'b-draft'}">${b.qcMet?'QC standard met':'Below QC standard (80)'}</span></div>` : ''}
+    ${cur.Type==='lean' && cur.Period==='Endline' ? `<div style="font-size:11px;color:${b.hasBaseline?'var(--muted)':'var(--red)'};margin-top:6px;">${b.hasBaseline ? `${b.metCount ?? 0} of 7 targets met` : 'No baseline found — change % cannot be computed'}</div>` : ''}
+    ${final && cur.selfScore!==null && cur.selfScore!==cur.finalScore ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Self-assessed ${cur.selfScore} → adjusted by mentor${overrideCount?` (${overrideCount} change${overrideCount>1?'s':''})`:''}</div>` : ''}
+    <div style="margin-top:14px;">${areas}</div>
+    ${mentorNotes}
+    ${reviewing() ? `<div style="margin-top:14px;"><label class="form-label">Mentor notes</label><textarea class="form-input" id="mentor-notes" rows="4" placeholder="Observations, recommendations…">${esc(cur.MentorNotes||'')}</textarea></div>` : ''}
+  </div>`;
+}
+
+// ── Shared input renderers ──
+function setAns(id, v) { curAnswers[id] = v; }
+function qWrap(q, inner, extra='') { return `<div class="q" id="q-${q.id}"><div class="q-label">${esc(q.label)}</div>${q.hint ? `<div class="q-hint">${esc(q.hint)}</div>` : ''}${inner}${extra}</div>`; }
+function roValue(q, v) {
+  if (v === undefined || v === null || v === '') return '<span class="ans-ro" style="color:var(--muted)">—</span>';
+  if (q.type === 'multi') return `<span class="ans-ro">${esc((v||[]).join(', ') || '—')}</span>`;
+  if (['level','rating4','stage','select'].includes(q.type) && q.options) { const i = q.type==='stage' ? parseInt(v,10)-1 : (q.type==='select' ? q.options.indexOf(v) : parseInt(v,10)); return `<span class="ans-ro">${esc(q.options[i] ?? v)}</span>`; }
+  if (q.type === 'stars') return `<span class="ans-ro" style="color:var(--amber)">${'★'.repeat(parseInt(v,10))}${'☆'.repeat(5-parseInt(v,10))}</span>`;
+  if (q.type === 'yesno') return `<span class="ans-ro">${v==='yes'?'Yes':'No'}</span>`;
+  return `<span class="ans-ro">${esc(v)}${q.unit ? ' ' + esc(q.unit) : ''}</span>`;
+}
+function renderQ(q, scoredNumeric) {
+  const v = curAnswers[q.id];
+  const canEdit = editable() && !reviewing();
+  // Mentor override row for scored numeric questions
+  const ov = curOverrides[q.id];
+  const overrideRow = reviewing() && scoredNumeric ? `<div class="override"><i class="ti ti-pencil" style="color:#B8860B"></i> Mentor score
+      <input type="number" min="0" max="${q.max||''}" value="${ov?.value ?? ''}" placeholder="${v ?? ''}" oninput="setOverride('${q.id}', this.value, null)">
+      <input type="text" value="${esc(ov?.note||'')}" placeholder="Reason (optional)" oninput="setOverride('${q.id}', null, this.value)"></div>` : '';
+  const finalOverride = cur.Status==='Reviewed' && ov ? `<div style="font-size:11px;color:#B8860B;margin-top:4px;"><i class="ti ti-pencil"></i> Mentor adjusted to <strong>${esc(ov.value)}</strong>${ov.note ? ' — ' + esc(ov.note) : ''}</div>` : '';
+  if (!canEdit) return qWrap(q, roValue(q, v), overrideRow + finalOverride);
+
+  switch (q.type) {
+    case 'number': return qWrap(q, `<div class="num-row"><input type="number" ${q.max!==undefined?`max="${q.max}"`:''} min="0" step="any" value="${v ?? ''}" oninput="setAns('${q.id}', this.value)">${q.unit ? `<span class="unit">${esc(q.unit)}</span>` : ''}</div>`);
+    case 'text': return qWrap(q, `<input class="form-input" value="${esc(v||'')}" oninput="setAns('${q.id}', this.value)">`);
+    case 'textarea': return qWrap(q, `<textarea class="form-input" rows="2" oninput="setAns('${q.id}', this.value)">${esc(v||'')}</textarea>`);
+    case 'select': return qWrap(q, `<select class="form-input" onchange="setAns('${q.id}', this.value)"><option value="">Select…</option>${q.options.map(o => `<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`);
+    case 'yesno': return qWrap(q, `<div class="opts">${['yes','no'].map(o => `<button class="opt ${v===o?'on':''}" onclick="pick('${q.id}','${o}',this)">${o==='yes'?'Yes':'No'}</button>`).join('')}</div>`);
+    case 'level': case 'rating4': return qWrap(q, `<div class="opts">${q.options.map((o,i) => `<button class="opt ${String(v)===String(i)?'on':''}" onclick="pick('${q.id}','${i}',this)">${esc(o)}</button>`).join('')}</div>`);
+    case 'stage': return qWrap(q, `<div class="opts" style="flex-direction:column;">${q.options.map((o,i) => `<button class="opt stage ${String(v)===String(i+1)?'on':''}" onclick="pick('${q.id}','${i+1}',this)">${esc(o)}</button>`).join('')}</div>`);
+    case 'stars': return qWrap(q, `<div class="stars" id="stars-${q.id}">${[1,2,3,4,5].map(n => `<button class="${(v||0)>=n?'on':''}" onclick="pickStar('${q.id}',${n})">★</button>`).join('')}</div>`);
+    case 'multi': { const arr = Array.isArray(v) ? v : []; return qWrap(q, `<div class="opts">${q.options.map(o => `<button class="opt ${arr.includes(o)?'on':''}" onclick="toggleMulti('${q.id}','${esc(o)}',this)">${esc(o)}</button>`).join('')}</div>`); }
+  }
+  return '';
+}
+function pick(id, val, btn) { setAns(id, val); btn.parentElement.querySelectorAll('.opt').forEach(b => b.classList.remove('on')); btn.classList.add('on'); }
+function pickStar(id, n) { setAns(id, n); document.querySelectorAll(`#stars-${id} button`).forEach((b,i) => b.classList.toggle('on', i < n)); }
+function toggleMulti(id, val, btn) { const arr = Array.isArray(curAnswers[id]) ? [...curAnswers[id]] : []; const i = arr.indexOf(val); if (i===-1) arr.push(val); else arr.splice(i,1); setAns(id, arr); btn.classList.toggle('on'); }
+function setOverride(id, value, note) {
+  const o = curOverrides[id] || {};
+  if (value !== null) { if (value === '') { delete curOverrides[id]; return; } o.value = value; }
+  if (note !== null) o.note = note;
+  curOverrides[id] = o;
+}
+
+// ── Product Quality ──
+function renderPqr() {
+  const f = FORMS.pqr;
+  return f.areas.map(a => `<div class="fsection">
+    <div class="fsection-hd"><span class="t">${esc(a.label)}</span><span class="m">${a.max} points</span></div>
+    <div class="fsection-body">${a.questions.map(q => renderQ({ ...q, type:'number', hint: q.hint }, true) +
+      (editable() && !reviewing() ? `<div class="scale-hint" style="margin:-4px 0 8px;">${q.max===10 ? '<span>Excellent 9–10</span><span>Good 7–8</span><span>Fair 5–6</span><span>Poor 0–4</span>' : '<span>Excellent 5</span><span>Good 4</span><span>Fair 3</span><span>Poor 0–2</span>'}</div>` : '')).join('')}</div>
+  </div>`).join('') + renderEvidenceSection('');
+}
+
+// ── Branding ──
+function renderBrand() {
+  const f = FORMS.brand;
+  const prefill = {};
+  if (me && cur.Status === 'Draft') { if (!curAnswers.business_stage && me.BusinessStage) prefill.business_stage = me.BusinessStage; if (!curAnswers.core_product && me.CoreProduct) prefill.core_product = me.CoreProduct; if (!curAnswers.target_customer && me.TargetCustomer) prefill.target_customer = me.TargetCustomer; if (!curAnswers.sales_channels && me.SalesChannels) prefill.sales_channels = me.SalesChannels; }
+  Object.assign(curAnswers, prefill);
+  return f.sections.map(s => `<div class="fsection">
+    <div class="fsection-hd"><span class="t">${esc(s.label)}</span></div>
+    <div class="fsection-body">${s.questions.map(q => renderQ(q, false)).join('')}</div>
+  </div>`).join('') + `<div class="fsection"><div class="fsection-hd"><span class="t">How this is scored</span></div><div class="fsection-body" style="font-size:12px;color:var(--muted);line-height:1.6;">
+    ${f.areas.map(a => `<span class="badge b-brand" style="margin:2px;">${esc(a.label)} ${a.weight}</span>`).join('')}
+    <div style="margin-top:8px;">Brand Identity comes from the seven maturity components; Product Positioning from the branding and positioning stages; Customer Value Proposition from the value-proposition rating; Digital Presence from platforms used and digital readiness; Market Readiness from the six star ratings; Growth Potential from business stage and positioning stage.</div></div></div>` + renderEvidenceSection('');
+}
+
+// ── Lean KPI ──
+function renderLean() {
+  const f = FORMS.lean; const isEnd = cur.Period === 'Endline';
+  const kpiResult = key => (cur.breakdown?.kpis||[]).find(k => k.key === key);
+  return `<div class="card" style="margin-bottom:14px;background:${isEnd?'#E0F7FA':'var(--teal-lt)'};border:none;font-size:13px;line-height:1.6;">
+      <strong>${isEnd ? 'Endline' : 'Baseline'}</strong> — ${isEnd ? 'answers are compared with your most recent Baseline and checked against each KPI target.' : 'record the current situation before Lean practice. Targets are checked at the Endline.'}
+    </div>` + f.kpis.map((k, i) => {
+    const qs = isEnd ? k.endline : k.baseline; const r = kpiResult(k.key);
+    return `<div class="fsection">
+      <div class="fsection-hd"><span class="t">KPI ${i+1} · ${esc(k.label)} <span style="font-weight:400;color:var(--muted);font-size:12px;">${esc(k.labelMm)}</span></span>
+        <span class="m">Target: ${esc(k.target)}${isEnd && r ? ` · <strong style="color:${r.met===true?'#1D9E75':r.met===false?'#E24B4A':'var(--muted)'}">${r.met===true?'Met':r.met===false?'Not met':'No baseline'}</strong>` : ''}</span></div>
+      <div class="fsection-body">
+        ${isEnd && r && r.baseline!==null && r.baseline!==undefined ? `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Baseline: <strong>${r.baseline} ${esc(k.unit)}</strong></div>` : ''}
+        ${qs.map(q => renderQ(q, q.type === 'number')).join('')}
+        ${renderKpiEvidence(k)}
+      </div></div>`;
+  }).join('');
+}
+function renderKpiEvidence(k) {
+  const items = (cur.evidence||[]).filter(e => e.kpi === k.key);
+  const canUp = editable() || isMentorUser;
+  return `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+      <div style="font-size:12px;color:var(--navy);font-weight:500;"><i class="ti ti-paperclip"></i> Evidence ${k.evidence.required ? '<span style="color:var(--red);font-size:10px;">(required)</span>' : '<span style="color:var(--muted);font-size:10px;">(if available)</span>'}</div>
+      ${canUp && cur.Status !== 'Reviewed' ? `<div style="display:flex;gap:6px;"><button class="btn btn-outline btn-sm" onclick="pickEvidence('${k.key}','photo')"><i class="ti ti-photo"></i> Photo</button><button class="btn btn-outline btn-sm" onclick="pickEvidence('${k.key}','doc')"><i class="ti ti-file"></i> Document</button></div>` : ''}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;">Photos: ${k.evidence.photos.join(', ')}. Documents: ${k.evidence.docs.join(', ')}.</div>
+    ${items.length ? `<div class="ev-list">${items.map(e => `<div class="ev-item"><i class="ti ${e.kind==='doc'?'ti-file':'ti-photo'}"></i><a href="${e.url}" target="_blank" style="color:var(--teal);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.name)}</a><span style="color:var(--muted);font-size:10px;">${fmtDate(e.time)}</span></div>`).join('')}</div>` : ''}
+  </div>`;
+}
+function renderEvidenceSection(kpi) {
+  const items = (cur.evidence||[]).filter(e => (e.kpi||'') === kpi);
+  const canUp = (editable() || isMentorUser) && cur.Status !== 'Reviewed';
+  return `<div class="fsection"><div class="fsection-hd"><span class="t"><i class="ti ti-paperclip"></i> Evidence <span style="font-weight:400;color:var(--muted);font-size:12px;">optional — product photos, labels, packaging</span></span>
+    ${canUp ? `<div style="display:flex;gap:6px;"><button class="btn btn-outline btn-sm" onclick="pickEvidence('','photo')"><i class="ti ti-photo"></i> Photo</button><button class="btn btn-outline btn-sm" onclick="pickEvidence('','doc')"><i class="ti ti-file"></i> Document</button></div>` : ''}</div>
+    <div class="fsection-body">${items.length ? `<div class="ev-list">${items.map(e => `<div class="ev-item"><i class="ti ${e.kind==='doc'?'ti-file':'ti-photo'}"></i><a href="${e.url}" target="_blank" style="color:var(--teal);flex:1;">${esc(e.name)}</a><span style="color:var(--muted);font-size:10px;">${fmtDate(e.time)}${e.by?' · '+esc(e.by):''}</span></div>`).join('')}</div>` : '<div style="font-size:12px;color:var(--muted);">No files attached.</div>'}</div></div>`;
+}
+function pickEvidence(kpi, kind) {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true;
+  inp.accept = kind === 'photo' ? 'image/*' : '.pdf,.doc,.docx,.xlsx,.xls,.jpg,.jpeg,.png';
+  inp.onchange = async () => {
+    const files = Array.from(inp.files); if (!files.length) return;
+    showToast(`Uploading ${files.length} file${files.length>1?'s':''}…`);
+    for (const f of files) {
+      if (f.size > 100*1024*1024) { showToast(`${f.name} is over 100MB`, 'error'); continue; }
+      const fd = new FormData(); fd.append('file', f); fd.append('kpi', kpi); fd.append('kind', kind);
+      const res = await fetch(`${API}/incu/assessments/${cur.ID}/evidence`, { method:'POST', headers:{ Authorization:'Bearer '+token }, body: fd });
+      const d = await res.json();
+      if (d.success) cur.evidence = d.evidence; else showToast(d.error || 'Upload failed', 'error');
+    }
+    showToast('Evidence attached ✓', 'success'); renderForm();
+  };
+  inp.click();
+}
+
+// ── Save / submit / review ──
+function validateForSubmit() {
+  if (cur.Type === 'pqr') { const missing = FORMS.pqr.areas.flatMap(a => a.questions).filter(q => curAnswers[q.id] === undefined || curAnswers[q.id] === ''); if (missing.length) return `Please score every indicator (${missing.length} missing).`; }
+  if (cur.Type === 'brand') { const req = ['m_name','m_logo','m_story','m_identity','m_packaging','m_photo','m_social','branding_stage','value_prop','positioning_stage','digital_readiness','star_quality','star_consistency','star_demand','star_pricing','star_cx','star_recognition']; const miss = req.filter(id => curAnswers[id] === undefined || curAnswers[id] === ''); if (miss.length) return `Please answer all rating questions (${miss.length} missing).`; }
+  if (cur.Type === 'lean') { const qs = FORMS.lean.kpis.flatMap(k => cur.Period === 'Endline' ? k.endline : k.baseline).filter(q => q.metric || ['b_members','b_participants','e_members','e_participants'].includes(q.id)); const miss = qs.filter(q => curAnswers[q.id] === undefined || curAnswers[q.id] === ''); if (miss.length) return `Please fill the key number for every KPI (${miss.length} missing).`; }
+  return null;
+}
+async function saveAssessment(submit) {
+  if (submit) { const err = validateForSubmit(); if (err) { showToast(err, 'error'); return; }
+    if (!(await confirmDialog({ title:'Submit for review?', message:'Once submitted you can no longer edit your answers. Your mentor will review and finalise the score.', confirmText:'Submit' }))) return; }
+  const r = await api(`/incu/assessments/${cur.ID}`, { method:'PUT', body: JSON.stringify({ answers: curAnswers, submit }) });
+  if (r?.success) {
+    showToast(submit ? 'Submitted — your mentor has been notified ✓' : 'Saved ✓', 'success');
+    cache.assessments = null;
+    if (submit) { navigateTo(returnTo === 'home' ? 'home' : 'assessments'); if (isMgmt) refreshQueueBadge(); }
+    else { cur.breakdown = r.breakdown; cur.selfScore = r.score; cur.Rating = r.rating; cur.Status = r.status; renderForm(); }
+  } else showToast(r?.error || 'Failed to save', 'error');
+}
+async function finaliseReview() {
+  const notes = document.getElementById('mentor-notes')?.value.trim() || '';
+  const n = Object.keys(curOverrides).length;
+  if (!(await confirmDialog({ title:'Finalise this assessment?', message:`${n ? n + ' indicator' + (n>1?'s':'') + ' adjusted. ' : 'No adjustments — the self-assessed score becomes final. '}The collaborator will be notified and the assessment locked.`, confirmText:'Finalise' }))) return;
+  const r = await api(`/incu/assessments/${cur.ID}/review`, { method:'POST', body: JSON.stringify({ mentorAnswers: curOverrides, mentorNotes: notes }) });
+  if (r?.success) { showToast(`Finalised — ${r.finalScore ?? '—'} (${r.rating}) ✓`, 'success'); cache.assessments = null; refreshQueueBadge(); openAssessment(cur.ID); }
+  else showToast(r?.error || 'Failed', 'error');
+}
+async function reopenReview() {
+  if (!(await confirmDialog({ title:'Reopen for review?', message:'The final score is kept until you finalise again.', confirmText:'Reopen' }))) return;
+  const r = await api(`/incu/assessments/${cur.ID}/review`, { method:'POST', body: JSON.stringify({ reopen: true }) });
+  if (r?.success) { showToast('Reopened', 'success'); refreshQueueBadge(); openAssessment(cur.ID); } else showToast(r?.error || 'Failed', 'error');
+}
+
+// ════════════════════════════════════════════════════════
+// MENTOR — queue, collaborators, dashboard
+// ════════════════════════════════════════════════════════
+async function loadQueue() {
+  const el = document.getElementById('panel-queue'); el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const d = await api('/incu/assessments?status=Submitted'); if (!d) return;
+  const list = d.assessments;
+  el.innerHTML = `<div class="section-hd"><div class="section-title">Awaiting review <span style="font-size:12px;color:var(--muted);font-weight:400;">${list.length}</span></div></div>` +
+    (list.length ? list.map(a => `<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <span class="badge b-${a.Type}">${TYPE_META[a.Type].label}</span>
+      <div style="flex:1;min-width:180px;"><div style="font-weight:600;color:var(--navy);">${esc(a.businessName)}</div><div style="font-size:12px;color:var(--muted);">${esc(a.ProductName || a.Period || '')} · submitted ${fmtDate(a.SubmittedAt)}</div></div>
+      <div style="text-align:right;"><div style="font-size:20px;font-weight:700;color:${scoreColor(a.selfScore)}">${a.selfScore ?? '—'}</div><div style="font-size:10px;color:var(--muted);">self-assessed</div></div>
+      <button class="btn btn-primary btn-sm" onclick="openAssessment('${a.ID}')">${isMentorUser ? 'Review' : 'View'}</button></div>`).join('')
+    : '<div class="empty"><i class="ti ti-inbox-off"></i>Nothing waiting for review</div>');
+}
+
+async function loadCollaborators() {
+  const el = document.getElementById('panel-collaborators'); el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const d = await api('/incu/collaborators'); if (!d) return;
+  cache.collaborators = d.collaborators;
+  const mini = (label, s) => `<div style="text-align:center;flex:1;"><div style="font-size:16px;font-weight:700;color:${scoreColor(s?.score)}">${s?.score ?? '—'}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;">${label}</div></div>`;
+  el.innerHTML = `<div class="section-hd"><div class="section-title">Collaborators <span style="font-size:12px;color:var(--muted);font-weight:400;">${d.collaborators.length}</span></div>
+      <a class="btn btn-outline btn-sm" href="../" title="Add collaborators in Staff Management"><i class="ti ti-user-plus"></i> Add in Staff Management</a></div>
+    ${d.collaborators.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${d.collaborators.map(c => `
+      <div class="card coll-card" onclick="openCollaborator('${c.ID}')">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <div class="user-avatar" style="background:var(--teal-lt);">${esc((c.BusinessName||'?').slice(0,2).toUpperCase())}</div>
+          <div style="flex:1;min-width:0;"><div style="font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.BusinessName)}</div><div style="font-size:11px;color:var(--muted);">${esc(c.Owner||c.staffName)}${c.Location?' · '+esc(c.Location):''}</div></div>
+          ${c.summary.pendingReview ? `<span class="nav-badge">${c.summary.pendingReview}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;padding-top:10px;border-top:1px solid var(--border2);">${mini('Quality', c.summary.pqr)}${mini('Brand', c.summary.brand)}${mini('Lean', c.summary.lean)}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:8px;">${c.summary.pqrProducts} product${c.summary.pqrProducts!==1?'s':''} · ${c.BusinessStage||'stage —'} · Lean ${c.summary.hasBaseline?'baseline':''}${c.summary.hasEndline?' + endline':''}${!c.summary.hasBaseline&&!c.summary.hasEndline?'not started':''}</div>
+      </div>`).join('')}</div>` : '<div class="empty"><i class="ti ti-building-store"></i>No collaborators yet — add them in Staff Management with the Collaborator role.</div>'}`;
+}
+function openCollaborator(id) {
+  const c = (cache.collaborators||[]).find(x => x.ID === id);
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); document.getElementById('panel-assessments').classList.add('active');
+  document.getElementById('topbar-title').textContent = c?.BusinessName || 'Collaborator';
+  loadAssessments({ collaboratorId: id, title: c?.BusinessName });
+}
+
+async function loadDashboard() {
+  const el = document.getElementById('panel-dashboard'); el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Loading MEALA indicators…</div>';
+  const d = await api('/incu/dashboard'); if (!d || d.error) { el.innerHTML = `<div class="empty">${esc(d?.error||'Could not load')}</div>`; return; }
+  charts.forEach(c => c.destroy()); charts = [];
+  const pct = (n,dd) => dd ? Math.round(n/dd*100) : 0;
+  el.innerHTML = `
+    <div class="stats-grid">
+      <div class="card"><div class="stat-label">Collaborators</div><div class="stat-val">${d.totals.collaborators}</div><div class="stat-sub">${d.totals.assessments} assessments · ${d.totals.reviewed} finalised</div></div>
+      <div class="card"><div class="stat-label">QC standard met</div><div class="stat-val" style="color:${scoreColor(d.qc.collaboratorsMetPct)}">${d.qc.collaboratorsMetPct}%</div><div class="stat-sub">${d.qc.collaboratorsMet} of ${d.totals.collaborators} collaborators · ${d.qc.productsMet}/${d.qc.productsAssessed} products ≥ 80</div></div>
+      <div class="card"><div class="stat-label">Brands emerging</div><div class="stat-val" style="color:var(--purple)">${d.brand.branded}</div><div class="stat-sub">of ${d.brand.assessed} assessed at Stage 2+ · avg score ${d.brand.avgScore ?? '—'}</div></div>
+      <div class="card"><div class="stat-label">Lean targets met</div><div class="stat-val" style="color:#00695C">${d.lean.avgTargetsMet ?? '—'}<span style="font-size:14px;color:var(--muted)">${d.lean.avgTargetsMet!==null?' / 7':''}</span></div><div class="stat-sub">${d.lean.baselines} baselines · ${d.lean.endlines} endlines</div></div>
+    </div>
+    ${d.totals.pendingReview ? `<div class="card" style="margin-bottom:16px;background:var(--blue-lt);border:none;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--blue);"><i class="ti ti-inbox"></i> ${d.totals.pendingReview} assessment${d.totals.pendingReview>1?'s':''} waiting for review <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="navigateTo('queue')">Open queue</button></div>` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;" class="dash-grid">
+      <div class="card"><div class="section-title" style="font-size:13px;margin-bottom:8px;">Branding classification</div><div style="height:200px;"><canvas id="ch-brand"></canvas></div></div>
+      <div class="card"><div class="section-title" style="font-size:13px;margin-bottom:8px;">Branding — average by area</div><div style="height:200px;"><canvas id="ch-brand-areas"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px;"><div class="section-title" style="font-size:13px;margin-bottom:10px;">Lean KPI target achievement <span style="font-size:11px;color:var(--muted);font-weight:400;">(latest endline per collaborator)</span></div>
+      <div class="kpi-grid">${d.lean.perKpi.map(k => `<div style="background:var(--off);border-radius:10px;padding:10px 12px;">
+        <div style="font-size:12px;font-weight:600;color:var(--navy);">${esc(k.label)}</div><div style="font-size:10px;color:var(--muted);margin-bottom:6px;">target ${esc(k.target)}</div>
+        <div style="display:flex;align-items:center;gap:8px;"><div class="prog-bar"><div class="prog-fill" style="width:${k.metPct}%;background:${scoreColor(k.metPct)}"></div></div><span style="font-size:12px;font-weight:700;color:${scoreColor(k.metPct)}">${k.assessed?k.metPct+'%':'—'}</span></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;">${k.met}/${k.assessed} met${k.avgChangePct!==null?` · avg change ${k.avgChangePct>0?'+':''}${k.avgChangePct}%`:''}</div></div>`).join('')}</div></div>
+    <div class="section-title" style="margin-bottom:10px;">Collaborator progress</div>
+    <div class="table-wrap"><table><thead><tr><th>Business</th><th>Stage</th><th>Quality</th><th>Brand</th><th>Lean</th><th>Products</th><th>Pending</th></tr></thead><tbody>
+      ${d.cards.length ? d.cards.map(c => `<tr style="cursor:pointer;" onclick="cache.collaborators=null;openCollaboratorById('${c.id}','${esc(c.businessName)}')">
+        <td><strong>${esc(c.businessName)}</strong><div style="font-size:11px;color:var(--muted);">${esc(c.owner||'')}${c.location?' · '+esc(c.location):''}</div></td>
+        <td style="font-size:12px;">${esc(c.businessStage||'—')}</td>
+        <td style="font-weight:700;color:${scoreColor(c.pqr?.score)}">${c.pqr?.score ?? '—'}</td>
+        <td style="font-weight:700;color:${scoreColor(c.brand?.score)}">${c.brand?.score ?? '—'}<div style="font-size:10px;font-weight:400;color:var(--muted);">${esc(c.brand?.rating||'')}</div></td>
+        <td style="font-weight:700;color:${scoreColor(c.lean?.score)}">${c.lean?.score ?? (c.hasBaseline?'baseline':'—')}</td>
+        <td>${c.pqrProducts}</td>
+        <td>${c.pendingReview ? `<span class="badge b-submitted">${c.pendingReview}</span>` : '—'}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty">No collaborators yet</div></td></tr>'}
+    </tbody></table></div>
+    <style>@media(max-width:800px){.dash-grid{grid-template-columns:1fr!important}}</style>`;
+
+  const bands = Object.entries(d.brand.bands);
+  const c1 = document.getElementById('ch-brand');
+  if (c1) charts.push(new Chart(c1, { type:'doughnut', data:{ labels: bands.map(b => b[0]), datasets:[{ data: bands.map(b => b[1]), backgroundColor:['#1D9E75','#4CAF50','#EF9F27','#F57C00','#E24B4A'], borderWidth:0 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ font:{ size:11 }, boxWidth:12 } } } } }));
+  const c2 = document.getElementById('ch-brand-areas');
+  if (c2) charts.push(new Chart(c2, { type:'bar', data:{ labels: d.brand.avgAreas.map(a => a.label.replace('Customer Value Proposition','CVP').replace('Business Growth Potential','Growth')), datasets:[{ data: d.brand.avgAreas.map(a => a.max ? Math.round((a.avg||0)/a.max*100) : 0), backgroundColor:'#534AB7', borderRadius:6 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ctx.raw + '% of max' } } }, scales:{ y:{ beginAtZero:true, max:100, ticks:{ callback:v => v+'%', font:{ size:10 } } }, x:{ ticks:{ font:{ size:10 } } } } } }));
+}
+async function openCollaboratorById(id, name) {
+  if (!cache.collaborators) { const c = await api('/incu/collaborators'); cache.collaborators = c?.collaborators || []; }
+  openCollaborator(id);
+}
+
+// ════════════════════════════════════════════════════════
+// ACCOUNT + UI HELPERS
+// ════════════════════════════════════════════════════════
+async function changePassword() {
+  const oldPassword = document.getElementById('old-password').value, newPassword = document.getElementById('new-password').value, confirm = document.getElementById('confirm-password').value;
+  if (!oldPassword || !newPassword) { showToast('Please fill in all fields', 'error'); return; }
+  if (newPassword.length < 6) { showToast('New password must be at least 6 characters', 'error'); return; }
+  if (newPassword !== confirm) { showToast('Passwords do not match', 'error'); return; }
+  const r = await api('/auth/change-password', { method:'POST', body: JSON.stringify({ oldPassword, newPassword }) });
+  if (r?.success) { showToast('Password updated ✓', 'success'); ['old-password','new-password','confirm-password'].forEach(id => document.getElementById(id).value = ''); }
+  else showToast(r?.error || 'Failed', 'error');
+}
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.addEventListener('click', e => { if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('open'); });
+let _confirmResolver = null;
+function _resolveConfirm(r) { document.getElementById('modal-confirm').classList.remove('open'); if (_confirmResolver) { _confirmResolver(r); _confirmResolver = null; } }
+function confirmDialog({ title='Are you sure?', message='', confirmText='Confirm', danger=false } = {}) {
+  document.getElementById('confirm-title').textContent = title; document.getElementById('confirm-message').textContent = message;
+  const ok = document.getElementById('confirm-ok-btn'); ok.textContent = confirmText; ok.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+  document.getElementById('modal-confirm').classList.add('open');
+  return new Promise(res => { _confirmResolver = res; });
+}
+let toastTimer;
+function showToast(msg, type='') { const t = document.getElementById('toast'); t.textContent = msg; t.className = `toast ${type} show`; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3000); }
+</script>
+</body>
+</html>
