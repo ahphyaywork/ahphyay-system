@@ -125,6 +125,19 @@ tbody td{padding:11px 14px;border-bottom:1px solid var(--border2);vertical-align
 .pthumb{position:relative}.pthumb .del{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(226,75,74,.9);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
 .pthumb .cap{font-size:10px;color:var(--text);margin-top:2px;line-height:1.3}
 .coll-card{cursor:pointer;transition:transform .1s}.coll-card:hover{transform:translateY(-2px);border-color:var(--teal)}
+
+/* ── Login hero: the logo owns the left panel ── */
+.login-left{padding:40px 48px;}
+.login-left::before{width:70vmin;height:70vmin;top:50%;right:auto;left:50%;transform:translate(-50%,-58%);background:radial-gradient(circle,rgba(17,24,39,.07),transparent 70%);}
+.login-left::after{display:none;}
+.login-brand{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+.login-logo{width:min(82%,680px);height:auto;margin:0 0 28px;filter:drop-shadow(0 24px 40px rgba(17,24,39,.14));}
+.login-logo img{width:100%;height:auto;object-fit:contain;object-position:center;}
+.login-brand h1{font-size:44px;letter-spacing:-.02em;margin-bottom:8px;}
+.login-brand .sub{font-size:15px;}
+.login-brand p{max-width:380px;margin:0 auto;font-size:14px;}
+.login-features{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:10px 24px;}
+.login-feat{margin-bottom:0;}
 </style>
 </head>
 <body>
@@ -137,7 +150,7 @@ tbody td{padding:11px 14px;border-bottom:1px solid var(--border2);vertical-align
       <div class="sub">The Incubation Trends · AhPhyay Social Development</div>
       <p>Self-assessment and mentoring hub for home-based women producers — product quality, branding, and Lean progress in one place.</p>
     </div>
-    <div>
+    <div class="login-features">
       <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">Product Quality Report — 100-point QC standard</span></div>
       <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">Branding &amp; Market Positioning assessment</span></div>
       <div class="login-feat"><div class="feat-dot"></div><span class="feat-text">Lean KPI baseline and endline tracking</span></div>
