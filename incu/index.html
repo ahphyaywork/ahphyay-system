@@ -6,6 +6,8 @@
 <title>SN@IL Incubation — AhPhyay</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root{--navy:#1C3461;--navy-d:#142849;--teal:#1D9E75;--teal-lt:#E1F5EE;--teal-mid:#5DCAA5;--amber:#EF9F27;--amber-lt:#FAEEDA;--red:#E24B4A;--red-lt:#FCEBEB;--purple:#534AB7;--purple-lt:#EEEDFE;--blue:#1565C0;--blue-lt:#E3F2FD;--white:#fff;--off:#F6FAF8;--text:#1A2E25;--muted:#6B8C7D;--border2:#E2EDE8;--sidebar:220px;--header:58px;}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -440,6 +442,7 @@ function renderAsmTable() {
     <td style="font-size:12px;">${esc(a.Rating||'—')}</td>
     <td style="font-size:11px;color:var(--muted);">${fmtDate(a.ReviewedAt || a.SubmittedAt || a.CreatedAt)}</td>
     <td style="white-space:nowrap;"><button class="btn btn-outline btn-sm" onclick="openAssessment('${a.ID}')">${a.Status==='Draft' ? 'Continue' : (isMentorUser && a.Status==='Submitted' ? 'Review' : 'View')}</button>
+      ${a.Status!=='Draft' ? `<button class="btn btn-outline btn-sm" style="margin-left:4px;" onclick="downloadAssessmentPdf('${a.ID}')" title="Download PDF"><i class="ti ti-download"></i></button>` : ''}
       ${(a.Status==='Draft' || isMentorUser) ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteAssessment('${a.ID}')" title="Delete"><i class="ti ti-trash"></i></button>` : ''}</td>
   </tr>`).join('');
 }
@@ -478,6 +481,7 @@ function renderForm() {
       <span style="font-size:13px;color:var(--navy);font-weight:600;">${esc(cur.businessName || cur.collaborator?.BusinessName || '')}</span>
       <span style="font-size:12px;color:var(--muted);">${esc(cur.ProductName ? cur.ProductName + (cur.ProductCategory ? ' (' + cur.ProductCategory + ')' : '') : '')} ${esc(cur.Period||'')}</span>
       ${cur.Status === 'Reviewed' ? `<span style="font-size:11px;color:var(--muted);margin-left:auto;">Finalised ${fmtDate(cur.ReviewedAt)}</span>` : cur.SubmittedAt ? `<span style="font-size:11px;color:var(--muted);margin-left:auto;">Submitted ${fmtDate(cur.SubmittedAt)}</span>` : ''}
+      ${cur.Status !== 'Draft' ? `<button class="btn btn-primary btn-sm" id="btn-pdf" onclick="downloadAssessmentPdf('${cur.ID}')"><i class="ti ti-download"></i> Download PDF</button>` : ''}
       ${isMgmt ? `<button class="btn btn-outline btn-sm" onclick="openCollabFolder('${cur.CollaboratorID}')"><i class="ti ti-folder"></i> Drive</button>` : ''}
     </div>`;
   const body = cur.Type === 'pqr' ? renderPqr() : cur.Type === 'brand' ? renderBrand() : renderLean();
@@ -773,6 +777,147 @@ async function openCollabFolder(collabId) {
 async function openCollaboratorById(id, name) {
   if (!cache.collaborators) { const c = await api('/incu/collaborators'); cache.collaborators = c?.collaborators || []; }
   openCollaborator(id);
+}
+
+// ════════════════════════════════════════════════════════
+// PDF REPORT — one assessment, saved to the Drive folder as well
+// ════════════════════════════════════════════════════════
+async function downloadAssessmentPdf(id) {
+  const btn = document.getElementById('btn-pdf'); const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Generating…'; }
+  try {
+    const d = await api(`/incu/assessments/${id}`);
+    if (!d || d.error) throw new Error(d?.error || 'Not found');
+    const a = d.assessment, c = d.collaborator || {};
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'mm', format:'a4' });
+    const W = 210, M = 14;
+    const navy=[28,52,97], teal=[29,158,117], muted=[107,140,125], red=[226,75,74], amber=[239,159,39], light=[246,250,248];
+    const col = sc => sc===null||sc===undefined ? muted : sc>=80 ? teal : sc>=60 ? amber : red;
+    const final = a.Status === 'Reviewed';
+    const score = final ? a.finalScore : a.selfScore;
+    const b = a.breakdown || {};
+    const clean = t => String(t ?? '').replace(/[^\x00-\x7F\u00A0-\u024F]/g, '').trim(); // Helvetica has no Myanmar glyphs
+
+    // ── Header band
+    doc.setFillColor(...navy); doc.rect(0, 0, W, 34, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(16);
+    doc.text(TYPE_META[a.Type].label, M, 14);
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(180,220,205);
+    doc.text('SN@IL Incubation  ·  AhPhyay Social Development', M, 21);
+    doc.text(`${a.ID}  ·  ${final ? 'Final report' : 'Submitted — awaiting mentor review'}`, M, 27);
+    doc.setTextColor(255,255,255); doc.setFontSize(9);
+    doc.text(`Generated ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}`, W-M, 14, { align:'right' });
+
+    // ── Business + score block
+    let y = 44;
+    doc.setTextColor(...navy); doc.setFont('helvetica','bold'); doc.setFontSize(14);
+    doc.text(clean(c.BusinessName || a.businessName || ''), M, y);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...muted);
+    const meta = [c.Owner, c.Location, c.BusinessStage].filter(Boolean).map(clean).join('  ·  ');
+    if (meta) doc.text(meta, M, y+6);
+    const sub = [a.ProductName ? `Product: ${a.ProductName}${a.ProductCategory ? ' (' + a.ProductCategory + ')' : ''}` : '', a.Period ? `Period: ${a.Period}` : '',
+      a.SubmittedAt ? `Submitted ${fmtDate(a.SubmittedAt)}` : '', a.ReviewedAt ? `Finalised ${fmtDate(a.ReviewedAt)}` : ''].filter(Boolean).join('  ·  ');
+    doc.text(clean(sub), M, y+12);
+
+    // score card (right)
+    const cx = W-M-52;
+    doc.setFillColor(...light); doc.roundedRect(cx, 38, 52, 26, 2, 2, 'F');
+    doc.setTextColor(...col(score)); doc.setFont('helvetica','bold'); doc.setFontSize(22);
+    doc.text(score===null||score===undefined ? '—' : String(score), cx+26, 50, { align:'center' });
+    doc.setFontSize(8); doc.setTextColor(...muted); doc.setFont('helvetica','normal');
+    doc.text(clean(b.rating || a.Rating || ''), cx+26, 56, { align:'center' });
+    doc.text(final ? 'FINAL SCORE' : (a.Type==='lean' && a.Period==='Baseline' ? 'BASELINE' : 'SELF-ASSESSED'), cx+26, 61, { align:'center' });
+    y = 72;
+
+    if (final && a.selfScore!==null && a.selfScore!==a.finalScore) {
+      doc.setFontSize(9); doc.setTextColor(...muted);
+      doc.text(`Self-assessed score ${a.selfScore} adjusted by mentor to ${a.finalScore}.`, M, y); y += 7;
+    }
+    if (a.Type==='pqr' && b.score!==undefined) {
+      doc.setFillColor(...(b.qcMet ? teal : red)); doc.roundedRect(M, y-4, 54, 7, 1.5, 1.5, 'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+      doc.text(b.qcMet ? 'QC STANDARD MET (>= 80)' : 'BELOW QC STANDARD (80)', M+27, y+1, { align:'center' }); y += 9;
+    }
+    if (b.ratingDesc) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...navy); const lines = doc.splitTextToSize(clean(b.ratingDesc), W-2*M); doc.text(lines, M, y); y += lines.length*4.5 + 3; }
+
+    const head = { fillColor: navy, textColor: [255,255,255], fontStyle:'bold', fontSize:8.5 };
+    const over = a.mentorAnswers || {};
+    const ansLabel = (q, v) => {
+      if (v===undefined||v===null||v==='') return '—';
+      if (q.type==='multi') return (v||[]).join(', ') || '—';
+      if (q.type==='stars') return '★'.repeat(parseInt(v,10)) + '☆'.repeat(5-parseInt(v,10));
+      if (q.type==='yesno') return v==='yes'?'Yes':'No';
+      if (['level','rating4'].includes(q.type)) return q.options[parseInt(v,10)] ?? v;
+      if (q.type==='stage') return (q.options[parseInt(v,10)-1] ?? v).split(':')[0];
+      return String(v) + (q.unit ? ' ' + q.unit : '');
+    };
+    const section = title => { if (y > 255) { doc.addPage(); y = 20; } doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...navy); doc.text(title, M, y); y += 3; };
+
+    if (a.Type === 'pqr') {
+      section('Indicator scores');
+      const rows = []; FORMS.pqr.areas.forEach(ar => { ar.questions.forEach(q => { const o = over[q.id]; rows.push([ar.label, q.label, q.max, a.answers[q.id] ?? '—', o ? o.value : '', clean(o?.note || '')]); }); });
+      doc.autoTable({ startY: y+2, head: [['Area','Indicator','Max','Self','Mentor','Note']], body: rows, styles:{ fontSize:8, cellPadding:2 }, headStyles: head,
+        columnStyles:{ 2:{halign:'center',cellWidth:12}, 3:{halign:'center',cellWidth:14}, 4:{halign:'center',cellWidth:16} },
+        didParseCell: dd => { if (dd.section==='body' && dd.column.index===4 && dd.cell.raw!=='') dd.cell.styles.textColor = [184,134,11]; } });
+      y = doc.lastAutoTable.finalY + 8;
+      section('Area totals');
+      doc.autoTable({ startY: y+2, head:[['Area','Score','Max','%']], body:(b.areas||[]).map(x => [x.label, x.score, x.max, Math.round(x.score/x.max*100)+'%']), styles:{ fontSize:8.5, cellPadding:2 }, headStyles: head, columnStyles:{1:{halign:'center'},2:{halign:'center'},3:{halign:'center'}} });
+      y = doc.lastAutoTable.finalY + 8;
+    } else if (a.Type === 'brand') {
+      section('Area scores');
+      doc.autoTable({ startY: y+2, head:[['Area','Score','Weight','%']], body:(b.areas||[]).map(x => [x.label, x.score, x.max, Math.round(x.score/x.max*100)+'%']), styles:{ fontSize:8.5, cellPadding:2 }, headStyles: head, columnStyles:{1:{halign:'center'},2:{halign:'center'},3:{halign:'center'}} });
+      y = doc.lastAutoTable.finalY + 8;
+      FORMS.brand.sections.forEach(sec => {
+        section(sec.label);
+        doc.autoTable({ startY: y+2, head:[['Question','Answer']], body: sec.questions.map(q => [clean(q.label).slice(0,90), clean(ansLabel(q, a.answers[q.id]))]), styles:{ fontSize:8, cellPadding:2 }, headStyles: head, columnStyles:{0:{cellWidth:95}} });
+        y = doc.lastAutoTable.finalY + 8;
+      });
+    } else if (a.Type === 'lean') {
+      const isEnd = a.Period === 'Endline';
+      section(isEnd ? 'KPI results against targets' : 'Baseline values');
+      const rows = (b.kpis||[]).map(k => isEnd
+        ? [k.label, k.baseline ?? '—', k.value ?? '—', k.unit, k.changePct===null||k.changePct===undefined ? '—' : (k.changePct>0?'+':'')+k.changePct+'%', k.target, k.met===true?'Met':k.met===false?'Not met':'No baseline']
+        : [k.label, k.value ?? '—', k.unit, k.target]);
+      doc.autoTable({ startY: y+2, head: [isEnd ? ['KPI','Baseline','Endline','Unit','Change','Target','Result'] : ['KPI','Value','Unit','Target']], body: rows, styles:{ fontSize:8.5, cellPadding:2 }, headStyles: head,
+        didParseCell: dd => { if (isEnd && dd.section==='body' && dd.column.index===6) dd.cell.styles.textColor = dd.cell.raw==='Met' ? teal : dd.cell.raw==='Not met' ? red : muted; if (isEnd && dd.section==='body' && dd.column.index===6) dd.cell.styles.fontStyle='bold'; } });
+      y = doc.lastAutoTable.finalY + 8;
+      if (isEnd && b.metCount!==null && b.metCount!==undefined) { doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...navy); doc.text(`${b.metCount} of 7 targets met`, M, y); y += 8; }
+      section('Detailed answers');
+      const detail = []; FORMS.lean.kpis.forEach(k => (isEnd ? k.endline : k.baseline).forEach(q => { const v = a.answers[q.id]; if (v!==undefined && v!=='' && v!==null) detail.push([k.label, clean(q.label), clean(ansLabel(q, v))]); }));
+      doc.autoTable({ startY: y+2, head:[['KPI','Question','Answer']], body: detail, styles:{ fontSize:8, cellPadding:2 }, headStyles: head, columnStyles:{0:{cellWidth:34},1:{cellWidth:70}} });
+      y = doc.lastAutoTable.finalY + 8;
+    }
+
+    if (a.MentorNotes) {
+      section('Mentor notes');
+      doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...navy);
+      const lines = doc.splitTextToSize(clean(a.MentorNotes), W-2*M); if (y + lines.length*4.5 > 280) { doc.addPage(); y = 20; }
+      doc.setFillColor(255,248,225); doc.rect(M-2, y-1, W-2*M+4, lines.length*4.5+6, 'F'); doc.text(lines, M, y+4); y += lines.length*4.5 + 12;
+    }
+    const files = (a.evidence||[]).filter(e => e.kind !== 'report');
+    if (files.length) {
+      section('Evidence files');
+      doc.autoTable({ startY: y+2, head:[['File','Type','KPI','Uploaded']], body: files.map(e => [clean(e.name), e.kind, e.kpi ? (FORMS.lean.kpis.find(k=>k.key===e.kpi)?.label || e.kpi) : '—', fmtDate(e.time)]), styles:{ fontSize:8, cellPadding:2 }, headStyles: head,
+        didDrawCell: dd => { if (dd.section==='body' && dd.column.index===0 && files[dd.row.index]?.url) doc.link(dd.cell.x, dd.cell.y, dd.cell.width, dd.cell.height, { url: files[dd.row.index].url }); } });
+      y = doc.lastAutoTable.finalY + 8;
+    }
+    const n = doc.getNumberOfPages();
+    for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(...muted); doc.text(`AhPhyay SN@IL Incubation  |  ${a.ID}  |  Page ${i} of ${n}`, W/2, 290, { align:'center' }); }
+
+    const stage = final ? 'final' : 'submitted';
+    const fileName = `${a.ID}-${a.Type}-${stage}.pdf`;
+    doc.save(fileName);
+    // Save a copy to the assessment's Drive folder (best-effort)
+    try {
+      const fd = new FormData(); fd.append('file', new Blob([doc.output('arraybuffer')], { type:'application/pdf' }), fileName);
+      const res = await fetch(`${API}/incu/assessments/${id}/report`, { method:'POST', headers:{ Authorization:'Bearer '+token }, body: fd });
+      const r = await res.json();
+      if (r.success) { showToast('Downloaded and saved to Drive ✓', 'success'); if (cur && cur.ID === id) { cur.evidence = r.evidence; renderForm(); } }
+      else showToast('Downloaded (Drive copy failed: ' + (r.error||'') + ')', 'error');
+    } catch (_) { showToast('Downloaded ✓', 'success'); }
+  } catch (e) { showToast('Report failed: ' + e.message, 'error'); }
+  const b2 = document.getElementById('btn-pdf'); if (b2) { b2.disabled = false; b2.innerHTML = orig || '<i class="ti ti-download"></i> Download PDF'; }
 }
 
 // ════════════════════════════════════════════════════════
