@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
-:root{--navy:#1C3461;--navy-d:#142849;--teal:#1D9E75;--teal-lt:#E1F5EE;--teal-mid:#5DCAA5;--amber:#EF9F27;--amber-lt:#FAEEDA;--red:#E24B4A;--red-lt:#FCEBEB;--purple:#534AB7;--purple-lt:#EEEDFE;--blue:#1565C0;--blue-lt:#E3F2FD;--white:#fff;--off:#F6FAF8;--text:#1A2E25;--muted:#6B8C7D;--border2:#E2EDE8;--sidebar:220px;--header:58px;}
+:root{--navy:#111827;--navy-d:#111827;--teal:#6B7280;--teal-lt:#DCFCE7;--teal-mid:#D1D5DB;--amber:#D97706;--amber-lt:#FEF3C7;--red:#E24B4A;--red-lt:#FCEBEB;--purple:#6D28D9;--purple-lt:#EDE9FE;--blue:#6B7280;--blue-lt:#DBEAFE;--white:#fff;--off:#FFFFFF;--text:#111827;--muted:#6B7280;--border2:#E5E7EB;--sidebar:220px;--header:58px;}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--off);color:var(--text);min-height:100vh}
 button{cursor:pointer;font-family:inherit}
@@ -18,14 +18,14 @@ input,textarea,select{font-family:inherit}
 /* login */
 #view-login{min-height:100vh;grid-template-columns:1fr 1fr}
 #view-login.active{display:grid}
-.login-left{background:var(--navy-d);display:flex;flex-direction:column;justify-content:space-between;padding:48px;position:relative;overflow:hidden}
-.login-left::before{content:'';position:absolute;top:-80px;right:-80px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(29,158,117,.15),transparent 70%)}
-.login-brand h1{font-size:30px;font-weight:800;color:#fff;margin-bottom:6px}
-.login-brand .sub{font-size:14px;color:var(--teal-mid);margin-bottom:10px;font-weight:600}
-.login-brand p{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6;max-width:300px}
+.login-left{background:#F9FAFB;border-right:1px solid var(--border2);display:flex;flex-direction:column;justify-content:space-between;padding:48px;position:relative;overflow:hidden}
+.login-left::before{content:'';position:absolute;top:-80px;right:-80px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(107,114,128,.15),transparent 70%)}
+.login-brand h1{font-size:30px;font-weight:800;color:var(--navy);margin-bottom:6px}
+.login-brand .sub{font-size:14px;color:var(--muted);margin-bottom:10px;font-weight:600}
+.login-brand p{font-size:13px;color:rgba(17,24,39,.45);line-height:1.6;max-width:300px}
 .login-logo{width:72px;height:72px;border-radius:16px;overflow:hidden;margin-bottom:24px;background:var(--teal)}
 .login-logo img{width:100%;height:100%;object-fit:cover}
-.login-feat{display:flex;align-items:center;gap:12px;margin-bottom:14px}.feat-dot{width:8px;height:8px;border-radius:50%;background:var(--teal)}.feat-text{font-size:12px;color:rgba(255,255,255,.55)}
+.login-feat{display:flex;align-items:center;gap:12px;margin-bottom:14px}.feat-dot{width:8px;height:8px;border-radius:50%;background:var(--teal)}.feat-text{font-size:12px;color:rgba(17,24,39,.55)}
 .login-right{display:flex;align-items:center;justify-content:center;padding:48px;background:#fff}
 .login-form-wrap{width:100%;max-width:380px}.login-form-wrap h2{font-size:26px;font-weight:700;color:var(--navy);margin-bottom:4px}.login-form-wrap p{font-size:13px;color:var(--muted);margin-bottom:32px}
 .form-group{margin-bottom:16px}.form-label{font-size:12px;font-weight:500;color:var(--navy);margin-bottom:6px;display:block}
@@ -36,19 +36,19 @@ input,textarea,select{font-family:inherit}
 @media(max-width:768px){#view-login.active{grid-template-columns:1fr}.login-left{display:none}.login-right{min-height:100vh}}
 /* shell */
 #view-app.active{display:flex;min-height:100vh}
-.sidebar{width:var(--sidebar);flex-shrink:0;background:var(--navy-d);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;transition:transform .25s}
-.sidebar-brand{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.06)}
+.sidebar{width:var(--sidebar);flex-shrink:0;background:#fff;border-right:1px solid var(--border2);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;transition:transform .25s}
+.sidebar-brand{padding:20px 18px 16px;border-bottom:1px solid var(--border2)}
 .sidebar-logo-row{display:flex;align-items:center;gap:10px}.sidebar-logo{width:36px;height:36px;border-radius:10px;overflow:hidden;background:var(--teal);flex-shrink:0}.sidebar-logo img{width:100%;height:100%;object-fit:cover}
-.sidebar-name{font-size:17px;font-weight:700;color:#fff}.sidebar-tagline{font-size:10px;color:var(--teal-mid);letter-spacing:.05em;text-transform:uppercase;margin-top:2px}
+.sidebar-name{font-size:17px;font-weight:700;color:var(--navy)}.sidebar-tagline{font-size:10px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-top:2px}
 .sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13px;color:rgba(255,255,255,.55);border:none;background:none;width:100%;text-align:left;margin-bottom:1px;transition:all .15s}
-.nav-item:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.85)}.nav-item.active{background:rgba(29,158,117,.15);color:var(--teal-mid)}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13px;color:rgba(17,24,39,.55);border:none;background:none;width:100%;text-align:left;margin-bottom:1px;transition:all .15s}
+.nav-item:hover{background:#F3F4F6;color:var(--navy)}.nav-item.active{background:#F3F4F6;color:var(--navy);font-weight:600}
 .nav-item i{font-size:16px;width:20px;text-align:center}
 .nav-badge{margin-left:auto;font-size:10px;padding:1px 6px;border-radius:99px;background:var(--red);color:#fff;font-weight:600}
-.sidebar-user{padding:14px;border-top:1px solid rgba(255,255,255,.06)}.user-card{display:flex;align-items:center;gap:10px}
+.sidebar-user{padding:14px;border-top:1px solid var(--border2)}.user-card{display:flex;align-items:center;gap:10px}
 .user-avatar{width:34px;height:34px;border-radius:50%;background:var(--teal-lt);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--navy)}
-.user-name{font-size:13px;font-weight:500;color:#fff}.user-role{font-size:10px;color:rgba(255,255,255,.35)}
-.logout-btn{margin-left:auto;background:none;border:none;color:rgba(255,255,255,.3);font-size:16px}.logout-btn:hover{color:var(--red)}
+.user-name{font-size:13px;font-weight:500;color:var(--navy)}.user-role{font-size:10px;color:rgba(17,24,39,.35)}
+.logout-btn{margin-left:auto;background:none;border:none;color:rgba(17,24,39,.3);font-size:16px}.logout-btn:hover{color:var(--red)}
 .main{margin-left:var(--sidebar);flex:1;display:flex;flex-direction:column;min-height:100vh}
 .topbar{height:var(--header);background:#fff;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:40}
 .topbar-title{font-size:17px;font-weight:700;color:var(--navy)}.topbar-date{font-size:12px;color:var(--muted)}
@@ -68,24 +68,24 @@ input,textarea,select{font-family:inherit}
 .btn-danger{background:var(--red-lt);color:var(--red);border:1px solid var(--red)}.btn-danger:hover{background:var(--red);color:#fff}
 .btn-sm{padding:5px 12px;font-size:12px}.btn:disabled{opacity:.6;cursor:not-allowed}
 .badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:3px 9px;border-radius:99px}
-.b-draft{background:var(--off);color:var(--muted);border:1px solid var(--border2)}.b-submitted{background:var(--blue-lt);color:var(--blue)}.b-reviewed{background:var(--teal-lt);color:#085041}
-.b-pqr{background:#FFF3E0;color:#E65100}.b-finance{background:#FFF8E1;color:#8D6E00}
-.type-card.finance{border-top-color:#C9A227}
-.cmt{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border2)}.cmt:last-child{border-bottom:none}.cmt .av{width:30px;height:30px;border-radius:50%;background:var(--teal-lt);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--navy);flex-shrink:0}.cmt .who{font-size:12px;font-weight:600;color:var(--navy)}.cmt .meta{font-size:10px;color:var(--muted)}.cmt .txt{font-size:13px;line-height:1.5;margin-top:3px;white-space:pre-wrap}.cmt.rp .av{background:#FFF8E1;color:#8D6E00}.b-brand{background:var(--purple-lt);color:var(--purple)}.b-lean{background:#E0F7FA;color:#00695C}
+.b-draft{background:var(--off);color:var(--muted);border:1px solid var(--border2)}.b-submitted{background:var(--blue-lt);color:var(--blue)}.b-reviewed{background:var(--teal-lt);color:#111827}
+.b-pqr{background:#FEF3C7;color:#C2410C}.b-finance{background:#DCFCE7;color:#111827}
+.type-card.finance{border-top-color:#D1D5DB}
+.cmt{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border2)}.cmt:last-child{border-bottom:none}.cmt .av{width:30px;height:30px;border-radius:50%;background:var(--teal-lt);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--navy);flex-shrink:0}.cmt .who{font-size:12px;font-weight:600;color:var(--navy)}.cmt .meta{font-size:10px;color:var(--muted)}.cmt .txt{font-size:13px;line-height:1.5;margin-top:3px;white-space:pre-wrap}.cmt.rp .av{background:#DCFCE7;color:#111827}.b-brand{background:var(--purple-lt);color:var(--purple)}.b-lean{background:#DBEAFE;color:#111827}
 .table-wrap{background:#fff;border:1px solid var(--border2);border-radius:14px;overflow:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}thead th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:10px 14px;text-align:left;background:var(--off);border-bottom:1px solid var(--border2)}
-tbody td{padding:11px 14px;border-bottom:1px solid var(--border2);vertical-align:middle}tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:#fafcfb}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--border2);vertical-align:middle}tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:#FFFFFF}
 .empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px}.empty i{font-size:34px;opacity:.5;display:block;margin-bottom:8px}
 .loading{text-align:center;padding:40px;color:var(--muted);font-size:13px}.spinner{width:24px;height:24px;border:2.5px solid var(--border2);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;margin-bottom:8px}@keyframes spin{to{transform:rotate(360deg)}}
 .prog-bar{height:6px;background:var(--border2);border-radius:99px;overflow:hidden;flex:1}.prog-fill{height:100%;border-radius:99px;transition:width .4s}
-.modal-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(20,40,73,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center}.modal-overlay.open{display:flex}
+.modal-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(17,24,39,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center}.modal-overlay.open{display:flex}
 .modal{background:#fff;border-radius:18px;width:min(520px,92vw);max-height:90vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.18)}
 .modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between}.modal-title{font-size:17px;font-weight:700;color:var(--navy)}
 .modal-close{width:30px;height:30px;border-radius:8px;border:none;background:var(--off);color:var(--muted);font-size:18px}.modal-body{padding:20px 24px}.modal-footer{padding:14px 24px 20px;display:flex;justify-content:flex-end;gap:8px}
 .toast{position:fixed;bottom:24px;right:24px;z-index:300;background:var(--navy);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.15);transform:translateY(80px);opacity:0;transition:all .3s}.toast.show{transform:none;opacity:1}.toast.success{background:var(--teal)}.toast.error{background:var(--red)}
 /* forms */
 .type-card{display:flex;flex-direction:column;gap:10px;border-top:4px solid var(--teal)}
-.type-card.pqr{border-top-color:#E65100}.type-card.brand{border-top-color:var(--purple)}.type-card.lean{border-top-color:#00695C}
+.type-card.pqr{border-top-color:#C2410C}.type-card.brand{border-top-color:var(--purple)}.type-card.lean{border-top-color:#111827}
 .type-card h3{font-size:15px;color:var(--navy)}.type-card .desc{font-size:12px;color:var(--muted);line-height:1.5}
 .score-big{font-size:34px;font-weight:800;line-height:1}
 .fsection{background:#fff;border:1px solid var(--border2);border-radius:14px;margin-bottom:14px;overflow:hidden}
@@ -98,18 +98,18 @@ tbody td{padding:11px 14px;border-bottom:1px solid var(--border2);vertical-align
 .opt{padding:6px 12px;border-radius:99px;border:1.5px solid var(--border2);background:#fff;font-size:12px;color:var(--text)}
 .opt.on{background:var(--navy);border-color:var(--navy);color:#fff}
 .opt.stage{border-radius:10px;text-align:left;max-width:100%;white-space:normal;line-height:1.4}
-.stars button{background:none;border:none;font-size:22px;color:#D9E3DD;padding:0 2px}.stars button.on{color:var(--amber)}
+.stars button{background:none;border:none;font-size:22px;color:#E5E7EB;padding:0 2px}.stars button.on{color:var(--amber)}
 .num-row{display:flex;align-items:center;gap:10px}.num-row input{width:110px;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:14px;outline:none}.num-row input:focus{border-color:var(--teal)}
 .num-row .unit{font-size:12px;color:var(--muted)}
 .scale-hint{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.scale-hint span{font-size:10px;padding:2px 7px;border-radius:99px;background:var(--off);color:var(--muted);border:1px solid var(--border2)}
-.override{margin-top:6px;padding:8px 10px;background:#FFF8E1;border:1px dashed #E0B94B;border-radius:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
-.override input[type=number]{width:80px;padding:5px 8px;border:1px solid #E0B94B;border-radius:6px}.override input[type=text]{flex:1;min-width:140px;padding:5px 8px;border:1px solid #E0B94B;border-radius:6px}
+.override{margin-top:6px;padding:8px 10px;background:#DCFCE7;border:1px dashed #D1D5DB;border-radius:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+.override input[type=number]{width:80px;padding:5px 8px;border:1px solid #D1D5DB;border-radius:6px}.override input[type=text]{flex:1;min-width:140px;padding:5px 8px;border:1px solid #D1D5DB;border-radius:6px}
 .ans-ro{font-size:13px;color:var(--text);background:var(--off);padding:6px 10px;border-radius:8px;display:inline-block}
 .area-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px}.area-row .lbl{width:190px;color:var(--navy)}.area-row .val{width:60px;text-align:right;font-weight:600;color:var(--navy)}
-.sticky-actions{position:sticky;bottom:0;background:rgba(246,250,248,.95);backdrop-filter:blur(4px);padding:12px 0;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid var(--border2)}
+.sticky-actions{position:sticky;bottom:0;background:rgba(17,24,39,.95);backdrop-filter:blur(4px);padding:12px 0;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid var(--border2)}
 .ev-list{display:flex;flex-direction:column;gap:4px;margin-top:8px}.ev-item{display:flex;align-items:center;gap:8px;font-size:12px;background:var(--off);padding:6px 10px;border-radius:8px}
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
-.mentor-note{background:#FFF8E1;border-left:3px solid var(--amber);padding:10px 14px;border-radius:8px;font-size:13px;white-space:pre-wrap}
+.mentor-note{background:#DCFCE7;border-left:3px solid var(--amber);padding:10px 14px;border-radius:8px;font-size:13px;white-space:pre-wrap}
 .insp-row{display:grid;grid-template-columns:1fr 92px 86px 1fr;gap:10px;align-items:start;padding:9px 0;border-bottom:1px solid var(--border2)}.insp-row:last-child{border-bottom:none}
 .insp-row.na .insp-label{opacity:.45;text-decoration:line-through}
 .insp-label{font-size:13px;color:var(--navy);font-weight:500}.insp-hint{font-size:11px;color:var(--muted)}
@@ -244,7 +244,7 @@ const TYPE_META = {
 };
 const ALL_TYPES = ['pqr','brand','lean','finance'];
 const STATUS_CLS = { Draft:'b-draft', Submitted:'b-submitted', Reviewed:'b-reviewed' };
-const scoreColor = s => s === null || s === undefined ? '#94A3B8' : s >= 80 ? '#1D9E75' : s >= 60 ? '#EF9F27' : '#E24B4A';
+const scoreColor = s => s === null || s === undefined ? '#9CA3AF' : s >= 80 ? '#6B7280' : s >= 60 ? '#D97706' : '#E24B4A';
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '—';
 
@@ -538,7 +538,7 @@ function renderForm() {
       ${cur.Status !== 'Draft' ? `<button class="btn btn-primary btn-sm" id="btn-pdf" onclick="downloadAssessmentPdf('${cur.ID}')"><i class="ti ti-download"></i> Download PDF</button>` : ''}
       ${isMgmt ? `<button class="btn btn-outline btn-sm" onclick="openCollabFolder('${cur.CollaboratorID}')"><i class="ti ti-folder"></i> Drive</button>` : ''}
     </div>
-    ${isRP ? `<div class="card" style="margin-bottom:14px;background:#FFF8E1;border:none;font-size:12px;color:#8D6E00;"><i class="ti ti-info-circle"></i> You are reviewing as the ${TYPE_META[cur.Type].label} resource person. Scores are read-only — leave your feedback in the comments below; the mentor and collaborator will be notified.</div>` : ''}`;
+    ${isRP ? `<div class="card" style="margin-bottom:14px;background:#DCFCE7;border:none;font-size:12px;color:#111827;"><i class="ti ti-info-circle"></i> You are reviewing as the ${TYPE_META[cur.Type].label} resource person. Scores are read-only — leave your feedback in the comments below; the mentor and collaborator will be notified.</div>` : ''}`;
   const body = (cur.Type === 'pqr' ? renderPqr() : cur.Type === 'brand' ? renderBrand() : cur.Type === 'finance' ? renderFinance() : renderLean()) + renderComments();
   const scorePanel = renderScorePanel();
   const actions = `
@@ -563,7 +563,7 @@ function renderScorePanel() {
   let areas = '';
   if (cur.Type === 'lean') {
     areas = (b.kpis||[]).map(k => `<div class="area-row"><span class="lbl">${esc(k.label)}</span>
-      <span class="val" style="color:${k.met===true?'#1D9E75':k.met===false?'#E24B4A':'var(--muted)'}">${k.met===true?'✓':k.met===false?'✗':'·'} ${k.value ?? '—'}${k.changePct!==undefined&&k.changePct!==null?` <small>(${k.changePct>0?'+':''}${k.changePct}%)</small>`:''}</span></div>`).join('');
+      <span class="val" style="color:${k.met===true?'#6B7280':k.met===false?'#E24B4A':'var(--muted)'}">${k.met===true?'✓':k.met===false?'✗':'·'} ${k.value ?? '—'}${k.changePct!==undefined&&k.changePct!==null?` <small>(${k.changePct>0?'+':''}${k.changePct}%)</small>`:''}</span></div>`).join('');
   } else {
     areas = (b.areas||[]).map(a => `<div class="area-row"><span class="lbl">${esc(a.label)}</span><div class="prog-bar"><div class="prog-fill" style="width:${a.max?Math.round(a.score/a.max*100):0}%;background:var(--teal)"></div></div><span class="val">${a.score}/${a.max}</span></div>`).join('');
     if (cur.Type==='pqr' && b.score!==undefined) areas += `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Defects: <strong style="color:${b.majorDefects>0?'#E24B4A':'var(--navy)'}">${b.majorDefects} major</strong> · <strong>${b.minorDefects} minor</strong></div>`;
@@ -600,10 +600,10 @@ function renderQ(q, scoredNumeric) {
   const canEdit = editable() && !reviewing();
   // Mentor override row for scored numeric questions
   const ov = curOverrides[q.id];
-  const overrideRow = reviewing() && scoredNumeric ? `<div class="override"><i class="ti ti-pencil" style="color:#B8860B"></i> Mentor score
+  const overrideRow = reviewing() && scoredNumeric ? `<div class="override"><i class="ti ti-pencil" style="color:#6B7280"></i> Mentor score
       <input type="number" min="0" max="${q.max||''}" value="${ov?.value ?? ''}" placeholder="${v ?? ''}" oninput="setOverride('${q.id}', this.value, null)">
       <input type="text" value="${esc(ov?.note||'')}" placeholder="Reason (optional)" oninput="setOverride('${q.id}', null, this.value)"></div>` : '';
-  const finalOverride = cur.Status==='Reviewed' && ov ? `<div style="font-size:11px;color:#B8860B;margin-top:4px;"><i class="ti ti-pencil"></i> Mentor adjusted to <strong>${esc(ov.value)}</strong>${ov.note ? ' — ' + esc(ov.note) : ''}</div>` : '';
+  const finalOverride = cur.Status==='Reviewed' && ov ? `<div style="font-size:11px;color:#6B7280;margin-top:4px;"><i class="ti ti-pencil"></i> Mentor adjusted to <strong>${esc(ov.value)}</strong>${ov.note ? ' — ' + esc(ov.note) : ''}</div>` : '';
   if (!canEdit) return qWrap(q, roValue(q, v), overrideRow + finalOverride);
 
   switch (q.type) {
@@ -691,10 +691,10 @@ function renderPqr() {
             <span>Major ${canEdit ? `<input type="number" min="0" style="width:56px;padding:4px 6px;border:1px solid var(--border2);border-radius:6px;margin-left:4px;" value="${esc(curAnswers.wm_major??'')}" oninput="setAns('wm_major', this.value)">` : `<strong>${esc(curAnswers.wm_major??0)}</strong>`}</span>
             <span>Minor ${canEdit ? `<input type="number" min="0" style="width:56px;padding:4px 6px;border:1px solid var(--border2);border-radius:6px;margin-left:4px;" value="${esc(curAnswers.wm_minor??'')}" oninput="setAns('wm_minor', this.value)">` : `<strong>${esc(curAnswers.wm_minor??0)}</strong>`}</span>
             <span style="color:var(--muted);">— attach defect photos below</span></div>` : '';
-        const overrideRow = reviewing() && !isNa ? `<div class="override" style="grid-column:1/-1;"><i class="ti ti-pencil" style="color:#B8860B"></i> Mentor mark
+        const overrideRow = reviewing() && !isNa ? `<div class="override" style="grid-column:1/-1;"><i class="ti ti-pencil" style="color:#6B7280"></i> Mentor mark
             <input type="number" min="0" max="${mx||''}" step="0.5" value="${ov?.value ?? ''}" placeholder="${v ?? ''}" oninput="setOverride('${q.id}', this.value, null)">
             <input type="text" value="${esc(ov?.note||'')}" placeholder="Reason (optional)" oninput="setOverride('${q.id}', null, this.value)"></div>` : '';
-        const finalOv = cur.Status==='Reviewed' && ov ? `<div style="grid-column:1/-1;font-size:11px;color:#B8860B;"><i class="ti ti-pencil"></i> Mentor adjusted to <strong>${esc(ov.value)}</strong>${ov.note ? ' — ' + esc(ov.note) : ''}</div>` : '';
+        const finalOv = cur.Status==='Reviewed' && ov ? `<div style="grid-column:1/-1;font-size:11px;color:#6B7280;"><i class="ti ti-pencil"></i> Mentor adjusted to <strong>${esc(ov.value)}</strong>${ov.note ? ' — ' + esc(ov.note) : ''}</div>` : '';
         return `<div class="insp-row ${isNa?'na':''}" id="row-${q.id}">
           <div><div class="insp-label">${esc(q.label)}</div>${q.hint ? `<div class="insp-hint">${esc(q.hint)}</div>` : ''}</div>
           <div>${naCell}</div><div>${markCell}</div><div>${remarkCell}</div>${defects}${overrideRow}${finalOv}</div>`;
@@ -756,14 +756,14 @@ function renderBrand() {
 function renderFinance() {
   const f = FORMS.finance; const b = cur.breakdown || {};
   const fmt = v => v === null || v === undefined ? '—' : Number(v).toLocaleString('en-US');
-  const calc = b.unitCost !== undefined ? `<div class="card" style="margin-bottom:14px;background:#FFF8E1;border:none;">
-      <div style="font-size:12px;font-weight:600;color:#8D6E00;margin-bottom:8px;"><i class="ti ti-calculator"></i> Calculated from your answers</div>
+  const calc = b.unitCost !== undefined ? `<div class="card" style="margin-bottom:14px;background:#DCFCE7;border:none;">
+      <div style="font-size:12px;font-weight:600;color:#111827;margin-bottom:8px;"><i class="ti ti-calculator"></i> Calculated from your answers</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;font-size:12px;">
         <div><div style="color:var(--muted);">Unit cost</div><div style="font-weight:700;color:var(--navy);">${fmt(b.unitCost)} ${f.currency}</div></div>
         <div><div style="color:var(--muted);">Gross margin</div><div style="font-weight:700;color:${scoreColor(b.grossMarginPct===null?null:b.grossMarginPct*2)}">${b.grossMarginPct ?? '—'}${b.grossMarginPct!==null&&b.grossMarginPct!==undefined?'%':''}</div></div>
-        <div><div style="color:var(--muted);">Net profit (month)</div><div style="font-weight:700;color:${b.netProfit>0?'#1D9E75':b.netProfit<0?'#E24B4A':'var(--navy)'}">${fmt(b.netProfit)} ${f.currency}</div></div>
+        <div><div style="color:var(--muted);">Net profit (month)</div><div style="font-weight:700;color:${b.netProfit>0?'#6B7280':b.netProfit<0?'#E24B4A':'var(--navy)'}">${fmt(b.netProfit)} ${f.currency}</div></div>
         <div><div style="color:var(--muted);">Net margin</div><div style="font-weight:700;color:var(--navy);">${b.netMarginPct ?? '—'}${b.netMarginPct!==null&&b.netMarginPct!==undefined?'%':''}</div></div>
-        <div><div style="color:var(--muted);">Income change</div><div style="font-weight:700;color:${b.incomeChangePct>0?'#1D9E75':b.incomeChangePct<0?'#E24B4A':'var(--navy)'}">${b.incomeChangePct===null||b.incomeChangePct===undefined?'—':(b.incomeChangePct>0?'+':'')+b.incomeChangePct+'%'}</div></div>
+        <div><div style="color:var(--muted);">Income change</div><div style="font-weight:700;color:${b.incomeChangePct>0?'#6B7280':b.incomeChangePct<0?'#E24B4A':'var(--navy)'}">${b.incomeChangePct===null||b.incomeChangePct===undefined?'—':(b.incomeChangePct>0?'+':'')+b.incomeChangePct+'%'}</div></div>
       </div></div>` : '';
   return calc + f.sections.map(s => `<div class="fsection">
     <div class="fsection-hd"><span class="t">${esc(s.label)}</span></div>
@@ -775,13 +775,13 @@ function renderFinance() {
 function renderLean() {
   const f = FORMS.lean; const isEnd = cur.Period === 'Endline';
   const kpiResult = key => (cur.breakdown?.kpis||[]).find(k => k.key === key);
-  return `<div class="card" style="margin-bottom:14px;background:${isEnd?'#E0F7FA':'var(--teal-lt)'};border:none;font-size:13px;line-height:1.6;">
+  return `<div class="card" style="margin-bottom:14px;background:${isEnd?'#DBEAFE':'var(--teal-lt)'};border:none;font-size:13px;line-height:1.6;">
       <strong>${isEnd ? 'Endline' : 'Baseline'}</strong> — ${isEnd ? 'answers are compared with your most recent Baseline and checked against each KPI target.' : 'record the current situation before Lean practice. Targets are checked at the Endline.'}
     </div>` + f.kpis.map((k, i) => {
     const qs = isEnd ? k.endline : k.baseline; const r = kpiResult(k.key);
     return `<div class="fsection">
       <div class="fsection-hd"><span class="t">KPI ${i+1} · ${esc(k.label)} <span style="font-weight:400;color:var(--muted);font-size:12px;">${esc(k.labelMm)}</span></span>
-        <span class="m">Target: ${esc(k.target)}${isEnd && r ? ` · <strong style="color:${r.met===true?'#1D9E75':r.met===false?'#E24B4A':'var(--muted)'}">${r.met===true?'Met':r.met===false?'Not met':'No baseline'}</strong>` : ''}</span></div>
+        <span class="m">Target: ${esc(k.target)}${isEnd && r ? ` · <strong style="color:${r.met===true?'#6B7280':r.met===false?'#E24B4A':'var(--muted)'}">${r.met===true?'Met':r.met===false?'Not met':'No baseline'}</strong>` : ''}</span></div>
       <div class="fsection-body">
         ${isEnd && r && r.baseline!==null && r.baseline!==undefined ? `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Baseline: <strong>${r.baseline} ${esc(k.unit)}</strong></div>` : ''}
         ${qs.map(q => renderQ(q, q.type === 'number')).join('')}
@@ -936,10 +936,10 @@ async function loadDashboard() {
       <div class="card"><div class="stat-label">Collaborators</div><div class="stat-val">${d.totals.collaborators}</div><div class="stat-sub">${d.totals.assessments} assessments · ${d.totals.reviewed} finalised</div></div>
       <div class="card"><div class="stat-label">QC standard met</div><div class="stat-val" style="color:${scoreColor(d.qc.collaboratorsMetPct)}">${d.qc.collaboratorsMetPct}%</div><div class="stat-sub">${d.qc.collaboratorsMet} of ${d.totals.collaborators} collaborators · ${d.qc.productsMet}/${d.qc.productsAssessed} products ≥ 80</div></div>
       <div class="card"><div class="stat-label">Brands emerging</div><div class="stat-val" style="color:var(--purple)">${d.brand.branded}</div><div class="stat-sub">of ${d.brand.assessed} assessed at Stage 2+ · avg score ${d.brand.avgScore ?? '—'}</div></div>
-      <div class="card"><div class="stat-label">Lean targets met</div><div class="stat-val" style="color:#00695C">${d.lean.avgTargetsMet ?? '—'}<span style="font-size:14px;color:var(--muted)">${d.lean.avgTargetsMet!==null?' / 7':''}</span></div><div class="stat-sub">${d.lean.baselines} baselines · ${d.lean.endlines} endlines</div></div>
+      <div class="card"><div class="stat-label">Lean targets met</div><div class="stat-val" style="color:#111827">${d.lean.avgTargetsMet ?? '—'}<span style="font-size:14px;color:var(--muted)">${d.lean.avgTargetsMet!==null?' / 7':''}</span></div><div class="stat-sub">${d.lean.baselines} baselines · ${d.lean.endlines} endlines</div></div>
     </div>
     <div class="card" style="margin-bottom:16px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;">
-      <div style="font-size:13px;font-weight:700;color:#8D6E00;"><i class="ti ti-coins"></i> Costing &amp; Profit</div>
+      <div style="font-size:13px;font-weight:700;color:#111827;"><i class="ti ti-coins"></i> Costing &amp; Profit</div>
       <div style="font-size:12px;color:var(--muted);">${d.finance.assessed} of ${d.totals.collaborators} assessed</div>
       <div style="font-size:12px;"><strong style="color:${scoreColor(d.finance.profitablePct)}">${d.finance.profitablePct}%</strong> <span style="color:var(--muted)">profitable</span></div>
       <div style="font-size:12px;"><strong>${d.finance.avgGrossMargin ?? '—'}${d.finance.avgGrossMargin!==null?'%':''}</strong> <span style="color:var(--muted)">avg gross margin</span></div>
@@ -973,10 +973,10 @@ async function loadDashboard() {
 
   const bands = Object.entries(d.brand.bands);
   const c1 = document.getElementById('ch-brand');
-  if (c1) charts.push(new Chart(c1, { type:'doughnut', data:{ labels: bands.map(b => b[0]), datasets:[{ data: bands.map(b => b[1]), backgroundColor:['#1D9E75','#4CAF50','#EF9F27','#F57C00','#E24B4A'], borderWidth:0 }] },
+  if (c1) charts.push(new Chart(c1, { type:'doughnut', data:{ labels: bands.map(b => b[0]), datasets:[{ data: bands.map(b => b[1]), backgroundColor:['#6B7280','#22C55E','#D97706','#C2410C','#E24B4A'], borderWidth:0 }] },
     options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ font:{ size:11 }, boxWidth:12 } } } } }));
   const c2 = document.getElementById('ch-brand-areas');
-  if (c2) charts.push(new Chart(c2, { type:'bar', data:{ labels: d.brand.avgAreas.map(a => a.label.replace('Customer Value Proposition','CVP').replace('Business Growth Potential','Growth')), datasets:[{ data: d.brand.avgAreas.map(a => a.max ? Math.round((a.avg||0)/a.max*100) : 0), backgroundColor:'#534AB7', borderRadius:6 }] },
+  if (c2) charts.push(new Chart(c2, { type:'bar', data:{ labels: d.brand.avgAreas.map(a => a.label.replace('Customer Value Proposition','CVP').replace('Business Growth Potential','Growth')), datasets:[{ data: d.brand.avgAreas.map(a => a.max ? Math.round((a.avg||0)/a.max*100) : 0), backgroundColor:'#6D28D9', borderRadius:6 }] },
     options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ctx.raw + '% of max' } } }, scales:{ y:{ beginAtZero:true, max:100, ticks:{ callback:v => v+'%', font:{ size:10 } } }, x:{ ticks:{ font:{ size:10 } } } } } }));
 }
 async function openCollabFolder(collabId) {
@@ -1002,7 +1002,7 @@ async function downloadAssessmentPdf(id) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit:'mm', format:'a4' });
     const W = 210, M = 14;
-    const navy=[28,52,97], teal=[29,158,117], muted=[107,140,125], red=[226,75,74], amber=[239,159,39], light=[246,250,248];
+    const navy=[17,24,39], teal=[107,114,128], muted=[107,114,128], red=[226,75,74], amber=[217,119,6], light=[255,255,255];
     const col = sc => sc===null||sc===undefined ? muted : sc>=80 ? teal : sc>=60 ? amber : red;
     const final = a.Status === 'Reviewed';
     const score = final ? a.finalScore : a.selfScore;
@@ -1013,7 +1013,7 @@ async function downloadAssessmentPdf(id) {
     doc.setFillColor(...navy); doc.rect(0, 0, W, 34, 'F');
     doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(16);
     doc.text(TYPE_META[a.Type].label, M, 14);
-    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(180,220,205);
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(209,213,219);
     doc.text('SN@IL Incubation  ·  AhPhyay Social Development', M, 21);
     doc.text(`${a.ID}  ·  ${final ? 'Final report' : 'Submitted — awaiting mentor review'}`, M, 27);
     doc.setTextColor(255,255,255); doc.setFontSize(9);
@@ -1110,7 +1110,7 @@ async function downloadAssessmentPdf(id) {
           if (colI === 0) bust();
           const x = M + colI * (cw + 4);
           doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(...navy); doc.text(clean(slotLabel(ph.kpi)).slice(0, 48), x, y);
-          doc.setDrawColor(226,237,232); doc.rect(x, y+2, cw, ch);
+          doc.setDrawColor(229,231,235); doc.rect(x, y+2, cw, ch);
           if (dataUrl) { try { const fmt = dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG'; const props = doc.getImageProperties(dataUrl); const ratio = Math.min((cw-2)/props.width, (ch-2)/props.height); const iw = props.width*ratio, ih = props.height*ratio; doc.addImage(dataUrl, fmt, x + (cw-iw)/2, y+2 + (ch-ih)/2, iw, ih); } catch (_) {} }
           if (ph.caption) { doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...muted); doc.text(clean(ph.caption).slice(0, 60), x, y + ch + 6, { maxWidth: cw }); }
           colI++; if (colI === 3) { colI = 0; y += ch + 14; }
@@ -1160,7 +1160,7 @@ async function downloadAssessmentPdf(id) {
       section('Mentor notes');
       doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...navy);
       const lines = doc.splitTextToSize(clean(a.MentorNotes), W-2*M); if (y + lines.length*4.5 > 280) { doc.addPage(); y = 20; }
-      doc.setFillColor(255,248,225); doc.rect(M-2, y-1, W-2*M+4, lines.length*4.5+6, 'F'); doc.text(lines, M, y+4); y += lines.length*4.5 + 12;
+      doc.setFillColor(254,243,199); doc.rect(M-2, y-1, W-2*M+4, lines.length*4.5+6, 'F'); doc.text(lines, M, y+4); y += lines.length*4.5 + 12;
     }
     // Comments thread (resource person feedback + mentor / collaborator replies)
     try {
@@ -1169,7 +1169,7 @@ async function downloadAssessmentPdf(id) {
       if (cms.length) {
         section('Feedback & comments');
         doc.autoTable({ startY: y+2, head:[['Who','Date','Comment']], body: cms.map(cmt => [`${clean(cmt.StaffName)}\n${clean(cmt.roleLabel)}`, fmtDate(cmt.CreatedAt), clean(cmt.Comment)]), styles:{ fontSize:8, cellPadding:2.5 }, headStyles: head, columnStyles:{0:{cellWidth:40},1:{cellWidth:24}},
-          didParseCell: dd => { if (dd.section==='body' && cms[dd.row.index]?.isRp) dd.cell.styles.fillColor = [255,248,225]; } });
+          didParseCell: dd => { if (dd.section==='body' && cms[dd.row.index]?.isRp) dd.cell.styles.fillColor = [254,243,199]; } });
         y = doc.lastAutoTable.finalY + 8;
       }
     } catch (_) {}

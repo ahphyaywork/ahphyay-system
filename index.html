@@ -7,24 +7,24 @@
 <title>AhPhyay — Staff System</title>
 <style>
 :root {
-  --navy:     #1C3461;
-  --navy-d:   #142849;
-  --navy-l:   #243f78;
-  --teal:     #1D9E75;
-  --teal-lt:  #E1F5EE;
-  --teal-mid: #5DCAA5;
-  --amber:    #EF9F27;
-  --amber-lt: #FAEEDA;
+  --navy:     #111827;
+  --navy-d:   #111827;
+  --navy-l:   #374151;
+  --teal:     #6B7280;
+  --teal-lt:  #DCFCE7;
+  --teal-mid: #D1D5DB;
+  --amber:    #D97706;
+  --amber-lt: #FEF3C7;
   --red:      #E24B4A;
   --red-lt:   #FCEBEB;
-  --purple:   #534AB7;
-  --purple-lt:#EEEDFE;
+  --purple:   #6D28D9;
+  --purple-lt:#EDE9FE;
   --white:    #FFFFFF;
-  --off:      #F6FAF8;
-  --text:     #1A2E25;
-  --muted:    #6B8C7D;
-  --border:   rgba(29,158,117,0.12);
-  --border2:  #E2EDE8;
+  --off:      #FFFFFF;
+  --text:     #111827;
+  --muted:    #6B7280;
+  --border:   rgba(107,114,128,0.12);
+  --border2:  #E5E7EB;
   --sidebar:  220px;
   --header:   58px;
 }
@@ -47,7 +47,7 @@ input,textarea,select{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
 #view-login.active{display:grid;}
 
 .login-left {
-  background:var(--navy-d);
+  background:#F9FAFB;border-right:1px solid var(--border2);
   display:flex;flex-direction:column;
   justify-content:space-between;
   padding:48px;
@@ -57,13 +57,13 @@ input,textarea,select{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
   content:'';position:absolute;
   top:-80px;right:-80px;
   width:320px;height:320px;border-radius:50%;
-  background:radial-gradient(circle,rgba(29,158,117,0.15),transparent 70%);
+  background:radial-gradient(circle,rgba(107,114,128,0.15),transparent 70%);
 }
 .login-left::after {
   content:'';position:absolute;
   bottom:-60px;left:-60px;
   width:240px;height:240px;border-radius:50%;
-  background:radial-gradient(circle,rgba(93,202,165,0.08),transparent 70%);
+  background:radial-gradient(circle,rgba(209,213,219,0.08),transparent 70%);
 }
 .login-brand {
   position:relative;z-index:1;
@@ -75,10 +75,10 @@ input,textarea,select{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
 .login-logo img{width:100%;height:100%;object-fit:cover;}
 .login-brand h1 {
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:32px;font-weight:800;
-  color:var(--white);margin-bottom:6px;
+  color:var(--navy);margin-bottom:6px;
 }
 .login-brand p {
-  font-size:13px;color:rgba(255,255,255,0.45);line-height:1.6;
+  font-size:13px;color:rgba(17,24,39,0.45);line-height:1.6;
   max-width:280px;
 }
 .login-features {
@@ -91,7 +91,7 @@ input,textarea,select{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
 .feat-dot {
   width:8px;height:8px;border-radius:50%;background:var(--teal);flex-shrink:0;
 }
-.feat-text{font-size:12px;color:rgba(255,255,255,0.55);}
+.feat-text{font-size:12px;color:rgba(17,24,39,0.55);}
 
 .login-right {
   display:flex;align-items:center;justify-content:center;
@@ -148,14 +148,14 @@ input,textarea,select{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
 /* Sidebar */
 .sidebar {
   width:var(--sidebar);flex-shrink:0;
-  background:var(--navy-d);
+  background:#fff;border-right:1px solid var(--border2);
   display:flex;flex-direction:column;
   position:fixed;top:0;left:0;bottom:0;z-index:50;
   transition:transform .25s;
 }
 .sidebar-brand {
   padding:20px 18px 16px;
-  border-bottom:1px solid rgba(255,255,255,0.06);
+  border-bottom:1px solid var(--border2);
 }
 .sidebar-logo-row{display:flex;align-items:center;gap:10px;margin-bottom:2px;}
 .sidebar-logo {
@@ -164,24 +164,24 @@ input,textarea,select{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
 }
 .sidebar-logo img{width:100%;height:100%;object-fit:cover;}
 .sidebar-name {
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:17px;font-weight:700;color:var(--white);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:17px;font-weight:700;color:var(--navy);
 }
-.sidebar-tagline{font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:.05em;text-transform:uppercase;}
+.sidebar-tagline{font-size:10px;color:rgba(17,24,39,0.3);letter-spacing:.05em;text-transform:uppercase;}
 
 .sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto;}
 .nav-section-label {
   font-size:9px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;
-  color:rgba(255,255,255,0.25);padding:10px 8px 4px;margin-top:4px;
+  color:rgba(17,24,39,0.25);padding:10px 8px 4px;margin-top:4px;
 }
 .nav-item {
   display:flex;align-items:center;gap:10px;
   padding:9px 10px;border-radius:8px;
-  font-size:13px;color:rgba(255,255,255,0.55);
+  font-size:13px;color:rgba(17,24,39,0.55);
   cursor:pointer;transition:all .15s;margin-bottom:1px;
   border:none;background:none;width:100%;text-align:left;
 }
-.nav-item:hover{background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.85);}
-.nav-item.active{background:rgba(29,158,117,0.15);color:var(--teal-mid);}
+.nav-item:hover{background:#F3F4F6;color:var(--navy);}
+.nav-item.active{background:#F3F4F6;color:var(--navy);font-weight:600;}
 .nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0;}
 .nav-item .nav-label{font-size:13px;}
 .nav-badge {
@@ -191,7 +191,7 @@ input,textarea,select{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
 }
 
 .sidebar-user {
-  padding:14px 14px;border-top:1px solid rgba(255,255,255,0.06);
+  padding:14px 14px;border-top:1px solid var(--border2);
 }
 .user-card{display:flex;align-items:center;gap:10px;}
 .user-avatar {
@@ -200,11 +200,11 @@ input,textarea,select{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;font-weight:700;color:var(--navy);
   flex-shrink:0;
 }
-.user-name{font-size:13px;font-weight:500;color:var(--white);}
-.user-role{font-size:10px;color:rgba(255,255,255,0.35);text-transform:capitalize;}
+.user-name{font-size:13px;font-weight:500;color:var(--navy);}
+.user-role{font-size:10px;color:rgba(17,24,39,0.35);text-transform:capitalize;}
 .logout-btn {
   margin-left:auto;background:none;border:none;
-  color:rgba(255,255,255,0.3);font-size:16px;padding:4px;
+  color:rgba(17,24,39,0.3);font-size:16px;padding:4px;
   transition:color .15s;
 }
 .logout-btn:hover{color:var(--red);}
@@ -267,7 +267,7 @@ thead th {
 }
 tbody td{padding:12px 16px;border-bottom:1px solid var(--border2);vertical-align:middle;}
 tbody tr:last-child td{border-bottom:none;}
-tbody tr:hover td{background:#fafcfb;}
+tbody tr:hover td{background:#FFFFFF;}
 
 /* ── Status badges ── */
 .task-tab{padding:7px 16px;border:1px solid var(--border2);background:var(--white);border-radius:99px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:inherit;transition:all .12s;}
@@ -275,34 +275,34 @@ tbody tr:hover td{background:#fafcfb;}
 .task-tab.active{background:var(--navy);border-color:var(--navy);color:var(--white);}
 .badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:500;padding:3px 9px;border-radius:99px;}
 .badge-dot{width:5px;height:5px;border-radius:50%;}
-.badge-done{background:var(--teal-lt);color:#085041;}
+.badge-done{background:var(--teal-lt);color:#111827;}
 .badge-done .badge-dot{background:var(--teal);}
-.badge-prog{background:var(--amber-lt);color:#633806;}
+.badge-prog{background:var(--amber-lt);color:#111827;}
 .badge-prog .badge-dot{background:var(--amber);}
 .badge-late{background:var(--red-lt);color:#791F1F;}
 .badge-late .badge-dot{background:var(--red);}
-.badge-track{background:var(--teal-lt);color:#085041;}
-.badge-risk{background:var(--amber-lt);color:#633806;}
+.badge-track{background:var(--teal-lt);color:#111827;}
+.badge-risk{background:var(--amber-lt);color:#111827;}
 .badge-behind{background:var(--red-lt);color:#791F1F;}
 .badge-admin{background:var(--navy);color:var(--white);}
 .badge-management{background:var(--purple-lt);color:var(--purple);}
-.badge-staff{background:var(--teal-lt);color:#085041;}
+.badge-staff{background:var(--teal-lt);color:#111827;}
 .badge-external{background:var(--off);color:var(--muted);border:1px solid var(--border2);}
 /* Role badges */
-.badge-developer{background:#1a1a2e;color:#00d9ff;}
+.badge-developer{background:#111827;color:#DCFCE7;}
 .badge-bod{background:var(--navy);color:var(--white);}
 .badge-senior-impact{background:var(--purple-lt);color:var(--purple);}
-.badge-senior-biz{background:#EDE7F6;color:#4527A0;}
-.badge-project-coordinator{background:#E8EAF6;color:#3949AB;}
-.badge-production-lead{background:#FFF3E0;color:#E65100;}
-.badge-senior-admin{background:#E8F5E9;color:#2E7D32;}
-.badge-project-officer{background:var(--teal-lt);color:#085041;}
-.badge-network-catalyst{background:#E0F7FA;color:#00695C;}
-.badge-page-admin{background:#F3E5F5;color:#6A1B9A;}
-.badge-admin-assistant{background:#FFF8E1;color:#F57F17;}
-.badge-production-intern{background:#FCE4EC;color:#880E4F;}
-.badge-collaborator{background:#E0F7FA;color:#00695C;border:1px solid #80DEEA;}
-.badge-rp-finance,.badge-rp-quality,.badge-rp-brand,.badge-rp-lean{background:#FFF8E1;color:#8D6E00;border:1px solid #E0B94B;}
+.badge-senior-biz{background:#EDE9FE;color:#111827;}
+.badge-project-coordinator{background:#EDE9FE;color:#6D28D9;}
+.badge-production-lead{background:#FEF3C7;color:#C2410C;}
+.badge-senior-admin{background:#DCFCE7;color:#111827;}
+.badge-project-officer{background:var(--teal-lt);color:#111827;}
+.badge-network-catalyst{background:#DBEAFE;color:#111827;}
+.badge-page-admin{background:#DBEAFE;color:#111827;}
+.badge-admin-assistant{background:#DCFCE7;color:#111827;}
+.badge-production-intern{background:#DBEAFE;color:#111827;}
+.badge-collaborator{background:#DBEAFE;color:#111827;border:1px solid #D1D5DB;}
+.badge-rp-finance,.badge-rp-quality,.badge-rp-brand,.badge-rp-lean{background:#DCFCE7;color:#111827;border:1px solid #D1D5DB;}
 
 /* ── Progress bar ── */
 .prog-wrap{display:flex;align-items:center;gap:8px;}
@@ -348,7 +348,7 @@ tbody tr:hover td{background:#fafcfb;}
 /* ── Modal ── */
 .modal-overlay {
   display:none;position:fixed;inset:0;z-index:200;
-  background:rgba(20,40,73,0.55);backdrop-filter:blur(4px);
+  background:rgba(17,24,39,0.55);backdrop-filter:blur(4px);
   align-items:center;justify-content:center;
 }
 .modal-overlay.open{display:flex;}
@@ -544,7 +544,7 @@ tbody tr:hover td{background:#fafcfb;}
             <button class="btn btn-primary btn-sm" onclick="savePermissions()" id="btn-save-perms"><i class="ti ti-device-floppy"></i> Save changes</button>
           </div>
         </div>
-        <div style="background:#FFF8E1;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#8D6E00;">
+        <div style="background:#DCFCE7;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#111827;">
           <i class="ti ti-info-circle"></i> Toggle what each role can see and do. Changes take effect the next time a user logs in. BOD always keeps access to this tab and staff management (anti-lockout safeguard).
         </div>
         <div id="access-matrix" style="overflow-x:auto;"></div>
@@ -556,7 +556,7 @@ tbody tr:hover td{background:#fafcfb;}
             <button class="btn btn-primary btn-sm" onclick="saveJdScope()" id="btn-save-jd"><i class="ti ti-device-floppy"></i> Save JD scope</button>
           </div>
         </div>
-        <div style="background:#EFF6FF;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#1565C0;">
+        <div style="background:#F9FAFB;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#6B7280;">
           <i class="ti ti-info-circle"></i> Which work areas belong to each role, taken from the 2026 job descriptions. This drives the <strong>JD alignment %</strong> shown on KPI cards &mdash; a separate diagnostic that does <strong>not</strong> affect anyone's KPI score. Tick an area to bring it inside that role's JD.
         </div>
         <div id="jd-scope-matrix" style="overflow-x:auto;"></div>
@@ -744,7 +744,7 @@ tbody tr:hover td{background:#fafcfb;}
           <div class="section-title">Document Submission Tracker</div>
           <button class="btn btn-primary btn-sm" onclick="openAddDoc()"><i class="ti ti-plus"></i> New Request</button>
         </div>
-        <div style="background:#FFF8E1;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#8D6E00;">
+        <div style="background:#DCFCE7;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#111827;">
           <i class="ti ti-alert-triangle"></i> Track supporting documents owed by project teams. Overdue submissions block finance reporting — these are flagged in red. Submit within 3–5 days post-activity to keep monthly closing on schedule.
         </div>
         <!-- Counters (clickable to filter) -->
@@ -794,7 +794,7 @@ tbody tr:hover td{background:#fafcfb;}
             <button class="btn btn-primary btn-sm" onclick="openAddRecurring()"><i class="ti ti-plus"></i> New Template</button>
           </div>
         </div>
-        <div style="background:var(--teal-lt);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#085041;">
+        <div style="background:var(--teal-lt);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#111827;">
           <i class="ti ti-info-circle"></i> Recurring task templates auto-generate real tasks based on their frequency. Daily tasks generate once per day, weekly every 7 days, monthly once per month. Generation runs automatically when management opens the system, or manually via the button above.
         </div>
         <div id="seed-prompt" style="display:none;background:var(--off);border:1px dashed var(--border2);border-radius:12px;padding:20px;text-align:center;margin-bottom:16px;">
@@ -970,7 +970,7 @@ tbody tr:hover td{background:#fafcfb;}
       </div>
       <!-- Collaborator business profile (SN@IL) — shown only when role = collaborator -->
       <div id="collab-profile" style="display:none;border-top:1px dashed var(--border2);padding-top:14px;margin-top:4px;">
-        <div style="font-size:12px;font-weight:600;color:#00695C;margin-bottom:10px;"><i class="ti ti-building-store"></i> Business profile (SN@IL incubation)</div>
+        <div style="font-size:12px;font-weight:600;color:#111827;margin-bottom:10px;"><i class="ti ti-building-store"></i> Business profile (SN@IL incubation)</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Business name *</label><input class="form-input" id="collab-business" placeholder="e.g. Shwe Yi Textiles"></div>
           <div class="form-group"><label class="form-label">Owner</label><input class="form-input" id="collab-owner" placeholder="Defaults to full name"></div>
@@ -1281,7 +1281,7 @@ tbody tr:hover td{background:#fafcfb;}
       <button class="modal-close" onclick="closeModal('modal-quick-doc')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
-      <div style="background:var(--teal-lt);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:#085041;">
+      <div style="background:var(--teal-lt);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:#111827;">
         <i class="ti ti-link" style="font-size:11px;"></i> This document will be created and automatically linked to your task. The task will auto-complete when this document is verified.
       </div>
       <div class="form-group">
@@ -2026,15 +2026,15 @@ async function loadDashboard() {
               <div class="staff-card-head">
                 <div style="position:relative;width:44px;height:44px;flex-shrink:0;">
                   <svg width="44" height="44" viewBox="0 0 44 44">
-                    <circle cx="22" cy="22" r="18" fill="none" stroke="#E2EDE8" stroke-width="4"/>
+                    <circle cx="22" cy="22" r="18" fill="none" stroke="#E5E7EB" stroke-width="4"/>
                     <circle cx="22" cy="22" r="18" fill="none"
-                      stroke="${s.avgKpi>=70?'#1D9E75':s.avgKpi>=40?'#EF9F27':'#E24B4A'}"
+                      stroke="${s.avgKpi>=70?'#6B7280':s.avgKpi>=40?'#D97706':'#E24B4A'}"
                       stroke-width="4"
                       stroke-dasharray="${(s.avgKpi/100)*113.1} 113.1"
                       stroke-linecap="round"
                       transform="rotate(-90 22 22)"/>
                     <text x="22" y="26" text-anchor="middle" font-size="9" font-weight="bold"
-                      fill="${s.avgKpi>=70?'#1D9E75':s.avgKpi>=40?'#EF9F27':'#E24B4A'}">${s.avgKpi}%</text>
+                      fill="${s.avgKpi>=70?'#6B7280':s.avgKpi>=40?'#D97706':'#E24B4A'}">${s.avgKpi}%</text>
                   </svg>
                 </div>
                 <div style="flex:1;">
@@ -2088,7 +2088,7 @@ async function loadDashboard() {
       data: {
         labels: ['Done','In Progress','Pending'],
         datasets: [{ data: [doneCount, progCount, pendCount],
-          backgroundColor: ['#1D9E75','#EF9F27','#E24B4A'],
+          backgroundColor: ['#6B7280','#D97706','#E24B4A'],
           borderWidth: 0, hoverOffset: 4 }]
       },
       options: { cutout: '70%', plugins: { legend: { display: false } }, responsive: false }
@@ -2100,13 +2100,13 @@ async function loadDashboard() {
       data: {
         labels: ['High','Medium','Low'],
         datasets: [{ data: [highCount, medCount, lowCount],
-          backgroundColor: ['#E24B4A','#EF9F27','#1D9E75'],
+          backgroundColor: ['#E24B4A','#D97706','#6B7280'],
           borderRadius: 6, borderWidth: 0 }]
       },
       options: {
         plugins: { legend: { display: false } },
         scales: {
-          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#E2EDE8' } },
+          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#E5E7EB' } },
           x: { ticks: { font: { size: 10 } }, grid: { display: false } }
         }
       }
@@ -2118,13 +2118,13 @@ async function loadDashboard() {
       data: {
         labels: ['On Track','At Risk','Behind'],
         datasets: [{ data: [onTrack, atRisk, behind],
-          backgroundColor: ['#1D9E75','#EF9F27','#E24B4A'],
+          backgroundColor: ['#6B7280','#D97706','#E24B4A'],
           borderRadius: 6, borderWidth: 0 }]
       },
       options: {
         plugins: { legend: { display: false } },
         scales: {
-          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#E2EDE8' } },
+          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#E5E7EB' } },
           x: { ticks: { font: { size: 10 } }, grid: { display: false } }
         }
       }
@@ -2319,10 +2319,10 @@ async function loadStaff() {
     const isActive = s.Active?.toLowerCase() === 'true';
     return `
     <tr style="${isActive ? '' : 'opacity:0.55;background:var(--off);'}">
-      <td><strong>${s.Name}</strong>${normalizeRoleKey(s.Role)==='collaborator' && _collabByStaff[s.ID] ? `<br><span style="font-size:11px;color:#00695C;"><i class="ti ti-building-store" style="font-size:11px;"></i> ${_collabByStaff[s.ID].BusinessName}</span>` : ''}</td>
+      <td><strong>${s.Name}</strong>${normalizeRoleKey(s.Role)==='collaborator' && _collabByStaff[s.ID] ? `<br><span style="font-size:11px;color:#111827;"><i class="ti ti-building-store" style="font-size:11px;"></i> ${_collabByStaff[s.ID].BusinessName}</span>` : ''}</td>
       <td style="color:var(--muted)">${s.Username}</td>
       <td><span class="badge badge-${normalizeRoleKey(s.Role)}">${roleLabel(s.Role)}</span></td>
-      <td style="font-size:11px;">${s.Team ? `<span style="background:${s.Team==='Support Team'?'#E3F2FD':s.Team==='Management'?'#F3E5F5':'#E8F5E9'};color:${s.Team==='Support Team'?'#1565C0':s.Team==='Management'?'#6A1B9A':'#2E7D32'};padding:2px 8px;border-radius:99px;">${s.Team}</span>` : '—'}</td>
+      <td style="font-size:11px;">${s.Team ? `<span style="background:${s.Team==='Support Team'?'#DBEAFE':s.Team==='Management'?'#DBEAFE':'#DCFCE7'};color:${s.Team==='Support Team'?'#6B7280':s.Team==='Management'?'#111827':'#111827'};padding:2px 8px;border-radius:99px;">${s.Team}</span>` : '—'}</td>
       <td style="color:var(--muted)">${s.Type}</td>
       <td style="color:var(--muted)">${s.Email||'—'}</td>
       <td style="color:var(--muted);font-size:11px">${s.Projects||'—'}</td>
@@ -2710,7 +2710,7 @@ function renderTaskRows(tasks, projects, staff) {
       </td>
       <td>${projBadges}</td>
       <td style="color:var(--muted)">${t.Category || '—'}</td>
-      <td>${assigneeRoles.length ? assigneeRoles.map(r => `<span style="display:inline-block;background:var(--teal-lt);color:#085041;font-size:10px;padding:2px 7px;border-radius:99px;margin:1px;">${r}</span>`).join(' ') : '<span style="color:var(--muted)">Unassigned</span>'}</td>
+      <td>${assigneeRoles.length ? assigneeRoles.map(r => `<span style="display:inline-block;background:var(--teal-lt);color:#111827;font-size:10px;padding:2px 7px;border-radius:99px;margin:1px;">${r}</span>`).join(' ') : '<span style="color:var(--muted)">Unassigned</span>'}</td>
       <td>
         <span class="badge ${t.Priority==='High'?'badge-late':t.Priority==='Low'?'badge-staff':'badge-prog'}">
           ${t.Priority || 'Medium'}
@@ -2728,7 +2728,7 @@ function renderTaskRows(tasks, projects, staff) {
         })() : ''}
         ${t.LinkedDocID && t.Status !== 'Done' ? (() => {
           const verified = t.linkedDocStatus === 'Verified';
-          return `<br><span style="display:inline-block;margin-top:4px;font-size:10px;padding:2px 7px;border-radius:99px;background:${verified ? '#E8F5E9' : '#FFF3E0'};color:${verified ? '#2E7D32' : '#E65100'};" title="Linked to: ${t.linkedDocTitle || 'document'}"><i class="ti ti-link" style="font-size:10px;"></i> ${verified ? 'Document verified' : 'Waiting on document'}</span>`;
+          return `<br><span style="display:inline-block;margin-top:4px;font-size:10px;padding:2px 7px;border-radius:99px;background:${verified ? '#DCFCE7' : '#FEF3C7'};color:${verified ? '#111827' : '#C2410C'};" title="Linked to: ${t.linkedDocTitle || 'document'}"><i class="ti ti-link" style="font-size:10px;"></i> ${verified ? 'Document verified' : 'Waiting on document'}</span>`;
         })() : ''}
       </td>
       <td>
@@ -2739,10 +2739,10 @@ function renderTaskRows(tasks, projects, staff) {
               if (verified && hasEvidence) {
                 return `<div>
                   <button class="btn btn-outline btn-sm" onclick="viewEvidence('${t.ID}')" style="color:var(--teal)"><i class="ti ti-file-check" style="font-size:13px;"></i> View documents</button>
-                  <div style="font-size:10px;color:#2E7D32;margin-top:3px;">Verified document</div>
+                  <div style="font-size:10px;color:#111827;margin-top:3px;">Verified document</div>
                 </div>`;
               }
-              const statusColor = t.linkedDocStatus === 'Verified' ? '#2E7D32' : t.linkedDocStatus === 'Submitted' ? '#1565C0' : t.linkedDocStatus === 'Incomplete' ? '#C62828' : '#E65100';
+              const statusColor = t.linkedDocStatus === 'Verified' ? '#111827' : t.linkedDocStatus === 'Submitted' ? '#6B7280' : t.linkedDocStatus === 'Incomplete' ? '#C62828' : '#C2410C';
               return `<div style="font-size:11px;color:var(--muted);">
                 <i class="ti ti-link" style="font-size:11px;"></i> Via document
                 <div style="color:${statusColor};font-weight:600;margin-top:2px;">${t.linkedDocStatus || 'Pending'}</div>
@@ -3286,8 +3286,8 @@ function jdChip(jd, opts) {
     return `<span style="font-size:11px;color:var(--muted);">JD alignment —</span>`;
   }
   const p = jd.alignmentPct;
-  const col = p >= 80 ? '#1D9E75' : p >= 50 ? '#EF9F27' : '#E24B4A';
-  const bg  = p >= 80 ? '#E8F5E9' : p >= 50 ? '#FFF3E0' : '#FCEBEB';
+  const col = p >= 80 ? '#6B7280' : p >= 50 ? '#D97706' : '#E24B4A';
+  const bg  = p >= 80 ? '#DCFCE7' : p >= 50 ? '#FEF3C7' : '#FCEBEB';
   const detail = jd.offScope > 0
     ? `${jd.offScope} of ${jd.classified} task${jd.classified!==1?'s':''} outside this role's JD`
     : `all ${jd.classified} classified task${jd.classified!==1?'s':''} within the JD`;
@@ -3320,9 +3320,9 @@ function jdExplainerSection(my) {
   const preCutoff = tasks.filter(t => !t.scored).length;
 
   const statusPill = (st) => {
-    if (st === 'in-jd')  return '<span style="background:#E8F5E9;color:#2E7D32;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:600;">In JD</span>';
+    if (st === 'in-jd')  return '<span style="background:#DCFCE7;color:#111827;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:600;">In JD</span>';
     if (st === 'off-jd') return '<span style="background:#FCEBEB;color:#C62828;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:600;">Off JD</span>';
-    return '<span style="background:#F1F5F9;color:#64748B;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:600;">Uncategorised</span>';
+    return '<span style="background:#F3F4F6;color:#6B7280;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:600;">Uncategorised</span>';
   };
 
   const taskRow = (t) => `
@@ -3356,7 +3356,7 @@ function jdExplainerSection(my) {
         <div style="background:var(--white);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
           <div style="font-weight:600;color:var(--navy);margin-bottom:8px;">Your role covers these areas</div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;">
-            ${roleAreas.length ? roleAreas.map(a => `<span style="background:#E8F5E9;color:#2E7D32;border-radius:99px;padding:3px 10px;font-size:11px;">${a.label}</span>`).join('') : '<span style="color:var(--muted);">No areas defined for your role.</span>'}
+            ${roleAreas.length ? roleAreas.map(a => `<span style="background:#DCFCE7;color:#111827;border-radius:99px;padding:3px 10px;font-size:11px;">${a.label}</span>`).join('') : '<span style="color:var(--muted);">No areas defined for your role.</span>'}
           </div>
           <div style="color:var(--muted);margin-top:8px;font-size:11px;">A task counts as <strong>In JD</strong> when its category maps to one of these areas. Anything else is <strong>Off JD</strong> (neutral — it just lowers the in-role share, it isn't a penalty on its own). Tasks with no clear category are <strong>Uncategorised</strong> and are ignored entirely.</div>
         </div>
@@ -3365,9 +3365,9 @@ function jdExplainerSection(my) {
         <div style="background:var(--white);border-radius:10px;padding:12px 14px;">
           <div style="font-weight:600;color:var(--navy);margin-bottom:2px;">Your tasks counted from ${startNice}</div>
           <div style="color:var(--muted);font-size:11px;margin-bottom:8px;">${inJd.length} in JD · ${offJd.length} off JD · ${uncat.length} uncategorised (ignored)${preCutoff ? ` · ${preCutoff} before the cutoff (not counted)` : ''}</div>
-          ${offJd.length ? `<div style="font-size:11px;font-weight:600;color:#C62828;margin-top:6px;margin-bottom:2px;">Off-JD tasks lowering your alignment</div>${offJd.map(taskRow).join('')}` : '<div style="color:#2E7D32;font-size:11px;padding:6px 0;">All your scored tasks are within your role — full marks on alignment.</div>'}
-          ${uncat.length ? `<div style="font-size:11px;font-weight:600;color:#64748B;margin-top:10px;margin-bottom:2px;">Uncategorised (not counted either way)</div>${uncat.map(taskRow).join('')}` : ''}
-          ${inJd.length ? `<div style="font-size:11px;font-weight:600;color:#2E7D32;margin-top:10px;margin-bottom:2px;">In-JD tasks</div>${inJd.map(taskRow).join('')}` : ''}
+          ${offJd.length ? `<div style="font-size:11px;font-weight:600;color:#C62828;margin-top:6px;margin-bottom:2px;">Off-JD tasks lowering your alignment</div>${offJd.map(taskRow).join('')}` : '<div style="color:#111827;font-size:11px;padding:6px 0;">All your scored tasks are within your role — full marks on alignment.</div>'}
+          ${uncat.length ? `<div style="font-size:11px;font-weight:600;color:#6B7280;margin-top:10px;margin-bottom:2px;">Uncategorised (not counted either way)</div>${uncat.map(taskRow).join('')}` : ''}
+          ${inJd.length ? `<div style="font-size:11px;font-weight:600;color:#111827;margin-top:10px;margin-bottom:2px;">In-JD tasks</div>${inJd.map(taskRow).join('')}` : ''}
         </div>` : `
         <div style="background:var(--white);border-radius:10px;padding:12px 14px;color:var(--muted);">
           You have no tasks due on or after ${startNice} yet, so JD alignment isn't affecting your score. It begins once you have tasks due from that date.
@@ -3423,13 +3423,13 @@ async function loadKPI() {
     if (!kpis.length) { el.innerHTML = '<div class="empty"><div class="empty-icon"><i class="ti ti-chart-bar"></i></div>No tasks assigned yet.</div>'; return; }
     const my = data.myKpi;
     const myDisplayScore = my ? (my.jdScore ?? my.kpiScore) : 0;
-    const scoreColor = my ? (myDisplayScore>=70?'#1D9E75':myDisplayScore>=50?'#EF9F27':'#E24B4A') : '#64748B';
+    const scoreColor = my ? (myDisplayScore>=70?'#6B7280':myDisplayScore>=50?'#D97706':'#E24B4A') : '#6B7280';
     const myScoreCard = my ? `
       <div style="background:var(--white);border:1px solid var(--border2);border-radius:16px;padding:20px 22px;margin-bottom:18px;">
         <div style="display:flex;align-items:center;gap:18px;">
           <div style="position:relative;width:72px;height:72px;flex-shrink:0;">
             <svg width="72" height="72" viewBox="0 0 72 72">
-              <circle cx="36" cy="36" r="30" fill="none" stroke="#E2EDE8" stroke-width="6"/>
+              <circle cx="36" cy="36" r="30" fill="none" stroke="#E5E7EB" stroke-width="6"/>
               <circle cx="36" cy="36" r="30" fill="none" stroke="${scoreColor}" stroke-width="6"
                 stroke-dasharray="${(my.kpiScore/100)*188.5} 188.5" stroke-linecap="round" transform="rotate(-90 36 36)"/>
               <text x="36" y="41" text-anchor="middle" font-size="20" font-weight="bold" fill="${scoreColor}">${myDisplayScore}</text>
@@ -3453,7 +3453,7 @@ async function loadKPI() {
           ${[['Completion','% of your tasks done',my.kpiBreakdown.completion],['Timeliness','% finished by due date',my.kpiBreakdown.timeliness],['Evidence','% of done tasks with evidence',my.kpiBreakdown.evidence],['Reliability','fewer overdue is better',my.kpiBreakdown.reliability]].map(([label,desc,b]) => `
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">
               <div style="width:96px;"><div style="color:var(--navy);font-weight:600;">${label}</div><div style="font-size:9px;color:var(--muted);">${desc}</div></div>
-              <div style="flex:1;height:6px;background:#E2EDE8;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${b.pct}%;background:var(--teal);"></div></div>
+              <div style="flex:1;height:6px;background:#E5E7EB;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${b.pct}%;background:var(--teal);"></div></div>
               <span style="width:36px;text-align:right;color:var(--navy);font-weight:600;">${b.pct}%</span>
               <span style="width:80px;text-align:right;color:var(--muted);">× ${b.weight}% = ${b.points} pts</span>
             </div>`).join('')}
@@ -3526,7 +3526,7 @@ async function loadKPI() {
       </div>
       <div class="stat-card">
         <div class="stat-label">On-time rate</div>
-        <div class="stat-val"><span class="stat-accent" style="background:${onTimeRateAll===null?'#94A3B8':onTimeRateAll>=70?'var(--teal)':onTimeRateAll>=40?'var(--amber)':'var(--red)'}"></span>${onTimeRateAll===null?'—':onTimeRateAll+'%'}</div>
+        <div class="stat-val"><span class="stat-accent" style="background:${onTimeRateAll===null?'#9CA3AF':onTimeRateAll>=70?'var(--teal)':onTimeRateAll>=40?'var(--amber)':'var(--red)'}"></span>${onTimeRateAll===null?'—':onTimeRateAll+'%'}</div>
         <div class="stat-sub">done by due date</div>
       </div>
       <div class="stat-card">
@@ -3560,15 +3560,15 @@ async function loadKPI() {
           <div class="staff-card-head">
             <div style="position:relative;width:48px;height:48px;flex-shrink:0;">
               <svg width="48" height="48" viewBox="0 0 48 48">
-                <circle cx="24" cy="24" r="20" fill="none" stroke="#E2EDE8" stroke-width="4"/>
+                <circle cx="24" cy="24" r="20" fill="none" stroke="#E5E7EB" stroke-width="4"/>
                 <circle cx="24" cy="24" r="20" fill="none"
-                  stroke="${(s.jdScore??s.kpiScore)>=70?'#1D9E75':(s.jdScore??s.kpiScore)>=50?'#EF9F27':'#E24B4A'}"
+                  stroke="${(s.jdScore??s.kpiScore)>=70?'#6B7280':(s.jdScore??s.kpiScore)>=50?'#D97706':'#E24B4A'}"
                   stroke-width="4"
                   stroke-dasharray="${((s.jdScore??s.kpiScore)/100)*125.7} 125.7"
                   stroke-linecap="round"
                   transform="rotate(-90 24 24)"/>
                 <text x="24" y="28" text-anchor="middle" font-size="11" font-weight="bold"
-                  fill="${(s.jdScore??s.kpiScore)>=70?'#1D9E75':(s.jdScore??s.kpiScore)>=50?'#EF9F27':'#E24B4A'}">${s.jdScore??s.kpiScore}</text>
+                  fill="${(s.jdScore??s.kpiScore)>=70?'#6B7280':(s.jdScore??s.kpiScore)>=50?'#D97706':'#E24B4A'}">${s.jdScore??s.kpiScore}</text>
               </svg>
             </div>
             <div style="flex:1;">
@@ -3581,7 +3581,7 @@ async function loadKPI() {
           </div>
           <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
             <span style="font-size:13px;color:var(--muted);">KPI Score</span>
-            <span style="font-size:20px;font-weight:700;color:${(s.jdScore??s.kpiScore)>=70?'#1D9E75':(s.jdScore??s.kpiScore)>=50?'#EF9F27':'#E24B4A'};">${s.jdScore??s.kpiScore}</span>
+            <span style="font-size:20px;font-weight:700;color:${(s.jdScore??s.kpiScore)>=70?'#6B7280':(s.jdScore??s.kpiScore)>=50?'#D97706':'#E24B4A'};">${s.jdScore??s.kpiScore}</span>
             <span style="font-size:12px;color:var(--muted);">/ 100</span>
             ${s.jdScore!==undefined && s.jdScore!==s.baseKpiScore ? `<span style="font-size:11px;color:var(--muted);">(base ${s.baseKpiScore} × ${s.jdMultiplier})</span>` : ''}
             <button onclick="toggleKpiBreakdown('${s.staffId}')" style="margin-left:auto;background:none;border:none;color:var(--teal);font-size:11px;cursor:pointer;font-family:inherit;"><i class="ti ti-info-circle"></i> How?</button>
@@ -3596,7 +3596,7 @@ async function loadKPI() {
             ${[['Completion',s.kpiBreakdown.completion],['Timeliness',s.kpiBreakdown.timeliness],['Evidence',s.kpiBreakdown.evidence],['Reliability',s.kpiBreakdown.reliability]].map(([label,b]) => `
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
                 <span style="width:78px;color:var(--muted);">${label}</span>
-                <div style="flex:1;height:5px;background:#E2EDE8;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${b.pct}%;background:var(--teal);"></div></div>
+                <div style="flex:1;height:5px;background:#E5E7EB;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${b.pct}%;background:var(--teal);"></div></div>
                 <span style="width:34px;text-align:right;color:var(--navy);">${b.pct}%</span>
                 <span style="width:54px;text-align:right;color:var(--muted);">×${b.weight}% = ${b.points}</span>
               </div>`).join('')}
@@ -3619,15 +3619,15 @@ async function loadKPI() {
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding-top:10px;border-top:1px solid var(--border2);">
             <div style="text-align:center;">
-              <div style="font-size:15px;font-weight:700;color:${s.onTimeRate===null?'#94A3B8':s.onTimeRate>=80?'#1D9E75':s.onTimeRate>=50?'#EF9F27':'#E24B4A'};">${s.onTimeRate===null?'—':s.onTimeRate+'%'}</div>
+              <div style="font-size:15px;font-weight:700;color:${s.onTimeRate===null?'#9CA3AF':s.onTimeRate>=80?'#6B7280':s.onTimeRate>=50?'#D97706':'#E24B4A'};">${s.onTimeRate===null?'—':s.onTimeRate+'%'}</div>
               <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;">On-time</div>
             </div>
             <div style="text-align:center;">
-              <div style="font-size:15px;font-weight:700;color:${s.overdueCount>0?'#E24B4A':'#1D9E75'};">${s.overdueCount}</div>
+              <div style="font-size:15px;font-weight:700;color:${s.overdueCount>0?'#E24B4A':'#6B7280'};">${s.overdueCount}</div>
               <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;">Overdue</div>
             </div>
             <div style="text-align:center;">
-              <div style="font-size:15px;font-weight:700;color:${s.avgDaysLate>0?'#E24B4A':'#64748B'};">${s.avgDaysLate>0?s.avgDaysLate+'d':'—'}</div>
+              <div style="font-size:15px;font-weight:700;color:${s.avgDaysLate>0?'#E24B4A':'#6B7280'};">${s.avgDaysLate>0?s.avgDaysLate+'d':'—'}</div>
               <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;">Avg late</div>
             </div>
           </div>
@@ -3641,7 +3641,7 @@ async function loadKPI() {
     html += `<div class="section-title" style="margin-bottom:12px;">Project health</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:24px;">
       ${projSummary.map(p => {
-        const hColor = p.health>=75?'#1D9E75':p.health>=50?'#EF9F27':'#E24B4A';
+        const hColor = p.health>=75?'#6B7280':p.health>=50?'#D97706':'#E24B4A';
         const hLabel = p.healthStatus==='healthy'?'Healthy':p.healthStatus==='at-risk'?'At risk':'Critical';
         return `
         <div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;padding:16px 18px;">
@@ -3664,15 +3664,15 @@ async function loadKPI() {
               <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Completion</div>
             </div>
             <div style="text-align:center;background:var(--off);border-radius:8px;padding:6px;">
-              <div style="font-size:14px;font-weight:700;color:${p.onTimeRate===null?'#94A3B8':p.onTimeRate>=80?'#1D9E75':p.onTimeRate>=50?'#EF9F27':'#E24B4A'};">${p.onTimeRate===null?'—':p.onTimeRate+'%'}</div>
+              <div style="font-size:14px;font-weight:700;color:${p.onTimeRate===null?'#9CA3AF':p.onTimeRate>=80?'#6B7280':p.onTimeRate>=50?'#D97706':'#E24B4A'};">${p.onTimeRate===null?'—':p.onTimeRate+'%'}</div>
               <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">On-time</div>
             </div>
             <div style="text-align:center;background:${p.overdueCount>0?'#FFEBEE':'var(--off)'};border-radius:8px;padding:6px;">
-              <div style="font-size:14px;font-weight:700;color:${p.overdueCount>0?'#C62828':'#1D9E75'};">${p.overdueCount}</div>
+              <div style="font-size:14px;font-weight:700;color:${p.overdueCount>0?'#C62828':'#6B7280'};">${p.overdueCount}</div>
               <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Overdue</div>
             </div>
-            <div style="text-align:center;background:${p.atRiskCount>0?'#FFF3E0':'var(--off)'};border-radius:8px;padding:6px;">
-              <div style="font-size:14px;font-weight:700;color:${p.atRiskCount>0?'#E65100':'#64748B'};">${p.atRiskCount}</div>
+            <div style="text-align:center;background:${p.atRiskCount>0?'#FEF3C7':'var(--off)'};border-radius:8px;padding:6px;">
+              <div style="font-size:14px;font-weight:700;color:${p.atRiskCount>0?'#C2410C':'#6B7280'};">${p.atRiskCount}</div>
               <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">At risk</div>
             </div>
           </div>
@@ -3723,13 +3723,13 @@ async function loadKPI() {
       data: {
         labels: ['Done','In Progress','Pending'],
         datasets: [{ data: [doneCount, progCount, pendCount],
-          backgroundColor: ['#1D9E75','#EF9F27','#E24B4A'],
+          backgroundColor: ['#6B7280','#D97706','#E24B4A'],
           borderRadius: 6, borderWidth: 0 }]
       },
       options: {
         plugins: { legend: { display: false } },
         scales: {
-          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#E2EDE8' } },
+          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#E5E7EB' } },
           x: { ticks: { font: { size: 10 } }, grid: { display: false } }
         }
       }
@@ -3741,13 +3741,13 @@ async function loadKPI() {
       data: {
         labels: summary.map(s => s.name.split(' ')[0]),
         datasets: [{ data: summary.map(s => s.jdScore ?? s.kpiScore),
-          backgroundColor: summary.map(s => (s.jdScore??s.kpiScore)>=70?'#1D9E75':(s.jdScore??s.kpiScore)>=50?'#EF9F27':'#E24B4A'),
+          backgroundColor: summary.map(s => (s.jdScore??s.kpiScore)>=70?'#6B7280':(s.jdScore??s.kpiScore)>=50?'#D97706':'#E24B4A'),
           borderRadius: 6, borderWidth: 0 }]
       },
       options: {
         plugins: { legend: { display: false } },
         scales: {
-          y: { beginAtZero: true, max: 100, ticks: { font: { size: 10 }, callback: v => v+'%' }, grid: { color: '#E2EDE8' } },
+          y: { beginAtZero: true, max: 100, ticks: { font: { size: 10 }, callback: v => v+'%' }, grid: { color: '#E5E7EB' } },
           x: { ticks: { font: { size: 10 } }, grid: { display: false } }
         }
       }
@@ -3821,19 +3821,19 @@ async function loadKpiRanking() {
 
   // Ranking table
   const medal = i => i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : (i+1);
-  const scoreColor = s => s>=70?'#1D9E75':s>=50?'#EF9F27':'#E24B4A';
+  const scoreColor = s => s>=70?'#6B7280':s>=50?'#D97706':'#E24B4A';
 
   // Trend arrow: compare latest snapshot to the previous one
   const trendFor = staffId => {
     // Use only months that have a score (non-null), compare the two most recent
     const series = (trends[staffId] || []).filter(p => p.score !== null && p.score !== undefined);
-    if (series.length < 2) return { icon:'ti-minus', color:'#94A3B8', text:'—' };
+    if (series.length < 2) return { icon:'ti-minus', color:'#9CA3AF', text:'—' };
     const latest = series[series.length-1].score;
     const prev = series[series.length-2].score;
     const diff = latest - prev;
-    if (diff > 2) return { icon:'ti-trending-up', color:'#1D9E75', text:'+'+diff };
+    if (diff > 2) return { icon:'ti-trending-up', color:'#6B7280', text:'+'+diff };
     if (diff < -2) return { icon:'ti-trending-down', color:'#E24B4A', text:String(diff) };
-    return { icon:'ti-minus', color:'#94A3B8', text:'steady' };
+    return { icon:'ti-minus', color:'#9CA3AF', text:'steady' };
   };
 
   // ── Summary cards ──
@@ -3858,18 +3858,18 @@ async function loadKpiRanking() {
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Ranked by JD-adjusted KPI score for <strong>${monthLabel(data.month)}</strong> — tasks due this month, adjusted for job-description alignment (from 8 Aug 2026). Base scores shown beneath each. Trend compares recent months.</div>
 
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
-      <div style="background:#E8F5E9;border-radius:14px;padding:16px 18px;">
-        <div style="font-size:11px;color:#2E7D32;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-trophy"></i> Top performer</div>
+      <div style="background:#DCFCE7;border-radius:14px;padding:16px 18px;">
+        <div style="font-size:11px;color:#111827;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-trophy"></i> Top performer</div>
         <div style="font-size:18px;font-weight:700;color:var(--navy);margin-top:6px;">${top ? top.name : '—'}</div>
         <div style="font-size:12px;color:var(--muted);">${top ? roleLabel(top.role) + ' · ' + (top.jdScore ?? top.kpiScore) + ' pts' : ''}</div>
       </div>
-      <div style="background:#FFF3E0;border-radius:14px;padding:16px 18px;">
-        <div style="font-size:11px;color:#E65100;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-lifebuoy"></i> Needs most support</div>
+      <div style="background:#FEF3C7;border-radius:14px;padding:16px 18px;">
+        <div style="font-size:11px;color:#C2410C;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-lifebuoy"></i> Needs most support</div>
         <div style="font-size:18px;font-weight:700;color:var(--navy);margin-top:6px;">${needsSupport ? needsSupport.name : '—'}</div>
         <div style="font-size:12px;color:var(--muted);">${needsSupport ? roleLabel(needsSupport.role) + ' · ' + (needsSupport.jdScore ?? needsSupport.kpiScore) + ' pts' : ''}</div>
       </div>
-      <div style="background:#E3F2FD;border-radius:14px;padding:16px 18px;">
-        <div style="font-size:11px;color:#1565C0;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-users"></i> Team average</div>
+      <div style="background:#DBEAFE;border-radius:14px;padding:16px 18px;">
+        <div style="font-size:11px;color:#6B7280;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;"><i class="ti ti-users"></i> Team average</div>
         <div style="font-size:28px;font-weight:700;color:${scoreColor(teamAvg)};margin-top:4px;line-height:1;">${teamAvg}</div>
         <div style="font-size:12px;color:var(--muted);">across ${summary.length} staff</div>
       </div>
@@ -3913,7 +3913,7 @@ async function loadKpiRanking() {
               </td>
               <td style="padding:11px 14px;">
                 <div style="display:flex;align-items:center;gap:8px;">
-                  <div style="flex:1;height:8px;background:#EEF1F4;border-radius:99px;overflow:hidden;min-width:70px;"><div style="height:100%;width:${dispScore}%;background:${sc};"></div></div>
+                  <div style="flex:1;height:8px;background:#F3F4F6;border-radius:99px;overflow:hidden;min-width:70px;"><div style="height:100%;width:${dispScore}%;background:${sc};"></div></div>
                   <span style="font-size:15px;font-weight:700;color:${sc};width:28px;">${dispScore}</span>
                 </div>
                 <div style="font-size:9px;color:var(--muted);margin-top:2px;">${s.jdLabel ?? s.kpiLabel}${s.jdScore!==undefined && s.jdScore!==s.baseKpiScore ? ` · base ${s.baseKpiScore}` : ''}</div>
@@ -3923,8 +3923,8 @@ async function loadKpiRanking() {
               </td>
               <td style="text-align:center;padding:11px 14px;color:${scoreColor(s.avgPercentage)};font-weight:600;">${s.avgPercentage}%</td>
               <td style="text-align:center;padding:11px 14px;">${jdChip(s.jdAlignment)}</td>
-              <td style="text-align:center;padding:11px 14px;color:${s.onTimeRate===null?'#94A3B8':scoreColor(s.onTimeRate)};">${s.onTimeRate===null?'—':s.onTimeRate+'%'}</td>
-              <td style="text-align:center;padding:11px 14px;color:${s.overdueCount>0?'#E24B4A':'#1D9E75'};font-weight:600;">${s.overdueCount}</td>
+              <td style="text-align:center;padding:11px 14px;color:${s.onTimeRate===null?'#9CA3AF':scoreColor(s.onTimeRate)};">${s.onTimeRate===null?'—':s.onTimeRate+'%'}</td>
+              <td style="text-align:center;padding:11px 14px;color:${s.overdueCount>0?'#E24B4A':'#6B7280'};font-weight:600;">${s.overdueCount}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -3939,7 +3939,7 @@ async function loadKpiRanking() {
         <canvas id="kpi-trend-chart"></canvas>
       </div>`;
   } else {
-    html += `<div style="background:#EFF6FF;border-radius:12px;padding:20px;text-align:center;color:#1565C0;font-size:13px;">
+    html += `<div style="background:#F9FAFB;border-radius:12px;padding:20px;text-align:center;color:#6B7280;font-size:13px;">
       <i class="ti ti-chart-line" style="font-size:24px;"></i><br>
       Not enough monthly history yet. Trends appear once staff have tasks due across two or more months.
     </div>`;
@@ -3955,7 +3955,7 @@ async function loadKpiRanking() {
       labels: ['Excellent (85+)', 'Strong (70–84)', 'Developing (50–69)', 'Needs attention (<50)'],
       datasets: [{
         data: [dist['Excellent'], dist['Strong'], dist['Developing'], dist['Needs attention']],
-        backgroundColor: ['#1D9E75', '#4CAF50', '#EF9F27', '#E24B4A'],
+        backgroundColor: ['#6B7280', '#22C55E', '#D97706', '#E24B4A'],
         borderWidth: 0,
       }]
     },
@@ -3991,7 +3991,7 @@ async function loadKpiRanking() {
     const staffMap = {};
     data.monthlySummary.forEach(s => staffMap[s.staffId] = s.name.split(' ')[0]);
     const allMonths = [...new Set(Object.values(trends).flatMap(series => series.map(p => p.month)))].sort();
-    const palette = ['#1D9E75','#EF9F27','#E24B4A','#1565C0','#6A4AB7','#0F6E56','#C2410C','#0891B2','#BE185D','#4338CA'];
+    const palette = ['#6B7280','#D97706','#E24B4A','#6B7280','#6D28D9','#111827','#C2410C','#6B7280','#6D28D9','#111827'];
     const datasets = Object.entries(trends).filter(([,series]) => series.filter(p => p.score !== null).length >= 2).map(([sid, series], idx) => {
       const byMonth = {}; series.forEach(p => byMonth[p.month] = p.score);
       return {
@@ -4144,7 +4144,7 @@ async function loadKpiByStaff() {
         <div style="padding:16px 20px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border2);">
           <div style="position:relative;width:52px;height:52px;flex-shrink:0;">
             <svg width="52" height="52" viewBox="0 0 52 52">
-              <circle cx="26" cy="26" r="22" fill="none" stroke="#E2EDE8" stroke-width="4"/>
+              <circle cx="26" cy="26" r="22" fill="none" stroke="#E5E7EB" stroke-width="4"/>
               <circle cx="26" cy="26" r="22" fill="none"
                 stroke="${getColor(pct)}"
                 stroke-width="4"
@@ -4504,14 +4504,14 @@ function formatBytes(bytes) {
 function fileIcon(mimeType, name) {
   const s = 'font-size:18px;';
   if (!mimeType) return `<i class="ti ti-file" style="${s}color:var(--muted);"></i>`;
-  if (mimeType.startsWith('image/')) return `<i class="ti ti-photo" style="${s}color:#534AB7;"></i>`;
+  if (mimeType.startsWith('image/')) return `<i class="ti ti-photo" style="${s}color:#6D28D9;"></i>`;
   if (mimeType === 'application/pdf') return `<i class="ti ti-file-type-pdf" style="${s}color:#E24B4A;"></i>`;
-  if (mimeType.includes('spreadsheet') || name?.endsWith('.xlsx') || name?.endsWith('.xls')) return `<i class="ti ti-file-spreadsheet" style="${s}color:#1D9E75;"></i>`;
-  if (mimeType.includes('presentation') || name?.endsWith('.pptx')) return `<i class="ti ti-presentation" style="${s}color:#E65100;"></i>`;
-  if (mimeType.includes('document') || name?.endsWith('.docx')) return `<i class="ti ti-file-word" style="${s}color:#185FA5;"></i>`;
-  if (mimeType.includes('zip') || mimeType.includes('compressed')) return `<i class="ti ti-file-zip" style="${s}color:#BA7517;"></i>`;
-  if (mimeType.startsWith('video/')) return `<i class="ti ti-video" style="${s}color:#534AB7;"></i>`;
-  if (mimeType.startsWith('audio/')) return `<i class="ti ti-music" style="${s}color:#880E4F;"></i>`;
+  if (mimeType.includes('spreadsheet') || name?.endsWith('.xlsx') || name?.endsWith('.xls')) return `<i class="ti ti-file-spreadsheet" style="${s}color:#6B7280;"></i>`;
+  if (mimeType.includes('presentation') || name?.endsWith('.pptx')) return `<i class="ti ti-presentation" style="${s}color:#C2410C;"></i>`;
+  if (mimeType.includes('document') || name?.endsWith('.docx')) return `<i class="ti ti-file-word" style="${s}color:#6B7280;"></i>`;
+  if (mimeType.includes('zip') || mimeType.includes('compressed')) return `<i class="ti ti-file-zip" style="${s}color:#6B7280;"></i>`;
+  if (mimeType.startsWith('video/')) return `<i class="ti ti-video" style="${s}color:#6D28D9;"></i>`;
+  if (mimeType.startsWith('audio/')) return `<i class="ti ti-music" style="${s}color:#111827;"></i>`;
   return `<i class="ti ti-file" style="${s}color:var(--muted);"></i>`;
 }
 
@@ -4546,7 +4546,7 @@ async function loadStorage() {
   // Admin/management: show all staff
   const missing = staffStorage.filter(s => !s.folderId).length;
   el.innerHTML = `
-    ${missing > 0 ? `<div style="background:var(--amber-lt);border:1px solid var(--amber);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#633806;">
+    ${missing > 0 ? `<div style="background:var(--amber-lt);border:1px solid var(--amber);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#111827;">
       ⚠ ${missing} staff member${missing>1?'s':''} don't have a storage folder yet.
       <button class="btn btn-sm" onclick="initMissingFolders()" style="margin-left:8px;background:var(--amber);color:var(--white);border:none;">Create now</button>
     </div>` : ''}
@@ -4625,7 +4625,7 @@ function renderStorageFiles(structure) {
     if (isEvidence && section.taskGroups?.length) {
       inner = section.taskGroups.map(tg => `
         <div style="margin-bottom:12px;">
-          <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;padding-left:4px;"><i class="ti ti-folder" style="font-size:12px;color:#BA7517;"></i> ${tg.folder.name}</div>
+          <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;padding-left:4px;"><i class="ti ti-folder" style="font-size:12px;color:#6B7280;"></i> ${tg.folder.name}</div>
           ${tg.files.length ? tg.files.map(f => renderFileRow(f)).join('') : '<div style="font-size:12px;color:var(--muted);padding:8px 4px;">Empty folder</div>'}
         </div>`).join('');
       if (section.files?.length) {
@@ -4639,7 +4639,7 @@ function renderStorageFiles(structure) {
 
     return `<div style="background:var(--white);border:1px solid var(--border2);border-radius:14px;margin-bottom:12px;overflow:hidden;">
       <div style="background:var(--off);padding:10px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:13px;font-weight:600;color:var(--navy);"><i class="ti ti-folder-open" style="font-size:14px;color:#BA7517;"></i> ${section.folder.name}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--navy);"><i class="ti ti-folder-open" style="font-size:14px;color:#6B7280;"></i> ${section.folder.name}</div>
       </div>
       <div style="padding:8px 12px;">${inner}</div>
     </div>`;
@@ -4998,11 +4998,11 @@ async function downloadKPIReport() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = 210, M = 14;
-    const navy = [28, 52, 97];
-    const teal = [29, 158, 117];
-    const muted = [107, 140, 125];
+    const navy = [17, 24, 39];
+    const teal = [107, 114, 128];
+    const muted = [107, 114, 128];
     const red = [226, 75, 74];
-    const amber = [239, 159, 39];
+    const amber = [217, 119, 6];
 
     const getColor = pct => pct >= 70 ? teal : pct >= 40 ? amber : red;
 
@@ -5018,7 +5018,7 @@ async function downloadKPIReport() {
     doc.text('AhPhyay', M, 60);
 
     doc.setFontSize(14); doc.setFont('helvetica','normal');
-    doc.setTextColor(180,220,205);
+    doc.setTextColor(209,213,219);
     doc.text('Staff Performance & KPI Report', M, 74);
 
     doc.setFontSize(11); doc.setTextColor(255,255,255);
@@ -5031,7 +5031,7 @@ async function downloadKPIReport() {
     const pending = activeTasks.filter(t => !t.Status || t.Status === 'Pending').length;
     const teamPct = activeTasks.length ? Math.round((done / activeTasks.length) * 100) : 0;
 
-    doc.setFontSize(10); doc.setTextColor(180,220,205);
+    doc.setFontSize(10); doc.setTextColor(209,213,219);
     doc.text(`Total tasks: ${activeTasks.length}  |  Done: ${done}  |  In Progress: ${inProg}  |  Pending: ${pending}  |  Team KPI: ${teamPct}%`, M, 155);
 
     // ── KPI Dashboard page (with charts) ─────────────────
@@ -5093,7 +5093,7 @@ async function downloadKPIReport() {
     let cx = M;
     const cardW = (W - 2*M - 3*4) / 4;
     cards.forEach(([label, val, color]) => {
-      doc.setFillColor(245, 247, 250); doc.roundedRect(cx, 24, cardW, 22, 2, 2, 'F');
+      doc.setFillColor(249, 250, 251); doc.roundedRect(cx, 24, cardW, 22, 2, 2, 'F');
       doc.setTextColor(...color); doc.setFontSize(16); doc.setFont('helvetica','bold');
       doc.text(String(val), cx + cardW/2, 35, { align: 'center' });
       doc.setTextColor(...muted); doc.setFontSize(8); doc.setFont('helvetica','normal');
@@ -5147,7 +5147,7 @@ async function downloadKPIReport() {
         data: {
           labels: ['Excellent', 'Strong', 'Developing', 'Needs attention'],
           datasets: [{ data: [dist['Excellent'],dist['Strong'],dist['Developing'],dist['Needs attention']],
-            backgroundColor: [rgb(teal),'#4CAF50',rgb(amber),rgb(red)], borderWidth: 0 }]
+            backgroundColor: [rgb(teal),'#22C55E',rgb(amber),rgb(red)], borderWidth: 0 }]
         },
         options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 12 } } }, title: { display: true, text: 'Score Distribution', font: { size: 15, weight: 'bold' } } } }
       }, 460, 340);
@@ -5177,7 +5177,7 @@ async function downloadKPIReport() {
       ];
       let rcx = M; const rcW = (W - 2*M - 2*4) / 3;
       rcards.forEach(([lab, val, sub, col]) => {
-        doc.setFillColor(245,247,250); doc.roundedRect(rcx, 24, rcW, 24, 2, 2, 'F');
+        doc.setFillColor(249,250,251); doc.roundedRect(rcx, 24, rcW, 24, 2, 2, 'F');
         doc.setTextColor(...muted); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
         doc.text(lab.toUpperCase(), rcx + 4, 30);
         doc.setTextColor(...col); doc.setFontSize(13); doc.setFont('helvetica','bold');
@@ -5221,7 +5221,7 @@ async function downloadKPIReport() {
         const nameMap = {};
         ranked.forEach(s => nameMap[s.staffId] = (s.name||'').split(' ')[0]);
         const allWeeks = [...new Set(Object.values(trends).flatMap(series => (series||[]).map(p => p.week)))].sort();
-        const palette = ['#1D9E75','#EF9F27','#E24B4A','#1565C0','#6A4AB7','#0F6E56','#C2410C','#0891B2'];
+        const palette = ['#6B7280','#D97706','#E24B4A','#6B7280','#6D28D9','#111827','#C2410C','#6B7280'];
         const datasets = Object.entries(trends).filter(([,series]) => (series||[]).length >= 2).map(([sid, series], idx) => {
           const byWeek = {}; series.forEach(p => byWeek[p.week] = p.score);
           return { label: nameMap[sid]||sid, data: allWeeks.map(w => byWeek[w] ?? null),
@@ -5355,7 +5355,7 @@ async function downloadKPIReport() {
           return [t.Name, roles||'—', t.Category||'—', t.DueDate||'—', t.Priority||'Medium', t.Status||'Pending'];
         }),
         styles: { fontSize: 8, cellPadding: 2.5 },
-        headStyles: { fillColor: [15,110,86], textColor: [255,255,255], fontStyle: 'bold' },
+        headStyles: { fillColor: [17,24,39], textColor: [255,255,255], fontStyle: 'bold' },
         columnStyles: {
           0: { cellWidth: 50 },
           5: { halign: 'center' },
@@ -5396,9 +5396,9 @@ let notifPollTimer = null;
 let notifDropdownOpen = false;
 
 const NOTIF_ICONS = {
-  comment:   '<i class="ti ti-message-circle" style="font-size:18px;color:#1D9E75;"></i>',
-  assigned:  '<i class="ti ti-clipboard-check" style="font-size:18px;color:#534AB7;"></i>',
-  completed: '<i class="ti ti-circle-check" style="font-size:18px;color:#1D9E75;"></i>',
+  comment:   '<i class="ti ti-message-circle" style="font-size:18px;color:#6B7280;"></i>',
+  assigned:  '<i class="ti ti-clipboard-check" style="font-size:18px;color:#6D28D9;"></i>',
+  completed: '<i class="ti ti-circle-check" style="font-size:18px;color:#6B7280;"></i>',
   overdue:   '<i class="ti ti-clock-exclamation" style="font-size:18px;color:#E24B4A;"></i>',
 };
 
@@ -5544,8 +5544,8 @@ function stopNotifPolling() {
 let currentRequestTab = 'received';
 
 const STATUS_COLORS = {
-  'Pending':  { bg: '#FFF3E0', color: '#E65100', icon: 'ti-clock' },
-  'Accepted': { bg: '#E8F5E9', color: '#2E7D32', icon: 'ti-circle-check' },
+  'Pending':  { bg: '#FEF3C7', color: '#C2410C', icon: 'ti-clock' },
+  'Accepted': { bg: '#DCFCE7', color: '#111827', icon: 'ti-circle-check' },
   'Declined': { bg: '#FFEBEE', color: '#C62828', icon: 'ti-circle-x' },
 };
 
@@ -5778,9 +5778,9 @@ async function confirmDeleteTask(taskId, taskName) {
 // DOCUMENT SUBMISSIONS
 // ════════════════════════════════════════════════════════
 const DOC_STATUS = {
-  'Pending':    { bg:'#FFF3E0', color:'#E65100', icon:'ti-clock' },
-  'Submitted':  { bg:'#E3F2FD', color:'#1565C0', icon:'ti-upload' },
-  'Verified':   { bg:'#E8F5E9', color:'#2E7D32', icon:'ti-circle-check' },
+  'Pending':    { bg:'#FEF3C7', color:'#C2410C', icon:'ti-clock' },
+  'Submitted':  { bg:'#DBEAFE', color:'#6B7280', icon:'ti-upload' },
+  'Verified':   { bg:'#DCFCE7', color:'#111827', icon:'ti-circle-check' },
   'Incomplete': { bg:'#FFEBEE', color:'#C62828', icon:'ti-alert-circle' },
 };
 
@@ -5811,10 +5811,10 @@ async function loadDocs() {
     const c = data.counts;
     counters.style.display = 'grid';
     counters.innerHTML = `
-      ${docCounter('Pending', c.pending, '#E65100', '#FFF3E0', 'Pending')}
+      ${docCounter('Pending', c.pending, '#C2410C', '#FEF3C7', 'Pending')}
       ${docCounter('Overdue', c.overdue, '#C62828', '#FFEBEE', 'overdue')}
-      ${docCounter('Verified', c.verified, '#2E7D32', '#E8F5E9', 'Verified')}
-      ${docCounter('Incomplete', c.incomplete, '#6A1B9A', '#F3E5F5', 'Incomplete')}
+      ${docCounter('Verified', c.verified, '#111827', '#DCFCE7', 'Verified')}
+      ${docCounter('Incomplete', c.incomplete, '#111827', '#DBEAFE', 'Incomplete')}
     `;
     if (filterBar) filterBar.style.display = data.docs.length ? 'flex' : 'none';
     // Ensure all filter controls are visible for full-access users
@@ -5991,8 +5991,8 @@ function renderFilteredDocs() {
       return 'Upcoming';
     };
     const groupColor = {
-      'Overdue — blocking reporting':'#C62828', 'Awaiting your verification':'#1565C0',
-      'Flagged incomplete':'#6A1B9A', 'Due soon':'#E65100', 'Upcoming':'#64748B', 'Verified':'#2E7D32'
+      'Overdue — blocking reporting':'#C62828', 'Awaiting your verification':'#6B7280',
+      'Flagged incomplete':'#111827', 'Due soon':'#C2410C', 'Upcoming':'#6B7280', 'Verified':'#111827'
     };
     let html = '', lastGroup = null;
     docs.forEach(d => {
@@ -6031,14 +6031,14 @@ function renderDocCard(d, fullAccess) {
   const entries = d.entries || [];
   let attachmentsHtml = '';
   if (entries.length) {
-    attachmentsHtml = `<div style="background:#F0F9F4;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
-      <div style="font-size:11px;font-weight:600;color:#085041;margin-bottom:6px;"><i class="ti ti-paperclip" style="font-size:11px;"></i> Submitted documents (${entries.length})</div>
+    attachmentsHtml = `<div style="background:#F0FDF4;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:600;color:#111827;margin-bottom:6px;"><i class="ti ti-paperclip" style="font-size:11px;"></i> Submitted documents (${entries.length})</div>
       ${entries.map((en, i) => {
         const t = en.time ? new Date(en.time) : null;
         const timeStr = t ? t.toLocaleString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
         const icon = en.type === 'link' ? 'ti-link' : 'ti-file';
         const label = en.type === 'link' ? (en.url.length > 40 ? en.url.slice(0,40)+'…' : en.url) : (en.name || ('File ' + (i+1)));
-        return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:5px 0;border-top:${i>0?'1px solid #DCEEE4':'none'};">
+        return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:5px 0;border-top:${i>0?'1px solid #E5E7EB':'none'};">
           <a href="${en.url}" target="_blank" style="color:var(--teal);font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="ti ${icon}" style="font-size:11px;"></i> ${label} <i class="ti ti-external-link" style="font-size:10px;"></i></a>
           ${timeStr ? `<span style="font-size:10px;color:var(--muted);white-space:nowrap;flex-shrink:0;">${timeStr}${en.by ? ' · ' + en.by : ''}</span>` : ''}
         </div>`;
@@ -6054,8 +6054,8 @@ function renderDocCard(d, fullAccess) {
   return `<div style="background:var(--white);border:1px solid ${d.isOverdue ? '#E24B4A' : 'var(--border2)'};border-radius:12px;padding:16px;margin-bottom:12px;${d.isOverdue ? 'box-shadow:0 0 0 1px #E24B4A;' : ''}">
     ${d.isOverdue ? `<div style="background:#FFEBEE;color:#C62828;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;margin-bottom:10px;display:inline-block;"><i class="ti ti-alert-triangle"></i> Blocking reporting — overdue</div>` : ''}
     ${!fullAccess ? (() => {
-      if (d.isOwner) return `<div style="display:inline-block;background:#E3F2FD;color:#1565C0;font-size:10px;font-weight:600;padding:3px 9px;border-radius:99px;margin-bottom:10px;"><i class="ti ti-upload" style="font-size:10px;"></i> You submit this</div>`;
-      if (d.canVerify) return `<div style="display:inline-block;background:#F3E5F5;color:#6A1B9A;font-size:10px;font-weight:600;padding:3px 9px;border-radius:99px;margin-bottom:10px;"><i class="ti ti-circle-check" style="font-size:10px;"></i> You verify this</div>`;
+      if (d.isOwner) return `<div style="display:inline-block;background:#DBEAFE;color:#6B7280;font-size:10px;font-weight:600;padding:3px 9px;border-radius:99px;margin-bottom:10px;"><i class="ti ti-upload" style="font-size:10px;"></i> You submit this</div>`;
+      if (d.canVerify) return `<div style="display:inline-block;background:#DBEAFE;color:#111827;font-size:10px;font-weight:600;padding:3px 9px;border-radius:99px;margin-bottom:10px;"><i class="ti ti-circle-check" style="font-size:10px;"></i> You verify this</div>`;
       return '';
     })() : ''}
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
@@ -6345,8 +6345,8 @@ async function submitDocFiles() {
 // ════════════════════════════════════════════════════════
 const FREQ_COLORS = {
   'Daily':   { bg:'#FFEBEE', color:'#C62828' },
-  'Weekly':  { bg:'#E3F2FD', color:'#1565C0' },
-  'Monthly': { bg:'#E8F5E9', color:'#2E7D32' },
+  'Weekly':  { bg:'#DBEAFE', color:'#6B7280' },
+  'Monthly': { bg:'#DCFCE7', color:'#111827' },
 };
 
 async function loadRecurring() {
@@ -6616,7 +6616,7 @@ function confirmDialog({ title = 'Are you sure?', message = '', confirmText = 'C
     iconEl.style.background = '#FCEBEB'; iconEl.style.color = '#C62828';
     iconEl.innerHTML = '<i class="ti ti-alert-triangle"></i>';
   } else {
-    iconEl.style.background = 'var(--teal-lt, #E2EDE8)'; iconEl.style.color = '#0F6E56';
+    iconEl.style.background = 'var(--teal-lt, #E5E7EB)'; iconEl.style.color = '#111827';
     iconEl.innerHTML = '<i class="ti ti-help-circle"></i>';
   }
   document.getElementById('modal-confirm').classList.add('open');
