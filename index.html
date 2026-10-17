@@ -302,6 +302,7 @@ tbody tr:hover td{background:#fafcfb;}
 .badge-admin-assistant{background:#FFF8E1;color:#F57F17;}
 .badge-production-intern{background:#FCE4EC;color:#880E4F;}
 .badge-collaborator{background:#E0F7FA;color:#00695C;border:1px solid #80DEEA;}
+.badge-rp-finance,.badge-rp-quality,.badge-rp-brand,.badge-rp-lean{background:#FFF8E1;color:#8D6E00;border:1px solid #E0B94B;}
 
 /* ── Progress bar ── */
 .prog-wrap{display:flex;align-items:center;gap:8px;}
@@ -941,6 +942,10 @@ tbody tr:hover td{background:#fafcfb;}
             <option value="bod">BOD</option>
             <option value="developer">Developer</option>
             <option value="collaborator">Collaborator (SN@IL incubation)</option>
+            <option value="rp-finance">Resource Person — Finance (SN@IL)</option>
+            <option value="rp-quality">Resource Person — Product Quality (SN@IL)</option>
+            <option value="rp-brand">Resource Person — Branding (SN@IL)</option>
+            <option value="rp-lean">Resource Person — Lean (SN@IL)</option>
           </select>
         </div>
         <div class="form-group">
@@ -1605,6 +1610,10 @@ const ROLE_LABELS = {
   'admin-assistant':      'Admin & Finance Assistant',
   'production-intern':    'Production Intern',
   'collaborator':         'Collaborator',
+  'rp-finance':           'Resource Person — Finance',
+  'rp-quality':           'Resource Person — Product Quality',
+  'rp-brand':             'Resource Person — Branding',
+  'rp-lean':              'Resource Person — Lean',
 };
 
 // Normalize old role names to new keys (mirrors worker normalizeRole)
@@ -1734,7 +1743,7 @@ function doLogout() {
 // ════════════════════════════════════════════════════════
 function showApp() {
   // SN@IL collaborators live in the incubation hub, not the staff system
-  if (user.role === 'collaborator') { window.location.href = '/incu/'; return; }
+  if (['collaborator','rp-finance','rp-quality','rp-brand','rp-lean'].includes(user.role)) { window.location.href = '/incu/'; return; }
   document.getElementById('view-login').classList.remove('active');
   document.getElementById('view-app').classList.add('active');
 
@@ -2364,11 +2373,17 @@ function openAddStaff() {
 
 // Show the business-profile block only for the collaborator role
 function toggleCollabFields() {
-  const isCollab = document.getElementById('staff-role').value === 'collaborator';
+  const roleVal = document.getElementById('staff-role').value;
+  const isCollab = roleVal === 'collaborator';
+  const isRp = roleVal.startsWith('rp-');
   document.getElementById('collab-profile').style.display = isCollab ? 'block' : 'none';
-  document.getElementById('staff-projects-group').style.display = isCollab ? 'none' : 'block';
+  document.getElementById('staff-projects-group').style.display = (isCollab || isRp) ? 'none' : 'block';
   const teamSel = document.getElementById('staff-team');
-  teamSel.disabled = isCollab;
+  teamSel.disabled = isCollab || isRp;
+  if (isRp) {
+    if (!teamSel.querySelector('option[value="Resource Person"]')) { const o = document.createElement('option'); o.value = 'Resource Person'; o.textContent = 'Resource Person'; teamSel.appendChild(o); }
+    teamSel.value = 'Resource Person';
+  }
   if (isCollab) {
     // Ensure a "Collaborator" option exists so the select shows the right value
     if (!teamSel.querySelector('option[value="Collaborator"]')) { const o = document.createElement('option'); o.value = 'Collaborator'; o.textContent = 'Collaborator'; teamSel.appendChild(o); }
@@ -2437,6 +2452,8 @@ async function saveStaff() {
     body.collaborator = readCollabFields();
     body.team = 'Collaborator'; body.projects = '';
     if (!body.collaborator.businessName) { showToast('Business name is required for a collaborator', 'error'); return; }
+  } else if (body.staffRole.startsWith('rp-')) {
+    body.team = 'Resource Person'; body.projects = '';
   }
 
   let res;

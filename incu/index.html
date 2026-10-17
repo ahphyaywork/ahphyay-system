@@ -69,7 +69,9 @@ input,textarea,select{font-family:inherit}
 .btn-sm{padding:5px 12px;font-size:12px}.btn:disabled{opacity:.6;cursor:not-allowed}
 .badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:3px 9px;border-radius:99px}
 .b-draft{background:var(--off);color:var(--muted);border:1px solid var(--border2)}.b-submitted{background:var(--blue-lt);color:var(--blue)}.b-reviewed{background:var(--teal-lt);color:#085041}
-.b-pqr{background:#FFF3E0;color:#E65100}.b-brand{background:var(--purple-lt);color:var(--purple)}.b-lean{background:#E0F7FA;color:#00695C}
+.b-pqr{background:#FFF3E0;color:#E65100}.b-finance{background:#FFF8E1;color:#8D6E00}
+.type-card.finance{border-top-color:#C9A227}
+.cmt{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border2)}.cmt:last-child{border-bottom:none}.cmt .av{width:30px;height:30px;border-radius:50%;background:var(--teal-lt);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--navy);flex-shrink:0}.cmt .who{font-size:12px;font-weight:600;color:var(--navy)}.cmt .meta{font-size:10px;color:var(--muted)}.cmt .txt{font-size:13px;line-height:1.5;margin-top:3px;white-space:pre-wrap}.cmt.rp .av{background:#FFF8E1;color:#8D6E00}.b-brand{background:var(--purple-lt);color:var(--purple)}.b-lean{background:#E0F7FA;color:#00695C}
 .table-wrap{background:#fff;border:1px solid var(--border2);border-radius:14px;overflow:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}thead th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:10px 14px;text-align:left;background:var(--off);border-bottom:1px solid var(--border2)}
 tbody td{padding:11px 14px;border-bottom:1px solid var(--border2);vertical-align:middle}tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:#fafcfb}
@@ -211,6 +213,8 @@ let FORMS = null, BUSINESS_STAGES = [], PRODUCT_CATEGORIES = [];
 let me = null;            // collaborator profile (collaborator role)
 let isMentorUser = false; // bod/developer
 let isMgmt = false;       // any management role (read-only unless mentor)
+let rpTopic = null;       // 'finance' | 'pqr' | 'brand' | 'lean' for resource persons
+let isRP = false;
 let cache = { assessments: null, collaborators: null, staffNames: null };
 let cur = null;           // assessment currently open in the form panel
 let curAnswers = {};
@@ -222,7 +226,9 @@ const TYPE_META = {
   pqr:   { label:'Product Quality Report', icon:'ti-shirt', cls:'pqr',   desc:'Score one product against the 100-point quality standard. QC standard is met at 80 and above.' },
   brand: { label:'Branding & Positioning', icon:'ti-tag',   cls:'brand', desc:'Checklist of brand maturity, market positioning and digital presence. The six weighted areas are scored automatically.' },
   lean:  { label:'Lean KPI',               icon:'ti-chart-arrows', cls:'lean', desc:'Seven workplace KPIs. Record a Baseline first, then an Endline after Lean practice to measure the change.' },
+  finance: { label:'Costing & Profit',     icon:'ti-coins', cls:'finance', desc:'Cost your main product, record this month’s sales and expenses. Margins, profit and income growth are calculated for you.' },
 };
+const ALL_TYPES = ['pqr','brand','lean','finance'];
 const STATUS_CLS = { Draft:'b-draft', Submitted:'b-submitted', Reviewed:'b-reviewed' };
 const scoreColor = s => s === null || s === undefined ? '#94A3B8' : s >= 80 ? '#1D9E75' : s >= 60 ? '#EF9F27' : '#E24B4A';
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -273,7 +279,8 @@ async function showApp() {
   document.getElementById('view-login').classList.remove('active'); document.getElementById('view-app').classList.add('active');
   document.getElementById('user-avatar').textContent = user.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
   document.getElementById('user-name').textContent = user.name;
-  document.getElementById('user-role').textContent = user.role === 'collaborator' ? 'Collaborator' : user.role === 'bod' ? 'Mentor (BOD)' : user.role;
+  const RP_LABEL = { 'rp-finance':'Resource Person · Finance', 'rp-quality':'Resource Person · Product Quality', 'rp-brand':'Resource Person · Branding', 'rp-lean':'Resource Person · Lean' };
+  document.getElementById('user-role').textContent = RP_LABEL[user.role] || (user.role === 'collaborator' ? 'Collaborator' : user.role === 'bod' ? 'Mentor (BOD)' : user.role);
 
   const f = await api('/incu/forms');
   if (!f || f.error) {
@@ -281,19 +288,25 @@ async function showApp() {
     return;
   }
   FORMS = f.forms; BUSINESS_STAGES = f.businessStages; PRODUCT_CATEGORIES = f.productCategories;
-  isMentorUser = f.isMentor; isMgmt = user.role !== 'collaborator';
-  if (!isMgmt) {
+  isMentorUser = f.isMentor; rpTopic = f.rpTopic || null; isRP = !!rpTopic;
+  isMgmt = user.role !== 'collaborator' && !isRP;
+  if (!isMgmt && !isRP) {
     const m = await api('/incu/me');
     if (!m || m.error) { document.querySelector('.page-content').innerHTML = `<div class="empty"><i class="ti ti-user-off"></i>${esc(m?.error || 'No collaborator profile found.')}</div>`; return; }
     me = m.collaborator;
   }
   buildNav();
-  navigateTo(isMgmt ? 'dashboard' : 'home');
+  navigateTo(isMgmt || isRP ? 'dashboard' : 'home');
 }
 
 function buildNav() {
   const nav = document.getElementById('sidebar-nav');
-  const items = isMgmt ? [
+  const items = isRP ? [
+    { panel:'dashboard', icon:'ti-layout-dashboard', label:'Overview' },
+    { panel:'assessments', icon:'ti-list-check', label: TYPE_META[rpTopic].label + ' reviews' },
+    { panel:'collaborators', icon:'ti-building-store', label:'Collaborators' },
+    { panel:'account', icon:'ti-user-circle', label:'My account' },
+  ] : isMgmt ? [
     { panel:'dashboard', icon:'ti-layout-dashboard', label:'Dashboard' },
     { panel:'queue', icon:'ti-inbox', label:'Review queue', badge:'queue-badge' },
     { panel:'collaborators', icon:'ti-building-store', label:'Collaborators' },
@@ -309,7 +322,7 @@ function buildNav() {
     : `<button class="nav-item" data-panel="${it.panel}" onclick="navigateTo('${it.panel}')"><i class="ti ${it.icon}"></i>${it.label}${it.badge ? `<span class="nav-badge" id="${it.badge}" style="display:none;"></span>` : ''}</button>`).join('');
   if (isMgmt) refreshQueueBadge();
 }
-const TITLES = { home:'Home', assessments: () => isMgmt ? 'All assessments' : 'My assessments', form:'Assessment', dashboard:'MEALA Dashboard', collaborators:'Collaborators', queue:'Review queue', account:'My account' };
+const TITLES = { home:'Home', assessments: () => isRP ? TYPE_META[rpTopic].label + ' reviews' : isMgmt ? 'All assessments' : 'My assessments', form:'Assessment', dashboard:'MEALA Dashboard', collaborators:'Collaborators', queue:'Review queue', account:'My account' };
 function navigateTo(panel, opts) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + panel)?.classList.add('active');
@@ -373,7 +386,7 @@ async function loadHome() {
       </div>
       ${pending ? `<span class="badge b-submitted"><i class="ti ti-clock"></i> ${pending} awaiting mentor review</span>` : ''}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">${['pqr','brand','lean'].map(typeCard).join('')}</div>`;
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">${ALL_TYPES.map(typeCard).join('')}</div>`;
 }
 
 // ════════════════════════════════════════════════════════
@@ -419,9 +432,9 @@ async function loadAssessments(opts = {}) {
     <div class="section-hd">
       <div class="section-title">${opts.title ? esc(opts.title) : (isMgmt ? 'All assessments' : 'My assessments')} <span style="font-size:12px;color:var(--muted);font-weight:400;">${list.length}</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <select class="form-input" id="asm-type-filter" style="width:auto;padding:6px 10px;font-size:12px;" onchange="renderAsmTable()"><option value="">All types</option><option value="pqr">Product Quality</option><option value="brand">Branding</option><option value="lean">Lean KPI</option></select>
+        <select class="form-input" id="asm-type-filter" style="width:auto;padding:6px 10px;font-size:12px;" onchange="renderAsmTable()"><option value="">All types</option><option value="pqr">Product Quality</option><option value="brand">Branding</option><option value="lean">Lean KPI</option><option value="finance">Costing &amp; Profit</option></select>
         <select class="form-input" id="asm-status-filter" style="width:auto;padding:6px 10px;font-size:12px;" onchange="renderAsmTable()"><option value="">All statuses</option><option>Draft</option><option>Submitted</option><option>Reviewed</option></select>
-        ${!isMgmt || opts.collaboratorId ? `<div style="display:flex;gap:4px;">${['pqr','brand','lean'].map(t => `<button class="btn btn-primary btn-sm" onclick="openNew('${t}','${opts.collaboratorId||''}')"><i class="ti ti-plus"></i> ${t==='pqr'?'Product':t==='brand'?'Branding':'Lean'}</button>`).join('')}</div>` : ''}
+        ${(!isMgmt && !isRP) || (isMgmt && opts.collaboratorId) ? `<div style="display:flex;gap:4px;flex-wrap:wrap;">${ALL_TYPES.map(t => `<button class="btn btn-primary btn-sm" onclick="openNew('${t}','${opts.collaboratorId||''}')"><i class="ti ti-plus"></i> ${t==='pqr'?'Product':t==='brand'?'Branding':t==='lean'?'Lean':'Costing'}</button>`).join('')}</div>` : ''}
       </div>
     </div>
     <div class="table-wrap"><table><thead><tr>${isMgmt ? '<th>Collaborator</th>' : ''}<th>Type</th><th>Product / Period</th><th>Status</th><th>Self</th><th>Final</th><th>Rating</th><th>Date</th><th></th></tr></thead><tbody id="asm-tbody"></tbody></table></div>`;
@@ -441,7 +454,7 @@ function renderAsmTable() {
     <td style="font-weight:700;color:${scoreColor(a.finalScore)}">${a.finalScore ?? '—'}</td>
     <td style="font-size:12px;">${esc(a.Rating||'—')}</td>
     <td style="font-size:11px;color:var(--muted);">${fmtDate(a.ReviewedAt || a.SubmittedAt || a.CreatedAt)}</td>
-    <td style="white-space:nowrap;"><button class="btn btn-outline btn-sm" onclick="openAssessment('${a.ID}')">${a.Status==='Draft' ? 'Continue' : (isMentorUser && a.Status==='Submitted' ? 'Review' : 'View')}</button>
+    <td style="white-space:nowrap;"><button class="btn btn-outline btn-sm" onclick="openAssessment('${a.ID}')">${a.Status==='Draft' ? 'Continue' : (isMentorUser && a.Status==='Submitted' ? 'Review' : isRP ? 'Review & comment' : 'View')}</button>
       ${a.Status!=='Draft' ? `<button class="btn btn-outline btn-sm" style="margin-left:4px;" onclick="downloadAssessmentPdf('${a.ID}')" title="Download PDF"><i class="ti ti-download"></i></button>` : ''}
       ${(a.Status==='Draft' || isMentorUser) ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteAssessment('${a.ID}')" title="Delete"><i class="ti ti-trash"></i></button>` : ''}</td>
   </tr>`).join('');
@@ -463,12 +476,39 @@ async function openAssessment(id) {
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   const d = await api(`/incu/assessments/${id}`); if (!d || d.error) { showToast(d?.error || 'Not found', 'error'); navigateTo('assessments'); return; }
   cur = d.assessment; cur.collaborator = d.collaborator; curAnswers = { ...cur.answers }; curOverrides = { ...cur.mentorAnswers };
+  cur.comments = null; cur.rpCommentCount = 0;
   document.getElementById('topbar-title').textContent = TYPE_META[cur.Type].label;
   renderForm();
+  if (cur.Status !== 'Draft') loadComments();
+}
+async function loadComments() {
+  const d = await api(`/incu/assessments/${cur.ID}/comments`);
+  if (!d || d.error) return;
+  cur.comments = d.comments; cur.rpCommentCount = d.rpCommentCount;
+  const box = document.getElementById('comments-box'); if (box) box.outerHTML = renderComments();
+}
+function renderComments() {
+  if (cur.Status === 'Draft') return '<div id="comments-box"></div>';
+  const list = cur.comments;
+  const rpName = { pqr:'Product Quality', brand:'Branding', lean:'Lean', finance:'Finance' }[cur.Type];
+  return `<div id="comments-box" class="fsection">
+    <div class="fsection-hd"><span class="t"><i class="ti ti-messages"></i> Feedback &amp; comments</span><span class="m">${list ? `${list.length} comment${list.length!==1?'s':''} · ${cur.rpCommentCount ? cur.rpCommentCount + ' from the ' + rpName + ' resource person' : 'no resource-person feedback yet'}` : 'loading…'}</span></div>
+    <div class="fsection-body">
+      ${list === null ? '<div class="loading"><div class="spinner"></div></div>' : list.length ? list.map(c => `<div class="cmt ${c.isRp?'rp':''}"><div class="av">${esc((c.StaffName||'?').split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase())}</div><div style="flex:1;min-width:0;"><span class="who">${esc(c.StaffName)}</span> <span class="meta">${esc(c.roleLabel)} · ${new Date(c.CreatedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span><div class="txt">${esc(c.Comment)}</div></div></div>`).join('') : '<div style="font-size:12px;color:var(--muted);">No comments yet.</div>'}
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border2);">
+        <textarea class="form-input" id="comment-input" rows="2" placeholder="${isRP ? 'Your feedback and recommendations…' : 'Write a comment…'}" style="flex:1;resize:none;"></textarea>
+        <button class="btn btn-primary" onclick="postComment()" style="height:60px;">Post</button>
+      </div>
+    </div></div>`;
+}
+async function postComment() {
+  const el = document.getElementById('comment-input'); const comment = el?.value.trim(); if (!comment) return;
+  const r = await api(`/incu/assessments/${cur.ID}/comments`, { method:'POST', body: JSON.stringify({ comment }) });
+  if (r?.success) { showToast('Comment posted ✓', 'success'); loadComments(); } else showToast(r?.error || 'Failed', 'error');
 }
 
 // Editing rules: collaborator edits own Draft; mentor can edit a Draft/Submitted or override scored fields while reviewing
-function editable() { return cur.Status !== 'Reviewed' && (!isMgmt || isMentorUser); }
+function editable() { return !isRP && cur.Status !== 'Reviewed' && (!isMgmt || isMentorUser); }
 function reviewing() { return isMentorUser && cur.Status === 'Submitted'; }
 
 function renderForm() {
@@ -483,8 +523,9 @@ function renderForm() {
       ${cur.Status === 'Reviewed' ? `<span style="font-size:11px;color:var(--muted);margin-left:auto;">Finalised ${fmtDate(cur.ReviewedAt)}</span>` : cur.SubmittedAt ? `<span style="font-size:11px;color:var(--muted);margin-left:auto;">Submitted ${fmtDate(cur.SubmittedAt)}</span>` : ''}
       ${cur.Status !== 'Draft' ? `<button class="btn btn-primary btn-sm" id="btn-pdf" onclick="downloadAssessmentPdf('${cur.ID}')"><i class="ti ti-download"></i> Download PDF</button>` : ''}
       ${isMgmt ? `<button class="btn btn-outline btn-sm" onclick="openCollabFolder('${cur.CollaboratorID}')"><i class="ti ti-folder"></i> Drive</button>` : ''}
-    </div>`;
-  const body = cur.Type === 'pqr' ? renderPqr() : cur.Type === 'brand' ? renderBrand() : renderLean();
+    </div>
+    ${isRP ? `<div class="card" style="margin-bottom:14px;background:#FFF8E1;border:none;font-size:12px;color:#8D6E00;"><i class="ti ti-info-circle"></i> You are reviewing as the ${TYPE_META[cur.Type].label} resource person. Scores are read-only — leave your feedback in the comments below; the mentor and collaborator will be notified.</div>` : ''}`;
+  const body = (cur.Type === 'pqr' ? renderPqr() : cur.Type === 'brand' ? renderBrand() : cur.Type === 'finance' ? renderFinance() : renderLean()) + renderComments();
   const scorePanel = renderScorePanel();
   const actions = `
     <div class="sticky-actions">
@@ -596,6 +637,25 @@ function renderBrand() {
     <div style="margin-top:8px;">Brand Identity comes from the seven maturity components; Product Positioning from the branding and positioning stages; Customer Value Proposition from the value-proposition rating; Digital Presence from platforms used and digital readiness; Market Readiness from the six star ratings; Growth Potential from business stage and positioning stage.</div></div></div>` + renderEvidenceSection('');
 }
 
+// ── Costing & Profit ──
+function renderFinance() {
+  const f = FORMS.finance; const b = cur.breakdown || {};
+  const fmt = v => v === null || v === undefined ? '—' : Number(v).toLocaleString('en-US');
+  const calc = b.unitCost !== undefined ? `<div class="card" style="margin-bottom:14px;background:#FFF8E1;border:none;">
+      <div style="font-size:12px;font-weight:600;color:#8D6E00;margin-bottom:8px;"><i class="ti ti-calculator"></i> Calculated from your answers</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;font-size:12px;">
+        <div><div style="color:var(--muted);">Unit cost</div><div style="font-weight:700;color:var(--navy);">${fmt(b.unitCost)} ${f.currency}</div></div>
+        <div><div style="color:var(--muted);">Gross margin</div><div style="font-weight:700;color:${scoreColor(b.grossMarginPct===null?null:b.grossMarginPct*2)}">${b.grossMarginPct ?? '—'}${b.grossMarginPct!==null&&b.grossMarginPct!==undefined?'%':''}</div></div>
+        <div><div style="color:var(--muted);">Net profit (month)</div><div style="font-weight:700;color:${b.netProfit>0?'#1D9E75':b.netProfit<0?'#E24B4A':'var(--navy)'}">${fmt(b.netProfit)} ${f.currency}</div></div>
+        <div><div style="color:var(--muted);">Net margin</div><div style="font-weight:700;color:var(--navy);">${b.netMarginPct ?? '—'}${b.netMarginPct!==null&&b.netMarginPct!==undefined?'%':''}</div></div>
+        <div><div style="color:var(--muted);">Income change</div><div style="font-weight:700;color:${b.incomeChangePct>0?'#1D9E75':b.incomeChangePct<0?'#E24B4A':'var(--navy)'}">${b.incomeChangePct===null||b.incomeChangePct===undefined?'—':(b.incomeChangePct>0?'+':'')+b.incomeChangePct+'%'}</div></div>
+      </div></div>` : '';
+  return calc + f.sections.map(s => `<div class="fsection">
+    <div class="fsection-hd"><span class="t">${esc(s.label)}</span></div>
+    <div class="fsection-body">${s.questions.map(q => renderQ(q, q.type === 'number')).join('')}</div>
+  </div>`).join('') + renderEvidenceSection('');
+}
+
 // ── Lean KPI ──
 function renderLean() {
   const f = FORMS.lean; const isEnd = cur.Period === 'Endline';
@@ -629,8 +689,8 @@ function renderKpiEvidence(k) {
 const evIcon = e => e.kind === 'report' ? 'ti-file-type-pdf' : e.kind === 'doc' ? 'ti-file' : 'ti-photo';
 function renderEvidenceSection(kpi) {
   const items = (cur.evidence||[]).filter(e => (e.kpi||'') === kpi);
-  const canUp = (editable() || isMentorUser) && cur.Status !== 'Reviewed';
-  return `<div class="fsection"><div class="fsection-hd"><span class="t"><i class="ti ti-paperclip"></i> Evidence <span style="font-weight:400;color:var(--muted);font-size:12px;">${cur.Type==='lean' ? 'other files &amp; generated reports' : 'optional — product photos, labels, packaging'}</span></span>
+  const canUp = (editable() || isMentorUser) && cur.Status !== 'Reviewed' && !isRP;
+  return `<div class="fsection"><div class="fsection-hd"><span class="t"><i class="ti ti-paperclip"></i> Evidence <span style="font-weight:400;color:var(--muted);font-size:12px;">${cur.Type==='lean' ? 'other files &amp; generated reports' : cur.Type==='finance' ? 'optional — costing sheet, sales record, receipts' : 'optional — product photos, labels, packaging'}</span></span>
     ${canUp ? `<div style="display:flex;gap:6px;"><button class="btn btn-outline btn-sm" onclick="pickEvidence('','photo')"><i class="ti ti-photo"></i> Photo</button><button class="btn btn-outline btn-sm" onclick="pickEvidence('','doc')"><i class="ti ti-file"></i> Document</button></div>` : ''}</div>
     <div class="fsection-body">${items.length ? `<div class="ev-list">${items.map(e => `<div class="ev-item"><i class="ti ${evIcon(e)}" style="${e.kind==='report'?'color:var(--red)':''}"></i><a href="${e.url}" target="_blank" style="color:var(--teal);flex:1;">${esc(e.name)}</a><span style="color:var(--muted);font-size:10px;">${fmtDate(e.time)}${e.by?' · '+esc(e.by):''}</span></div>`).join('')}</div>` : '<div style="font-size:12px;color:var(--muted);">No files attached.</div>'}</div></div>`;
 }
@@ -656,6 +716,7 @@ function pickEvidence(kpi, kind) {
 function validateForSubmit() {
   if (cur.Type === 'pqr') { const missing = FORMS.pqr.areas.flatMap(a => a.questions).filter(q => curAnswers[q.id] === undefined || curAnswers[q.id] === ''); if (missing.length) return `Please score every indicator (${missing.length} missing).`; }
   if (cur.Type === 'brand') { const req = ['m_name','m_logo','m_story','m_identity','m_packaging','m_photo','m_social','branding_stage','value_prop','positioning_stage','digital_readiness','star_quality','star_consistency','star_demand','star_pricing','star_cx','star_recognition']; const miss = req.filter(id => curAnswers[id] === undefined || curAnswers[id] === ''); if (miss.length) return `Please answer all rating questions (${miss.length} missing).`; }
+  if (cur.Type === 'finance') { const req = ['material_cost','labour_cost','overhead_cost','selling_price','revenue','expenses','pricing_method']; const miss = req.filter(id => curAnswers[id] === undefined || curAnswers[id] === ''); if (miss.length) return `Please fill the costing and monthly figures (${miss.length} missing).`; }
   if (cur.Type === 'lean') { const qs = FORMS.lean.kpis.flatMap(k => cur.Period === 'Endline' ? k.endline : k.baseline).filter(q => q.metric || ['b_members','b_participants','e_members','e_participants'].includes(q.id)); const miss = qs.filter(q => curAnswers[q.id] === undefined || curAnswers[q.id] === ''); if (miss.length) return `Please fill the key number for every KPI (${miss.length} missing).`; }
   return null;
 }
@@ -673,7 +734,9 @@ async function saveAssessment(submit) {
 async function finaliseReview() {
   const notes = document.getElementById('mentor-notes')?.value.trim() || '';
   const n = Object.keys(curOverrides).length;
-  if (!(await confirmDialog({ title:'Finalise this assessment?', message:`${n ? n + ' indicator' + (n>1?'s':'') + ' adjusted. ' : 'No adjustments — the self-assessed score becomes final. '}The collaborator will be notified and the assessment locked.`, confirmText:'Finalise' }))) return;
+  const rpName = { pqr:'Product Quality', brand:'Branding', lean:'Lean', finance:'Finance' }[cur.Type];
+  const gate = cur.rpCommentCount ? '' : `\n\n⚠ The ${rpName} resource person has not commented on this assessment yet. You can finalise now or wait for their feedback.`;
+  if (!(await confirmDialog({ title:'Finalise this assessment?', message:`${n ? n + ' indicator' + (n>1?'s':'') + ' adjusted. ' : 'No adjustments — the self-assessed score becomes final. '}The collaborator will be notified and the assessment locked.${gate}`, confirmText: cur.rpCommentCount ? 'Finalise' : 'Finalise anyway', danger: !cur.rpCommentCount }))) return;
   const r = await api(`/incu/assessments/${cur.ID}/review`, { method:'POST', body: JSON.stringify({ mentorAnswers: curOverrides, mentorNotes: notes }) });
   if (r?.success) { showToast(`Finalised — ${r.finalScore ?? '—'} (${r.rating}) ✓`, 'success'); cache.assessments = null; refreshQueueBadge(); openAssessment(cur.ID); }
   else showToast(r?.error || 'Failed', 'error');
@@ -706,16 +769,16 @@ async function loadCollaborators() {
   cache.collaborators = d.collaborators;
   const mini = (label, s) => `<div style="text-align:center;flex:1;"><div style="font-size:16px;font-weight:700;color:${scoreColor(s?.score)}">${s?.score ?? '—'}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;">${label}</div></div>`;
   el.innerHTML = `<div class="section-hd"><div class="section-title">Collaborators <span style="font-size:12px;color:var(--muted);font-weight:400;">${d.collaborators.length}</span></div>
-      <a class="btn btn-outline btn-sm" href="../" title="Add collaborators in Staff Management"><i class="ti ti-user-plus"></i> Add in Staff Management</a></div>
+      ${isMgmt ? `<a class="btn btn-outline btn-sm" href="../" title="Add collaborators in Staff Management"><i class="ti ti-user-plus"></i> Add in Staff Management</a>` : ''}</div>
     ${d.collaborators.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${d.collaborators.map(c => `
       <div class="card coll-card" onclick="openCollaborator('${c.ID}')">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
           <div class="user-avatar" style="background:var(--teal-lt);">${esc((c.BusinessName||'?').slice(0,2).toUpperCase())}</div>
           <div style="flex:1;min-width:0;"><div style="font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.BusinessName)}</div><div style="font-size:11px;color:var(--muted);">${esc(c.Owner||c.staffName)}${c.Location?' · '+esc(c.Location):''}</div></div>
           ${c.summary.pendingReview ? `<span class="nav-badge">${c.summary.pendingReview}</span>` : ''}
-          <button class="btn btn-outline btn-sm" title="Open Drive folder" onclick="event.stopPropagation();openCollabFolder('${c.ID}')"><i class="ti ti-folder"></i></button>
+          ${isMgmt ? `<button class="btn btn-outline btn-sm" title="Open Drive folder" onclick="event.stopPropagation();openCollabFolder('${c.ID}')"><i class="ti ti-folder"></i></button>` : ''}
         </div>
-        <div style="display:flex;gap:6px;padding-top:10px;border-top:1px solid var(--border2);">${mini('Quality', c.summary.pqr)}${mini('Brand', c.summary.brand)}${mini('Lean', c.summary.lean)}</div>
+        <div style="display:flex;gap:6px;padding-top:10px;border-top:1px solid var(--border2);">${mini('Quality', c.summary.pqr)}${mini('Brand', c.summary.brand)}${mini('Lean', c.summary.lean)}${mini('Costing', c.summary.finance)}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:8px;">${c.summary.pqrProducts} product${c.summary.pqrProducts!==1?'s':''} · ${c.BusinessStage||'stage —'} · Lean ${c.summary.hasBaseline?'baseline':''}${c.summary.hasEndline?' + endline':''}${!c.summary.hasBaseline&&!c.summary.hasEndline?'not started':''}</div>
       </div>`).join('')}</div>` : '<div class="empty"><i class="ti ti-building-store"></i>No collaborators yet — add them in Staff Management with the Collaborator role.</div>'}`;
 }
@@ -726,7 +789,27 @@ function openCollaborator(id) {
   loadAssessments({ collaboratorId: id, title: c?.BusinessName });
 }
 
+async function loadRpOverview() {
+  const el = document.getElementById('panel-dashboard'); el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const [d, c] = await Promise.all([api('/incu/assessments'), api('/incu/dashboard')]);
+  if (!d) return;
+  const list = d.assessments; const pending = list.filter(a => a.Status === 'Submitted');
+  const stat = c && !c.error ? (rpTopic === 'pqr' ? `${c.qc.productsMetPct}% of products meet the QC standard` : rpTopic === 'brand' ? `${c.brand.branded} of ${c.brand.assessed} at Stage 2+ · avg ${c.brand.avgScore ?? '—'}` : rpTopic === 'lean' ? `${c.lean.endlines} endlines · avg ${c.lean.avgTargetsMet ?? '—'} / 7 targets met` : `${c.finance.profitablePct}% profitable · avg gross margin ${c.finance.avgGrossMargin ?? '—'}%`) : '';
+  el.innerHTML = `
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+      <div class="card"><div class="stat-label">${TYPE_META[rpTopic].label} assessments</div><div class="stat-val">${list.length}</div><div class="stat-sub">${stat}</div></div>
+      <div class="card"><div class="stat-label">Awaiting mentor decision</div><div class="stat-val" style="color:var(--blue)">${pending.length}</div><div class="stat-sub">your feedback helps the mentor finalise</div></div>
+      <div class="card"><div class="stat-label">Collaborators</div><div class="stat-val">${c?.totals?.collaborators ?? '—'}</div><div class="stat-sub">in the incubation programme</div></div>
+    </div>
+    <div class="section-hd"><div class="section-title">Recent submissions in your topic</div><button class="btn btn-outline btn-sm" onclick="navigateTo('assessments')">See all</button></div>
+    ${list.length ? list.slice(0, 8).map(a => `<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <span class="badge ${STATUS_CLS[a.Status]}">${a.Status}</span>
+      <div style="flex:1;min-width:180px;"><div style="font-weight:600;color:var(--navy);">${esc(a.businessName)}</div><div style="font-size:12px;color:var(--muted);">${esc(a.ProductName || a.Period || '')} · ${fmtDate(a.ReviewedAt || a.SubmittedAt)}</div></div>
+      <div style="text-align:right;"><div style="font-size:20px;font-weight:700;color:${scoreColor(a.finalScore ?? a.selfScore)}">${a.finalScore ?? a.selfScore ?? '—'}</div><div style="font-size:10px;color:var(--muted);">${esc(a.Rating||'')}</div></div>
+      <button class="btn btn-primary btn-sm" onclick="openAssessment('${a.ID}')">Review &amp; comment</button></div>`).join('') : '<div class="empty"><i class="ti ti-inbox-off"></i>No submissions in your topic yet</div>'}`;
+}
 async function loadDashboard() {
+  if (isRP) return loadRpOverview();
   const el = document.getElementById('panel-dashboard'); el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Loading MEALA indicators…</div>';
   const d = await api('/incu/dashboard'); if (!d || d.error) { el.innerHTML = `<div class="empty">${esc(d?.error||'Could not load')}</div>`; return; }
   charts.forEach(c => c.destroy()); charts = [];
@@ -737,6 +820,15 @@ async function loadDashboard() {
       <div class="card"><div class="stat-label">QC standard met</div><div class="stat-val" style="color:${scoreColor(d.qc.collaboratorsMetPct)}">${d.qc.collaboratorsMetPct}%</div><div class="stat-sub">${d.qc.collaboratorsMet} of ${d.totals.collaborators} collaborators · ${d.qc.productsMet}/${d.qc.productsAssessed} products ≥ 80</div></div>
       <div class="card"><div class="stat-label">Brands emerging</div><div class="stat-val" style="color:var(--purple)">${d.brand.branded}</div><div class="stat-sub">of ${d.brand.assessed} assessed at Stage 2+ · avg score ${d.brand.avgScore ?? '—'}</div></div>
       <div class="card"><div class="stat-label">Lean targets met</div><div class="stat-val" style="color:#00695C">${d.lean.avgTargetsMet ?? '—'}<span style="font-size:14px;color:var(--muted)">${d.lean.avgTargetsMet!==null?' / 7':''}</span></div><div class="stat-sub">${d.lean.baselines} baselines · ${d.lean.endlines} endlines</div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;">
+      <div style="font-size:13px;font-weight:700;color:#8D6E00;"><i class="ti ti-coins"></i> Costing &amp; Profit</div>
+      <div style="font-size:12px;color:var(--muted);">${d.finance.assessed} of ${d.totals.collaborators} assessed</div>
+      <div style="font-size:12px;"><strong style="color:${scoreColor(d.finance.profitablePct)}">${d.finance.profitablePct}%</strong> <span style="color:var(--muted)">profitable</span></div>
+      <div style="font-size:12px;"><strong>${d.finance.avgGrossMargin ?? '—'}${d.finance.avgGrossMargin!==null?'%':''}</strong> <span style="color:var(--muted)">avg gross margin</span></div>
+      <div style="font-size:12px;"><strong>${d.finance.avgNetMargin ?? '—'}${d.finance.avgNetMargin!==null?'%':''}</strong> <span style="color:var(--muted)">avg net margin</span></div>
+      <div style="font-size:12px;"><strong>${d.finance.avgIncomeChange===null?'—':(d.finance.avgIncomeChange>0?'+':'')+d.finance.avgIncomeChange+'%'}</strong> <span style="color:var(--muted)">avg income change</span></div>
+      <div style="font-size:12px;"><strong>${d.finance.keepingRecords}</strong> <span style="color:var(--muted)">keeping 3+ record types</span></div>
     </div>
     ${d.totals.pendingReview ? `<div class="card" style="margin-bottom:16px;background:var(--blue-lt);border:none;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--blue);"><i class="ti ti-inbox"></i> ${d.totals.pendingReview} assessment${d.totals.pendingReview>1?'s':''} waiting for review <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="navigateTo('queue')">Open queue</button></div>` : ''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;" class="dash-grid">
@@ -749,15 +841,16 @@ async function loadDashboard() {
         <div style="display:flex;align-items:center;gap:8px;"><div class="prog-bar"><div class="prog-fill" style="width:${k.metPct}%;background:${scoreColor(k.metPct)}"></div></div><span style="font-size:12px;font-weight:700;color:${scoreColor(k.metPct)}">${k.assessed?k.metPct+'%':'—'}</span></div>
         <div style="font-size:10px;color:var(--muted);margin-top:4px;">${k.met}/${k.assessed} met${k.avgChangePct!==null?` · avg change ${k.avgChangePct>0?'+':''}${k.avgChangePct}%`:''}</div></div>`).join('')}</div></div>
     <div class="section-title" style="margin-bottom:10px;">Collaborator progress</div>
-    <div class="table-wrap"><table><thead><tr><th>Business</th><th>Stage</th><th>Quality</th><th>Brand</th><th>Lean</th><th>Products</th><th>Pending</th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>Business</th><th>Stage</th><th>Quality</th><th>Brand</th><th>Lean</th><th>Costing</th><th>Products</th><th>Pending</th></tr></thead><tbody>
       ${d.cards.length ? d.cards.map(c => `<tr style="cursor:pointer;" onclick="cache.collaborators=null;openCollaboratorById('${c.id}','${esc(c.businessName)}')">
         <td><strong>${esc(c.businessName)}</strong><div style="font-size:11px;color:var(--muted);">${esc(c.owner||'')}${c.location?' · '+esc(c.location):''}</div></td>
         <td style="font-size:12px;">${esc(c.businessStage||'—')}</td>
         <td style="font-weight:700;color:${scoreColor(c.pqr?.score)}">${c.pqr?.score ?? '—'}</td>
         <td style="font-weight:700;color:${scoreColor(c.brand?.score)}">${c.brand?.score ?? '—'}<div style="font-size:10px;font-weight:400;color:var(--muted);">${esc(c.brand?.rating||'')}</div></td>
         <td style="font-weight:700;color:${scoreColor(c.lean?.score)}">${c.lean?.score ?? (c.hasBaseline?'baseline':'—')}</td>
+        <td style="font-weight:700;color:${scoreColor(c.finance?.score)}">${c.finance?.score ?? '—'}</td>
         <td>${c.pqrProducts}</td>
-        <td>${c.pendingReview ? `<span class="badge b-submitted">${c.pendingReview}</span>` : '—'}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty">No collaborators yet</div></td></tr>'}
+        <td>${c.pendingReview ? `<span class="badge b-submitted">${c.pendingReview}</span>` : '—'}</td></tr>`).join('') : '<tr><td colspan="8"><div class="empty">No collaborators yet</div></td></tr>'}
     </tbody></table></div>
     <style>@media(max-width:800px){.dash-grid{grid-template-columns:1fr!important}}</style>`;
 
@@ -873,6 +966,19 @@ async function downloadAssessmentPdf(id) {
         doc.autoTable({ startY: y+2, head:[['Question','Answer']], body: sec.questions.map(q => [clean(q.label).slice(0,90), clean(ansLabel(q, a.answers[q.id]))]), styles:{ fontSize:8, cellPadding:2 }, headStyles: head, columnStyles:{0:{cellWidth:95}} });
         y = doc.lastAutoTable.finalY + 8;
       });
+    } else if (a.Type === 'finance') {
+      section('Calculated results');
+      const fm = v => v===null||v===undefined ? '—' : Number(v).toLocaleString('en-US');
+      doc.autoTable({ startY: y+2, head:[['Unit cost','Gross margin','Net profit (month)','Net margin','Income change']], body:[[fm(b.unitCost)+' MMK', b.grossMarginPct===null||b.grossMarginPct===undefined?'—':b.grossMarginPct+'%', fm(b.netProfit)+' MMK', b.netMarginPct===null||b.netMarginPct===undefined?'—':b.netMarginPct+'%', b.incomeChangePct===null||b.incomeChangePct===undefined?'—':(b.incomeChangePct>0?'+':'')+b.incomeChangePct+'%']], styles:{ fontSize:8.5, cellPadding:2.5, halign:'center' }, headStyles: head });
+      y = doc.lastAutoTable.finalY + 8;
+      section('Area scores');
+      doc.autoTable({ startY: y+2, head:[['Area','Score','Weight','%']], body:(b.areas||[]).map(x => [x.label, x.score, x.max, Math.round(x.score/x.max*100)+'%']), styles:{ fontSize:8.5, cellPadding:2 }, headStyles: head, columnStyles:{1:{halign:'center'},2:{halign:'center'},3:{halign:'center'}} });
+      y = doc.lastAutoTable.finalY + 8;
+      FORMS.finance.sections.forEach(sec => {
+        section(sec.label);
+        doc.autoTable({ startY: y+2, head:[['Question','Answer']], body: sec.questions.map(q => [clean(q.label).slice(0,90), clean(ansLabel(q, a.answers[q.id]))]), styles:{ fontSize:8, cellPadding:2 }, headStyles: head, columnStyles:{0:{cellWidth:95}} });
+        y = doc.lastAutoTable.finalY + 8;
+      });
     } else if (a.Type === 'lean') {
       const isEnd = a.Period === 'Endline';
       section(isEnd ? 'KPI results against targets' : 'Baseline values');
@@ -895,6 +1001,17 @@ async function downloadAssessmentPdf(id) {
       const lines = doc.splitTextToSize(clean(a.MentorNotes), W-2*M); if (y + lines.length*4.5 > 280) { doc.addPage(); y = 20; }
       doc.setFillColor(255,248,225); doc.rect(M-2, y-1, W-2*M+4, lines.length*4.5+6, 'F'); doc.text(lines, M, y+4); y += lines.length*4.5 + 12;
     }
+    // Comments thread (resource person feedback + mentor / collaborator replies)
+    try {
+      const cd = await api(`/incu/assessments/${id}/comments`);
+      const cms = cd?.comments || [];
+      if (cms.length) {
+        section('Feedback & comments');
+        doc.autoTable({ startY: y+2, head:[['Who','Date','Comment']], body: cms.map(cmt => [`${clean(cmt.StaffName)}\n${clean(cmt.roleLabel)}`, fmtDate(cmt.CreatedAt), clean(cmt.Comment)]), styles:{ fontSize:8, cellPadding:2.5 }, headStyles: head, columnStyles:{0:{cellWidth:40},1:{cellWidth:24}},
+          didParseCell: dd => { if (dd.section==='body' && cms[dd.row.index]?.isRp) dd.cell.styles.fillColor = [255,248,225]; } });
+        y = doc.lastAutoTable.finalY + 8;
+      }
+    } catch (_) {}
     const files = (a.evidence||[]).filter(e => e.kind !== 'report');
     if (files.length) {
       section('Evidence files');
