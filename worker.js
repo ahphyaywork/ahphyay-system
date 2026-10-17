@@ -28,6 +28,7 @@ const ROLES = {
   PAGE_ADMIN:        'page-admin',
   ADMIN_ASSISTANT:   'admin-assistant',
   PRODUCTION_INTERN: 'production-intern',
+  COLLABORATOR:      'collaborator',   // SN@IL incubation collaborator (external business owner)
 };
 
 // Permission group helpers
@@ -36,6 +37,8 @@ const isManagement = r => ['bod','developer','senior-impact','senior-biz','proje
 const isDeveloper  = r => r === 'developer';
 const isStaffLevel = r => ['production-lead','senior-admin','project-officer','network-catalyst','page-admin','admin-assistant','production-intern'].includes(r);
 const hasAccess    = r => Object.values(ROLES).includes(r);
+const isCollaborator = r => r === 'collaborator';
+const isMentor     = r => isAdmin(r);   // mentors are BOD/Developer for now
 
 // Role display labels
 const ROLE_LABELS = {
@@ -51,6 +54,7 @@ const ROLE_LABELS = {
   'page-admin':           'Page Admin',
   'admin-assistant':      'Admin & Finance Assistant',
   'production-intern':    'Production Intern',
+  'collaborator':         'Collaborator',
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -290,7 +294,7 @@ const PERMISSION_KEYS = {
 function defaultPermissions() {
   const mgmt = ['bod','developer','senior-impact','senior-biz','project-coordinator'];
   const admin = ['bod','developer'];
-  const all = Object.values(ROLES);
+  const all = Object.values(ROLES).filter(r => r !== 'collaborator');
   const staffLevel = ['production-lead','senior-admin','project-officer','network-catalyst','page-admin','admin-assistant','production-intern'];
 
   const perms = {};
@@ -436,6 +440,15 @@ export default {
       if (!auth) return json({ error: 'Unauthorized' }, 401);
 
       const { role, staffId } = auth;
+
+      // Collaborators are confined to the incubation extension + their own account
+      if (isCollaborator(role) && !path.startsWith('/incu') &&
+          !['/auth/me','/auth/change-password'].includes(path)) {
+        return json({ error: 'Access denied' }, 403);
+      }
+
+      // ── SN@IL Incubation extension ──
+      if (path.startsWith('/incu')) return await handleIncu(path, request, url, env, auth);
 
       // Auth
       if (path === '/auth/me') {
@@ -686,7 +699,7 @@ async function getStaff(env, role, staffId, url) {
 async function getStaffNames(env) {
   const staff = await sheetsRead(env, 'Staff');
   const names = staff
-    .filter(s => s.Active?.toLowerCase() === 'true')
+    .filter(s => s.Active?.toLowerCase() === 'true' && normalizeRole(s.Role) !== 'collaborator')
     .map(s => ({ ID: s.ID, Name: s.Name, Role: normalizeRole(s.Role) }));
   return json(names);
 }
@@ -694,8 +707,10 @@ async function getStaffNames(env) {
 async function addStaff(request, env, role) {
   if (!isAdmin(role)) return json({ error: 'Admin only' }, 403);
   const body = await request.json();
-  const { name, username, password, staffRole, type, email, projects, team } = body;
+  const { name, username, password, staffRole, type, email, projects, team, collaborator } = body;
   if (!name || !username || !password) return json({ error: 'Missing required fields' }, 400);
+  const isCollab = staffRole === 'collaborator';
+  if (isCollab && !collaborator?.businessName?.trim()) return json({ error: 'Business name is required for a collaborator' }, 400);
 
   const staff = await sheetsRead(env, 'Staff');
   if (staff.find(r => r.Username?.toLowerCase() === username.toLowerCase()))
@@ -706,16 +721,19 @@ async function addStaff(request, env, role) {
 
   // Create personal Drive folder structure for this staff member
   let folderId = '';
-  try {
+  if (!isCollab) try {
     folderId = await createStaffFolderStructure(env, id, name);
   } catch (e) {
     console.error('Failed to create staff folder:', e.message);
     // Don't block account creation if folder creation fails
   }
 
-  const row = [id, name, username, hashed, staffRole || 'project-officer', type || 'Full-time', email || '', projects || '', 'true', new Date().toISOString(), '', folderId, team || 'Program Team'];
+  const row = [id, name, username, hashed, staffRole || 'project-officer', type || 'Full-time', email || '', isCollab ? '' : (projects || ''), 'true', new Date().toISOString(), '', folderId, isCollab ? 'Collaborator' : (team || 'Program Team')];
   await sheetsAppend(env, 'Staff', row);
-  return json({ success: true, id });
+
+  let collaboratorId = '';
+  if (isCollab) collaboratorId = await upsertCollaboratorProfile(env, id, collaborator);
+  return json({ success: true, id, collaboratorId });
 }
 
 async function updateStaff(request, env, role, targetId) {
@@ -742,6 +760,9 @@ async function updateStaff(request, env, role, targetId) {
     body.team || existing.Team || 'Program Team',
   ];
   await sheetsUpdateRow(env, 'Staff', rowIdx + 2, updated);
+  if (normalizeRole(updated[4]) === 'collaborator' && body.collaborator) {
+    await upsertCollaboratorProfile(env, targetId, body.collaborator);
+  }
   return json({ success: true });
 }
 
@@ -1208,7 +1229,7 @@ async function getKPI(url, env, role, staffId) {
 
   let staffSummary = [];
   if (isManagement(role) && !rankingOnly) {
-    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRole(s.Role) !== 'developer');
+    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && !['developer','collaborator'].includes(normalizeRole(s.Role)));
     staffSummary = activeStaff.map(s => {
       const staffTasks = relevantTasks.filter(t => isAssigned(t.AssigneeID, s.ID));
       const kBase = computeStaffKpi(staffTasks, todayStr);
@@ -1308,7 +1329,7 @@ async function getKPI(url, env, role, staffId) {
   const monthParam = url.searchParams.get('month');
   if (isManagement(role)) {
     const month = monthParam || todayStr.slice(0, 7); // YYYY-MM
-    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRole(s.Role) !== 'developer');
+    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && !['developer','collaborator'].includes(normalizeRole(s.Role)));
 
     // The 6 months we display (selected month + 5 prior)
     const months = [];
@@ -1374,7 +1395,7 @@ async function getDashboard(env, role, staffId) {
   ]);
   const logs = [];
 
-  const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && normalizeRole(s.Role) !== 'developer');
+  const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && !['developer','collaborator'].includes(normalizeRole(s.Role)));
   const activeProjects = projects.filter(p => p.Status?.toLowerCase() === 'active');
 
   const now = new Date();
@@ -2992,6 +3013,631 @@ async function initResumableUpload(request, env, role, staffId, targetStaffId) {
 }
 
 // ══════════════════════════════════════════════════════════
+// SN@IL INCUBATION EXTENSION  (/incu/*)
+// Collaborators self-assess → system scores → mentor (BOD) reviews & finalises.
+// Form definitions live here ONLY; the frontend renders from GET /incu/forms
+// and the scoring below reads the same object, so UI and score never drift.
+// ══════════════════════════════════════════════════════════
+
+const INCU_BUSINESS_STAGES = ['Idea Stage','Start-up','Early Growth','Growing Enterprise','Established Enterprise'];
+const INCU_PRODUCT_CATEGORIES = ['Garment','Bag','Home Textile','Accessories'];
+
+const INCU_FORMS = {
+  // ── Product Quality Report — 100 pts, QC standard met at ≥ 80 ──
+  pqr: {
+    label: 'Product Quality Report',
+    perProduct: true,
+    qcThreshold: 80,
+    areas: [
+      { key:'quality',   label:'Product Quality',       max:30, questions:[
+        { id:'fabric',      label:'Fabric / Material Quality',  max:10, hint:'Is the fabric free from stains, holes, or defects?' },
+        { id:'stitching',   label:'Stitching & Workmanship',    max:10, hint:'Are the stitches straight, even, and secure?' },
+        { id:'durability',  label:'Durability & Construction',  max:10, hint:'Can the product withstand normal use?' } ]},
+      { key:'design',    label:'Design & Functionality',  max:20, questions:[
+        { id:'design',      label:'Product Design',             max:10, hint:'Is the product attractive and suitable for the target market?' },
+        { id:'function',    label:'Functionality',              max:10, hint:'Does it function properly (bag closes well, garment fits correctly)?' } ]},
+      { key:'finishing', label:'Finishing',               max:20, questions:[
+        { id:'finish',      label:'Finishing Quality',          max:10, hint:'Are loose threads removed? Is it clean and properly ironed?' },
+        { id:'measure',     label:'Measurement & Consistency',  max:10, hint:'Are measurements consistent with the product specification?' } ]},
+      { key:'branding',  label:'Branding & Packaging',    max:15, questions:[
+        { id:'brandid',     label:'Brand Identity',             max:5,  hint:'Does the product have a logo or brand label?' },
+        { id:'label',       label:'Product Label / Information',max:5,  hint:'Is there a care label or product information?' },
+        { id:'packaging',   label:'Packaging',                  max:5,  hint:'Is the packaging attractive and protective?' } ]},
+      { key:'market',    label:'Market Readiness',        max:15, questions:[
+        { id:'price',       label:'Price Competitiveness',      max:5,  hint:'Is the product appropriately priced for its quality?' },
+        { id:'appeal',      label:'Customer Appeal',            max:5,  hint:'Would customers be interested in buying it?' },
+        { id:'presentation',label:'Overall Presentation',       max:5,  hint:'Is the overall presentation suitable for exhibitions or retail?' } ]},
+    ],
+    // 10-pt scale: Excellent 9–10 · Good 7–8 · Fair 5–6 · Poor 0–4.  5-pt: 5 · 4 · 3 · 0–2
+    bands: [[90,'Excellent','Premium quality product, ready for exhibitions and wider markets.'],
+            [80,'Very Good','Good quality with only minor improvements needed.'],
+            [70,'Good','Meets basic market standards but requires improvement in consistency or presentation.'],
+            [60,'Fair','Saleable but needs significant improvement before expanding markets.'],
+            [0,'Needs Improvement','Requires major improvements in quality, finishing, and market readiness before promotion.']],
+  },
+
+  // ── Branding & Market Positioning — 100 pts, auto-derived from the checklist ──
+  brand: {
+    label: 'Branding & Market Positioning',
+    sections: [
+      { key:'snapshot', label:'Current Business Snapshot', questions:[
+        { id:'business_stage', label:'Business Stage', type:'select', options: INCU_BUSINESS_STAGES },
+        { id:'core_product',   label:'Core Product',   type:'text' },
+        { id:'target_customer',label:'Target Customer',type:'text' },
+        { id:'sales_channels', label:'Current Sales Channels', type:'text' } ]},
+      { key:'maturity', label:'Branding Maturity', questions:[
+        { id:'m_name',      label:'Business Name',        type:'level', options:['Established','Developing','None'] },
+        { id:'m_logo',      label:'Logo',                 type:'level', options:['Strong','Basic','None'] },
+        { id:'m_story',     label:'Brand Story',          type:'level', options:['Clear','Partial','None'] },
+        { id:'m_identity',  label:'Product Identity',     type:'level', options:['Clear','Developing','Weak'] },
+        { id:'m_packaging', label:'Packaging',            type:'level', options:['Professional','Basic','None'] },
+        { id:'m_photo',     label:'Product Photography',  type:'level', options:['Good','Fair','Limited'] },
+        { id:'m_social',    label:'Social Media Branding',type:'level', options:['Consistent','Inconsistent','None'] },
+        { id:'branding_stage', label:'Branding Stage', type:'stage', options:[
+          'Stage 1 – Product-Based Business: sells products without a clear brand identity',
+          'Stage 2 – Brand Identity Development: name, logo and identity emerging but inconsistent',
+          'Stage 3 – Market-Oriented Brand: consistent branding, growing recognition and storytelling',
+          'Stage 4 – Competitive Lifestyle Brand: strong positioning, loyal customers, clear differentiation'] } ]},
+      { key:'positioning', label:'Market Positioning', questions:[
+        { id:'value_prop', label:'Value Proposition — how clearly does the business communicate why customers should choose its products?', type:'rating4', options:['Excellent','Good','Fair','Weak'] },
+        { id:'usp',        label:'Current USP', type:'textarea' },
+        { id:'star_quality',    label:'Product Quality',     type:'stars' },
+        { id:'star_consistency',label:'Product Consistency', type:'stars' },
+        { id:'star_demand',     label:'Market Demand',       type:'stars' },
+        { id:'star_pricing',    label:'Pricing Strategy',    type:'stars' },
+        { id:'star_cx',         label:'Customer Experience', type:'stars' },
+        { id:'star_recognition',label:'Brand Recognition',   type:'stars' },
+        { id:'positioning_stage', label:'Positioning Stage', type:'stage', options:[
+          'Stage 1 – Local Community Business: mainly serves friends, neighbours and local buyers',
+          'Stage 2 – Emerging Market Presence: participates in exhibitions, receives repeat customers',
+          'Stage 3 – Regional Market Position: recognised beyond the local community, growing partnerships',
+          'Stage 4 – Premium or Export Ready: clear positioning, strong branding, capacity for larger markets'] } ]},
+      { key:'digital', label:'Digital Positioning', questions:[
+        { id:'platforms', label:'Current Platforms', type:'multi', options:['Facebook','TikTok','Instagram','Viber','Website','Marketplace'] },
+        { id:'digital_readiness', label:'Digital Readiness', type:'rating4', options:['Beginner','Developing','Intermediate','Advanced'], ascending:true } ]},
+    ],
+    areas: [
+      { key:'brand_identity', label:'Brand Identity',             weight:20 },
+      { key:'positioning',    label:'Product Positioning',        weight:20 },
+      { key:'cvp',            label:'Customer Value Proposition', weight:15 },
+      { key:'digital',        label:'Digital Presence',           weight:15 },
+      { key:'market',         label:'Market Readiness',           weight:15 },
+      { key:'growth',         label:'Business Growth Potential',  weight:15 },
+    ],
+    bands: [[90,'Brand Leader','Strong, recognizable brand with a clear market position and readiness for expansion.'],
+            [80,'Growth Brand','Consistent branding and growing market presence with potential for scaling.'],
+            [70,'Emerging Brand','Developing brand identity and positioning but requires stronger consistency and market differentiation.'],
+            [60,'Developing Business','Basic branding exists, but significant improvement is needed in positioning, marketing, and customer engagement.'],
+            [0,'Foundation Stage','Business is primarily product-focused and requires support to establish a clear brand identity and market positioning.']],
+  },
+
+  // ── Lean KPI Baseline / Endline — 7 KPIs; endline is scored against the latest reviewed baseline ──
+  lean: {
+    label: 'Lean KPI Questionnaire',
+    periods: ['Baseline','Endline'],
+    kpis: [
+      { key:'output', label:'Daily Output', labelMm:'တစ်နေ့တာ ထုတ်လုပ်နိုင်မှု', target:'+20% growth', targetRule:{ type:'increase', pct:20 }, unit:'units/day',
+        baseline:[ { id:'b_output', label:'Average units produced per day', type:'number', unit:'units/day', metric:true },
+                   { id:'b_days_week', label:'Working days per week', type:'number', unit:'days' },
+                   { id:'b_has_target', label:'Is there a daily production target?', type:'yesno' },
+                   { id:'b_target', label:'If yes, target', type:'number', unit:'units/day' },
+                   { id:'b_barriers', label:'Main barriers to increasing output', type:'multi', options:['Waiting for materials','Poor work management','Waiting in line','Tool / machine problems','Other'] } ],
+        endline:[  { id:'e_output', label:'Average units produced per day after Lean', type:'number', unit:'units/day', metric:true },
+                   { id:'e_changes', label:'Main changes that improved output', type:'textarea' } ],
+        evidence:{ required:true, photos:['Production area','Workstation layout','Working process'], docs:['Daily production record','Order record','Production tracking sheet'] } },
+      { key:'defect', label:'Defect Rate', labelMm:'အမှားပါသော ထုတ်ကုန်နှုန်း', target:'< 5%', targetRule:{ type:'below', value:5, rateOf:30 }, unit:'per 30',
+        baseline:[ { id:'b_defects', label:'Defective items per 30 produced', type:'number', unit:'/ 30', metric:true },
+                   { id:'b_rework', label:'Items reworked per week', type:'number', unit:'/ week' },
+                   { id:'b_defect_types', label:'Most common defect types', type:'textarea' },
+                   { id:'b_defect_cause', label:'Main cause of defects', type:'textarea' } ],
+        endline:[  { id:'e_defects', label:'Defective items per 30 produced after Lean', type:'number', unit:'/ 30', metric:true },
+                   { id:'e_quality_changes', label:'Changes made to improve quality', type:'textarea' } ],
+        evidence:{ required:false, photos:['Defect sample','Quality checking area'], docs:['Defect record','Quality inspection checklist'] } },
+      { key:'search', label:'Search Time', labelMm:'ပစ္စည်းရှာဖွေချိန်', target:'< 5 minutes', targetRule:{ type:'below', value:5 }, unit:'minutes',
+        baseline:[ { id:'b_search', label:'Average time to find tools / materials', type:'number', unit:'minutes', metric:true },
+                   { id:'b_hard_items', label:'Items that are hard to find', type:'textarea' } ],
+        endline:[  { id:'e_search', label:'Average time to find tools / materials now', type:'number', unit:'minutes', metric:true },
+                   { id:'e_5s_easier', label:'What became easier because of 5S and visual management?', type:'textarea' } ],
+        evidence:{ required:true, photos:['Before / after storage area','Labeling system'], docs:['Storage layout','Material location list'] } },
+      { key:'lead', label:'Lead Time', labelMm:'အော်ဒါပြီးစီးချိန်', target:'Reduce 40–60%', targetRule:{ type:'decrease', pct:40 }, unit:'days',
+        baseline:[ { id:'b_lead', label:'Days from order received to finished product delivered', type:'number', unit:'days', metric:true },
+                   { id:'b_delay_reasons', label:'Reasons orders get delayed', type:'textarea' } ],
+        endline:[  { id:'e_lead', label:'Days to complete an order after Lean', type:'number', unit:'days', metric:true } ],
+        evidence:{ required:false, photos:['Process flow','Production & packing area'], docs:['Order tracking sheet','Delivery record'] } },
+      { key:'fives', label:'5S Score', labelMm:'5S အမှတ်', target:'> 80 / 100', targetRule:{ type:'above', value:80 }, unit:'/ 100',
+        baseline:[ { id:'b_5s', label:'Current 5S audit score', type:'number', unit:'/ 100', max:100, metric:true },
+                   { id:'b_workplace', label:'Workplace organisation', type:'select', options:['Good','Average','Needs improvement'] } ],
+        endline:[  { id:'e_5s', label:'5S audit score after Lean', type:'number', unit:'/ 100', max:100, metric:true },
+                   { id:'e_workplace_changes', label:'What changed in the workplace after 5S?', type:'textarea' } ],
+        evidence:{ required:true, photos:['Entire workplace','Working table','Storage area','Finished product area'], docs:['5S audit checklist','Cleaning schedule'] } },
+      { key:'kaizen', label:'Kaizen Suggestions', labelMm:'တိုးတက်ရေးအကြံပြုချက်', target:'≥ 5 / month', targetRule:{ type:'atleast', value:5 }, unit:'/ month',
+        baseline:[ { id:'b_kaizen', label:'Improvement suggestions submitted per month', type:'number', unit:'/ month', metric:true },
+                   { id:'b_kaizen_recorded', label:'Are suggestions recorded?', type:'yesno' } ],
+        endline:[  { id:'e_kaizen', label:'Kaizen suggestions submitted per month', type:'number', unit:'/ month', metric:true },
+                   { id:'e_kaizen_done', label:'Improvements implemented', type:'number', unit:'count' } ],
+        evidence:{ required:false, photos:['Kaizen activity','Improvement result'], docs:['Kaizen suggestion form','Improvement record'] } },
+      { key:'participation', label:'Employee Participation', labelMm:'အဖွဲ့ဝင်ပါဝင်မှု', target:'> 70%', targetRule:{ type:'above', value:70, ratio:true }, unit:'%',
+        baseline:[ { id:'b_members', label:'Total members', type:'number', unit:'people' },
+                   { id:'b_participants', label:'Members participating in Lean activities', type:'number', unit:'people' },
+                   { id:'b_low_reason', label:'Reason for low participation (if any)', type:'textarea' } ],
+        endline:[  { id:'e_members', label:'Total members', type:'number', unit:'people' },
+                   { id:'e_participants', label:'Members participating', type:'number', unit:'people' },
+                   { id:'e_behaviour', label:'How did members\u2019 behaviour / attitude change after Lean?', type:'textarea' } ],
+        evidence:{ required:false, photos:['Team meeting','Training','Kaizen activity'], docs:['Attendance record','Training record'] } },
+    ],
+  },
+};
+
+// ── Scoring helpers ──
+const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+function bandFor(bands, score) {
+  for (const [min, label, desc] of bands) if (score >= min) return { label, desc };
+  return { label: bands[bands.length - 1][1], desc: bands[bands.length - 1][2] };
+}
+
+// Product Quality: straight sum of the 13 indicators, capped at each max.
+function scorePqr(answers) {
+  const f = INCU_FORMS.pqr;
+  const areas = f.areas.map(a => {
+    const items = a.questions.map(q => ({ id:q.id, label:q.label, max:q.max, score: clamp(num(answers[q.id]) ?? 0, 0, q.max) }));
+    const score = items.reduce((s, i) => s + i.score, 0);
+    return { key:a.key, label:a.label, max:a.max, score, items };
+  });
+  const total = Math.round(areas.reduce((s, a) => s + a.score, 0));
+  const band = bandFor(f.bands, total);
+  return { score: total, rating: band.label, ratingDesc: band.desc, qcMet: total >= f.qcThreshold, areas };
+}
+
+// Branding: derive the six weighted areas from the checklist answers.
+//   Brand Identity 20   ← 7 maturity components, best/mid/none = 2/1/0 (max 14)
+//   Positioning 20      ← branding stage (1–4) and positioning stage (1–4), averaged
+//   CVP 15              ← value proposition rating (Excellent 3 … Weak 0)
+//   Digital 15          ← half from platform count (/6), half from digital readiness (0–3)
+//   Market Readiness 15 ← average of the six 1–5 star ratings, rescaled 0–1
+//   Growth 15           ← business stage (0–4) and positioning stage (1–4), averaged
+function scoreBrand(answers) {
+  const f = INCU_FORMS.brand;
+  const levelVal = id => { const i = ['0','1','2'].indexOf(String(answers[id] ?? '')); return i === -1 ? 0 : 2 - i; }; // option index 0 = best
+  const stageVal = id => clamp(num(answers[id]) ?? 1, 1, 4);
+  const maturity = ['m_name','m_logo','m_story','m_identity','m_packaging','m_photo','m_social'].reduce((s, id) => s + levelVal(id), 0);
+  const brandingStage = stageVal('branding_stage'), positioningStage = stageVal('positioning_stage');
+  const valueProp = (() => { const i = num(answers.value_prop); return i === null ? 0 : clamp(3 - i, 0, 3); })(); // option 0 = Excellent
+  const platforms = Array.isArray(answers.platforms) ? answers.platforms.length : 0;
+  const digitalReady = clamp(num(answers.digital_readiness) ?? 0, 0, 3);                                        // option 0 = Beginner
+  const stars = ['star_quality','star_consistency','star_demand','star_pricing','star_cx','star_recognition'].map(id => clamp(num(answers[id]) ?? 1, 1, 5));
+  const starAvg = stars.reduce((a, b) => a + b, 0) / stars.length;
+  const bizStage = clamp(INCU_BUSINESS_STAGES.indexOf(answers.business_stage), 0, 4);
+
+  const ratios = {
+    brand_identity: maturity / 14,
+    positioning:    ((brandingStage - 1) / 3 + (positioningStage - 1) / 3) / 2,
+    cvp:            valueProp / 3,
+    digital:        (platforms / 6) * 0.5 + (digitalReady / 3) * 0.5,
+    market:         (starAvg - 1) / 4,
+    growth:         (bizStage / 4 + (positioningStage - 1) / 3) / 2,
+  };
+  const areas = f.areas.map(a => ({ key:a.key, label:a.label, max:a.weight, score: Math.round(ratios[a.key] * a.weight * 10) / 10 }));
+  const total = Math.round(areas.reduce((s, a) => s + a.score, 0));
+  const band = bandFor(f.bands, total);
+  return { score: total, rating: band.label, ratingDesc: band.desc, areas, brandingStage, positioningStage };
+}
+
+// Lean: pull the one headline metric per KPI; for an endline, compare to the paired baseline
+// and test each KPI against its target. Score = % of the 7 targets met (null for baseline).
+function leanMetric(kpi, answers, period) {
+  const qs = period === 'Endline' ? kpi.endline : kpi.baseline;
+  if (kpi.targetRule.ratio) {
+    const pre = period === 'Endline' ? 'e' : 'b';
+    const total = num(answers[pre + '_members']), part = num(answers[pre + '_participants']);
+    return total ? Math.round((part || 0) / total * 1000) / 10 : null;
+  }
+  const q = qs.find(x => x.metric);
+  let v = num(answers[q.id]);
+  if (v !== null && kpi.targetRule.rateOf) v = Math.round(v / kpi.targetRule.rateOf * 1000) / 10; // defects/30 → %
+  return v;
+}
+function leanTargetMet(rule, base, end) {
+  if (end === null) return null;
+  switch (rule.type) {
+    case 'increase': return base ? ((end - base) / base * 100) >= rule.pct : null;
+    case 'decrease': return base ? ((base - end) / base * 100) >= rule.pct : null;
+    case 'below':    return end < rule.value;
+    case 'above':    return end > rule.value;
+    case 'atleast':  return end >= rule.value;
+  }
+  return null;
+}
+function scoreLean(answers, period, baselineAnswers) {
+  const f = INCU_FORMS.lean;
+  const kpis = f.kpis.map(k => {
+    const value = leanMetric(k, answers, period);
+    if (period !== 'Endline') return { key:k.key, label:k.label, unit:k.unit, target:k.target, value };
+    const base = baselineAnswers ? leanMetric(k, baselineAnswers, 'Baseline') : null;
+    const changePct = (base && value !== null) ? Math.round((value - base) / base * 1000) / 10 : null;
+    return { key:k.key, label:k.label, unit:k.unit, target:k.target, baseline: base, value, changePct, met: leanTargetMet(k.targetRule, base, value) };
+  });
+  if (period !== 'Endline') return { score: null, rating: 'Baseline recorded', kpis, metCount: null };
+  const scored = kpis.filter(k => k.met !== null);
+  const metCount = scored.filter(k => k.met).length;
+  const score = scored.length ? Math.round(metCount / f.kpis.length * 100) : null;
+  const rating = score === null ? 'Not enough data' : score >= 85 ? 'Excellent' : score >= 70 ? 'Strong' : score >= 50 ? 'Developing' : 'Needs attention';
+  return { score, rating, kpis, metCount, hasBaseline: !!baselineAnswers };
+}
+
+function scoreAssessment(type, answers, period, baselineAnswers) {
+  if (type === 'pqr')   return scorePqr(answers);
+  if (type === 'brand') return scoreBrand(answers);
+  if (type === 'lean')  return scoreLean(answers, period, baselineAnswers);
+  throw new Error('Unknown assessment type');
+}
+
+const parseJson = (s, fallback) => { try { return s ? JSON.parse(s) : fallback; } catch (_) { return fallback; } };
+
+// ── Collaborator profile ──
+function nextCollabId(rows) {
+  let max = 0;
+  for (const r of rows) { const m = /^COL-(\d+)$/.exec(r.ID || ''); if (m) max = Math.max(max, parseInt(m[1], 10)); }
+  return 'COL-' + String(max + 1).padStart(3, '0');
+}
+async function upsertCollaboratorProfile(env, staffId, c) {
+  const rows = await sheetsRead(env, 'Collaborators');
+  const idx = rows.findIndex(r => r.StaffID === staffId);
+  const e = idx === -1 ? {} : rows[idx];
+  const id = e.ID || nextCollabId(rows);
+  const row = [
+    id, staffId,
+    c.businessName !== undefined ? c.businessName.trim() : (e.BusinessName || ''),
+    c.owner !== undefined ? c.owner : (e.Owner || ''),
+    c.location !== undefined ? c.location : (e.Location || ''),
+    c.businessStage !== undefined ? c.businessStage : (e.BusinessStage || ''),
+    c.coreProduct !== undefined ? c.coreProduct : (e.CoreProduct || ''),
+    c.targetCustomer !== undefined ? c.targetCustomer : (e.TargetCustomer || ''),
+    c.salesChannels !== undefined ? c.salesChannels : (e.SalesChannels || ''),
+    c.mentorId !== undefined ? c.mentorId : (e.MentorID || ''),
+    e.Active || 'true',
+    e.CreatedAt || new Date().toISOString(),
+  ];
+  if (idx === -1) await sheetsAppend(env, 'Collaborators', row);
+  else await sheetsUpdateRow(env, 'Collaborators', idx + 2, row);
+  return id;
+}
+
+// ── Router ──
+async function handleIncu(path, request, url, env, auth) {
+  const { role, staffId } = auth;
+  const m = request.method;
+  const canView = isCollaborator(role) || isManagement(role);
+  if (!canView) return json({ error: 'Access denied' }, 403);
+
+  if (path === '/incu/forms' && m === 'GET')
+    return json({ forms: INCU_FORMS, businessStages: INCU_BUSINESS_STAGES, productCategories: INCU_PRODUCT_CATEGORIES, isMentor: isMentor(role) });
+  if (path === '/incu/me' && m === 'GET')               return await incuMe(env, auth);
+  if (path === '/incu/collaborators' && m === 'GET')    return await incuCollaborators(env, role);
+  if (path === '/incu/assessments' && m === 'GET')      return await incuListAssessments(url, env, auth);
+  if (path === '/incu/assessments' && m === 'POST')     return await incuCreateAssessment(request, env, auth);
+  const one = path.match(/^\/incu\/assessments\/([\w-]+)$/);
+  if (one && m === 'GET')                               return await incuGetAssessment(env, auth, one[1]);
+  if (one && m === 'PUT')                               return await incuUpdateAssessment(request, env, auth, one[1]);
+  if (one && m === 'DELETE')                            return await incuDeleteAssessment(env, auth, one[1]);
+  const rev = path.match(/^\/incu\/assessments\/([\w-]+)\/review$/);
+  if (rev && m === 'POST')                              return await incuReviewAssessment(request, env, auth, rev[1]);
+  const ev = path.match(/^\/incu\/assessments\/([\w-]+)\/evidence$/);
+  if (ev && m === 'POST')                               return await incuUploadEvidence(request, env, auth, ev[1]);
+  if (path === '/incu/dashboard' && m === 'GET')        return await incuDashboard(env, role);
+  return json({ error: 'Not found' }, 404);
+}
+
+// Resolve the collaborator record for the logged-in user (collaborators only)
+async function myCollaborator(env, staffId) {
+  const rows = await sheetsRead(env, 'Collaborators');
+  return rows.find(r => r.StaffID === staffId) || null;
+}
+
+async function incuMe(env, auth) {
+  if (!isCollaborator(auth.role)) return json({ collaborator: null, isMentor: isMentor(auth.role) });
+  const c = await myCollaborator(env, auth.staffId);
+  if (!c) return json({ error: 'No collaborator profile found — ask your mentor to complete your business profile' }, 404);
+  return json({ collaborator: c, isMentor: false });
+}
+
+// Mentor view: every collaborator with their latest scores
+async function incuCollaborators(env, role) {
+  if (!isManagement(role)) return json({ error: 'Access denied' }, 403);
+  const [rows, staff, assessments] = await Promise.all([
+    sheetsRead(env, 'Collaborators'), sheetsRead(env, 'Staff'), sheetsRead(env, 'Assessments'),
+  ]);
+  const list = rows.filter(r => r.Active?.toLowerCase() !== 'false').map(c => {
+    const s = staff.find(x => x.ID === c.StaffID);
+    const mine = assessments.filter(a => a.CollaboratorID === c.ID);
+    return { ...c, staffName: s?.Name || '', username: s?.Username || '', staffActive: s?.Active, mentorName: staff.find(x => x.ID === c.MentorID)?.Name || '',
+             summary: summariseCollaborator(mine) };
+  });
+  return json({ collaborators: list });
+}
+
+// Latest reviewed (fallback: submitted) score per type, plus pending-review count
+function summariseCollaborator(assessments) {
+  const latest = type => {
+    const of = assessments.filter(a => a.Type === type && a.Status !== 'Draft').sort((a, b) => (b.SubmittedAt || '').localeCompare(a.SubmittedAt || ''));
+    const rev = of.find(a => a.Status === 'Reviewed') || of[0];
+    if (!rev) return null;
+    const score = rev.Status === 'Reviewed' ? num(rev.FinalScore) : num(rev.SelfScore);
+    return { id: rev.ID, status: rev.Status, score, rating: rev.Rating, period: rev.Period, date: rev.ReviewedAt || rev.SubmittedAt };
+  };
+  const leanDone = assessments.filter(a => a.Type === 'lean' && a.Status === 'Reviewed');
+  return {
+    pqr: latest('pqr'), brand: latest('brand'), lean: latest('lean'),
+    pqrProducts: assessments.filter(a => a.Type === 'pqr' && a.Status === 'Reviewed').length,
+    pendingReview: assessments.filter(a => a.Status === 'Submitted').length,
+    hasBaseline: leanDone.some(a => a.Period === 'Baseline'),
+    hasEndline: leanDone.some(a => a.Period === 'Endline'),
+    total: assessments.length,
+  };
+}
+
+function enrichAssessment(a) {
+  return { ...a,
+    answers: parseJson(a.Answers, {}), breakdown: parseJson(a.Breakdown, null),
+    mentorAnswers: parseJson(a.MentorAnswers, {}), evidence: parseJson(a.Evidence, []),
+    selfScore: num(a.SelfScore), finalScore: num(a.FinalScore),
+    Answers: undefined, Breakdown: undefined, MentorAnswers: undefined, Evidence: undefined };
+}
+
+async function incuListAssessments(url, env, auth) {
+  const all = await sheetsRead(env, 'Assessments');
+  let collabId = url.searchParams.get('collaboratorId') || '';
+  if (isCollaborator(auth.role)) {
+    const c = await myCollaborator(env, auth.staffId);
+    if (!c) return json({ assessments: [] });
+    collabId = c.ID;
+  }
+  let list = collabId ? all.filter(a => a.CollaboratorID === collabId) : all;
+  const type = url.searchParams.get('type'); if (type) list = list.filter(a => a.Type === type);
+  const status = url.searchParams.get('status'); if (status) list = list.filter(a => a.Status === status);
+  list = list.map(enrichAssessment).sort((a, b) => (b.CreatedAt || '').localeCompare(a.CreatedAt || ''));
+  // Mentors get collaborator names attached
+  if (!isCollaborator(auth.role)) {
+    const collabs = await sheetsRead(env, 'Collaborators');
+    list = list.map(a => ({ ...a, businessName: collabs.find(c => c.ID === a.CollaboratorID)?.BusinessName || a.CollaboratorID }));
+  }
+  return json({ assessments: list });
+}
+
+async function incuGetAssessment(env, auth, id) {
+  const all = await sheetsRead(env, 'Assessments');
+  const a = all.find(x => x.ID === id);
+  if (!a) return json({ error: 'Not found' }, 404);
+  if (isCollaborator(auth.role)) {
+    const c = await myCollaborator(env, auth.staffId);
+    if (!c || c.ID !== a.CollaboratorID) return json({ error: 'Access denied' }, 403);
+  }
+  const collabs = await sheetsRead(env, 'Collaborators');
+  const c = collabs.find(x => x.ID === a.CollaboratorID);
+  return json({ assessment: { ...enrichAssessment(a), businessName: c?.BusinessName || '' }, collaborator: c || null });
+}
+
+// Find the most recent reviewed Baseline for a collaborator (for endline scoring)
+function latestBaseline(all, collabId) {
+  return all.filter(a => a.CollaboratorID === collabId && a.Type === 'lean' && a.Period === 'Baseline' && a.Status !== 'Draft')
+            .sort((a, b) => (b.SubmittedAt || b.CreatedAt || '').localeCompare(a.SubmittedAt || a.CreatedAt || ''))[0] || null;
+}
+
+async function incuCreateAssessment(request, env, auth) {
+  const body = await request.json();
+  const { type, period, productName, productCategory, answers, submit } = body;
+  if (!INCU_FORMS[type]) return json({ error: 'Invalid assessment type' }, 400);
+
+  let collabId = body.collaboratorId || '';
+  if (isCollaborator(auth.role)) {
+    const c = await myCollaborator(env, auth.staffId);
+    if (!c) return json({ error: 'No collaborator profile' }, 403);
+    collabId = c.ID;
+  } else if (!isMentor(auth.role)) return json({ error: 'Only collaborators or mentors can create assessments' }, 403);
+  if (!collabId) return json({ error: 'collaboratorId required' }, 400);
+
+  if (type === 'lean' && !INCU_FORMS.lean.periods.includes(period)) return json({ error: 'Lean period must be Baseline or Endline' }, 400);
+  if (type === 'pqr' && !productName?.trim()) return json({ error: 'Product name is required' }, 400);
+
+  const all = await sheetsRead(env, 'Assessments');
+  const baseline = type === 'lean' && period === 'Endline' ? latestBaseline(all, collabId) : null;
+  const ans = answers || {};
+  const result = scoreAssessment(type, ans, period, baseline ? parseJson(baseline.Answers, {}) : null);
+  const now = new Date().toISOString();
+  const status = submit ? 'Submitted' : 'Draft';
+  const id = 'ASM-' + Date.now();
+  await sheetsAppend(env, 'Assessments', [
+    id, collabId, type, period || '', productName || '', productCategory || '', status,
+    JSON.stringify(ans), JSON.stringify(result), result.score ?? '', '', '', result.rating || '',
+    '', '[]', '', submit ? now : '', '', now,
+  ]);
+  if (submit) await notifyMentors(env, collabId, type, id);
+  return json({ success: true, id, status, score: result.score, rating: result.rating, breakdown: result });
+}
+
+async function incuUpdateAssessment(request, env, auth, id) {
+  const all = await sheetsRead(env, 'Assessments');
+  const idx = all.findIndex(x => x.ID === id);
+  if (idx === -1) return json({ error: 'Not found' }, 404);
+  const e = all[idx];
+  if (isCollaborator(auth.role)) {
+    const c = await myCollaborator(env, auth.staffId);
+    if (!c || c.ID !== e.CollaboratorID) return json({ error: 'Access denied' }, 403);
+  } else if (!isMentor(auth.role)) return json({ error: 'Access denied' }, 403);
+  if (e.Status === 'Reviewed') return json({ error: 'This assessment has been finalised and can no longer be edited' }, 400);
+
+  const body = await request.json();
+  const ans = body.answers !== undefined ? body.answers : parseJson(e.Answers, {});
+  const period = body.period || e.Period;
+  const baseline = e.Type === 'lean' && period === 'Endline' ? latestBaseline(all.filter(a => a.ID !== id), e.CollaboratorID) : null;
+  const result = scoreAssessment(e.Type, ans, period, baseline ? parseJson(baseline.Answers, {}) : null);
+  const now = new Date().toISOString();
+  const submitting = body.submit === true && e.Status === 'Draft';
+  const status = submitting ? 'Submitted' : e.Status;
+  await sheetsUpdateRow(env, 'Assessments', idx + 2, [
+    e.ID, e.CollaboratorID, e.Type, period, body.productName !== undefined ? body.productName : e.ProductName,
+    body.productCategory !== undefined ? body.productCategory : e.ProductCategory, status,
+    JSON.stringify(ans), JSON.stringify(result), result.score ?? '', e.MentorAnswers || '', e.FinalScore || '', result.rating || '',
+    e.MentorNotes || '', e.Evidence || '[]', e.ReviewerID || '', submitting ? now : (e.SubmittedAt || ''), e.ReviewedAt || '', e.CreatedAt,
+  ]);
+  if (submitting) await notifyMentors(env, e.CollaboratorID, e.Type, id);
+  return json({ success: true, status, score: result.score, rating: result.rating, breakdown: result });
+}
+
+// Mentor review: overrides are merged over the collaborator's answers, re-scored, and frozen as FinalScore.
+async function incuReviewAssessment(request, env, auth, id) {
+  if (!isMentor(auth.role)) return json({ error: 'Only mentors can review' }, 403);
+  const all = await sheetsRead(env, 'Assessments');
+  const idx = all.findIndex(x => x.ID === id);
+  if (idx === -1) return json({ error: 'Not found' }, 404);
+  const e = all[idx];
+  if (e.Status === 'Draft') return json({ error: 'Collaborator has not submitted this yet' }, 400);
+
+  const { mentorAnswers, mentorNotes, reopen } = await request.json();
+  if (reopen) {
+    await sheetsUpdate(env, 'Assessments', idx + 2, getColIndex('Assessments', 'Status'), 'Submitted');
+    return json({ success: true, status: 'Submitted' });
+  }
+  const overrides = mentorAnswers || {};   // { questionId: { value, note } }
+  const merged = { ...parseJson(e.Answers, {}) };
+  for (const k in overrides) if (overrides[k] && overrides[k].value !== undefined) merged[k] = overrides[k].value;
+  const baseline = e.Type === 'lean' && e.Period === 'Endline' ? latestBaseline(all.filter(a => a.ID !== id), e.CollaboratorID) : null;
+  const result = scoreAssessment(e.Type, merged, e.Period, baseline ? parseJson(baseline.Answers, {}) : null);
+  const now = new Date().toISOString();
+  await sheetsUpdateRow(env, 'Assessments', idx + 2, [
+    e.ID, e.CollaboratorID, e.Type, e.Period, e.ProductName, e.ProductCategory, 'Reviewed',
+    e.Answers, JSON.stringify(result), e.SelfScore, JSON.stringify(overrides), result.score ?? '', result.rating || '',
+    mentorNotes || '', e.Evidence || '[]', auth.staffId, e.SubmittedAt || now, now, e.CreatedAt,
+  ]);
+  // Notify the collaborator
+  try {
+    const collabs = await sheetsRead(env, 'Collaborators');
+    const c = collabs.find(x => x.ID === e.CollaboratorID);
+    if (c?.StaffID) await createNotification(env, c.StaffID, 'completed', 'Assessment reviewed',
+      `${INCU_FORMS[e.Type].label}${e.ProductName ? ' — ' + e.ProductName : ''}: ${result.score ?? '—'} (${result.rating})`, '');
+  } catch (_) {}
+  return json({ success: true, status: 'Reviewed', finalScore: result.score, rating: result.rating, breakdown: result });
+}
+
+async function incuDeleteAssessment(env, auth, id) {
+  const all = await sheetsRead(env, 'Assessments');
+  const idx = all.findIndex(x => x.ID === id);
+  if (idx === -1) return json({ error: 'Not found' }, 404);
+  const e = all[idx];
+  if (isCollaborator(auth.role)) {
+    const c = await myCollaborator(env, auth.staffId);
+    if (!c || c.ID !== e.CollaboratorID || e.Status !== 'Draft') return json({ error: 'You can only delete your own drafts' }, 403);
+  } else if (!isMentor(auth.role)) return json({ error: 'Access denied' }, 403);
+  await sheetsDeleteRow(env, 'Assessments', idx + 2);
+  return json({ success: true });
+}
+
+// Evidence file → Drive folder "INCU ASM-xxx — <label>" under Evidence_Folder_ID
+async function incuUploadEvidence(request, env, auth, id) {
+  const all = await sheetsRead(env, 'Assessments');
+  const idx = all.findIndex(x => x.ID === id);
+  if (idx === -1) return json({ error: 'Not found' }, 404);
+  const e = all[idx];
+  if (isCollaborator(auth.role)) {
+    const c = await myCollaborator(env, auth.staffId);
+    if (!c || c.ID !== e.CollaboratorID) return json({ error: 'Access denied' }, 403);
+  } else if (!isMentor(auth.role)) return json({ error: 'Access denied' }, 403);
+
+  const formData = await request.formData();
+  const file = formData.get('file');
+  const kpi = formData.get('kpi') || '';
+  const kind = formData.get('kind') || 'photo';   // photo | doc
+  if (!file) return json({ error: 'No file provided' }, 400);
+  const buf = await file.arrayBuffer();
+  if (buf.byteLength > 100 * 1024 * 1024) return json({ error: 'File must be under 100MB' }, 400);
+
+  const token = await getDriveToken(env);
+  const folderId = await getOrCreateTaskFolder(token, env, 'INCU ' + id, INCU_FORMS[e.Type].label + (e.ProductName ? ' — ' + e.ProductName : ''));
+  const fileName = (file.name || 'evidence').replace(/[^\w.\-_ ]/g, '_');
+  const uploaded = await driveUploadFile(token, buf, fileName, file.type || 'application/octet-stream', folderId);
+  const url = 'https://drive.google.com/file/d/' + uploaded.id + '/view?usp=sharing';
+
+  const evidence = parseJson(e.Evidence, []);
+  evidence.push({ url, name: fileName, kpi, kind, time: new Date().toISOString(), by: auth.name || '' });
+  await sheetsUpdate(env, 'Assessments', idx + 2, getColIndex('Assessments', 'Evidence'), JSON.stringify(evidence));
+  return json({ success: true, url, evidence });
+}
+
+async function notifyMentors(env, collabId, type, assessmentId) {
+  try {
+    const [staff, collabs] = await Promise.all([sheetsRead(env, 'Staff'), sheetsRead(env, 'Collaborators')]);
+    const c = collabs.find(x => x.ID === collabId);
+    const targets = c?.MentorID ? staff.filter(s => s.ID === c.MentorID)
+                                : staff.filter(s => isMentor(normalizeRole(s.Role)) && s.Active?.toLowerCase() === 'true');
+    for (const t of targets) await createNotification(env, t.ID, 'assigned', 'Assessment to review',
+      `${c?.BusinessName || collabId} submitted a ${INCU_FORMS[type].label}`, '');
+  } catch (_) {}
+}
+
+// MEALA dashboard — percentages the client reports against
+async function incuDashboard(env, role) {
+  if (!isManagement(role)) return json({ error: 'Access denied' }, 403);
+  const [collabs, assessments] = await Promise.all([sheetsRead(env, 'Collaborators'), sheetsRead(env, 'Assessments')]);
+  const active = collabs.filter(c => c.Active?.toLowerCase() !== 'false');
+  const reviewed = assessments.filter(a => a.Status === 'Reviewed');
+  const pct = (n, d) => d ? Math.round(n / d * 100) : 0;
+
+  // Latest reviewed assessment per collaborator per type
+  const latestFor = (cid, type) => reviewed.filter(a => a.CollaboratorID === cid && a.Type === type)
+    .sort((a, b) => (b.ReviewedAt || '').localeCompare(a.ReviewedAt || ''))[0] || null;
+
+  // ── QC system: % collaborators with ≥1 product meeting the QC standard; % products meeting it
+  const pqrAll = reviewed.filter(a => a.Type === 'pqr');
+  const latestPerProduct = {};
+  pqrAll.forEach(a => { const k = a.CollaboratorID + '|' + a.ProductName; if (!latestPerProduct[k] || (a.ReviewedAt || '') > (latestPerProduct[k].ReviewedAt || '')) latestPerProduct[k] = a; });
+  const products = Object.values(latestPerProduct);
+  const productsMet = products.filter(a => num(a.FinalScore) >= INCU_FORMS.pqr.qcThreshold);
+  const collabsWithQc = new Set(productsMet.map(a => a.CollaboratorID));
+  const collabsWithAnyPqr = new Set(products.map(a => a.CollaboratorID));
+
+  // ── Branding: distribution by stage band + branding stage (1–4)
+  const brandLatest = active.map(c => latestFor(c.ID, 'brand')).filter(Boolean);
+  const brandBands = {}; INCU_FORMS.brand.bands.forEach(b => brandBands[b[1]] = 0);
+  const brandingStages = { 1:0, 2:0, 3:0, 4:0 };
+  brandLatest.forEach(a => { brandBands[a.Rating] = (brandBands[a.Rating] || 0) + 1; const bd = parseJson(a.Breakdown, {}); if (bd.brandingStage) brandingStages[bd.brandingStage]++; });
+  const brandAvgAreas = INCU_FORMS.brand.areas.map(ar => {
+    const vals = brandLatest.map(a => (parseJson(a.Breakdown, {}).areas || []).find(x => x.key === ar.key)?.score).filter(v => v !== undefined);
+    return { key: ar.key, label: ar.label, max: ar.weight, avg: vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length * 10) / 10 : null };
+  });
+
+  // ── Lean: endlines with targets, per-KPI achievement
+  const leanEnd = active.map(c => reviewed.filter(a => a.CollaboratorID === c.ID && a.Type === 'lean' && a.Period === 'Endline')
+    .sort((a, b) => (b.ReviewedAt || '').localeCompare(a.ReviewedAt || ''))[0]).filter(Boolean);
+  const leanBase = active.filter(c => reviewed.some(a => a.CollaboratorID === c.ID && a.Type === 'lean' && a.Period === 'Baseline')).length;
+  const perKpi = INCU_FORMS.lean.kpis.map(k => {
+    const rows = leanEnd.map(a => (parseJson(a.Breakdown, {}).kpis || []).find(x => x.key === k.key)).filter(x => x && x.met !== null);
+    const met = rows.filter(x => x.met).length;
+    const changes = rows.map(x => x.changePct).filter(v => v !== null && v !== undefined);
+    return { key: k.key, label: k.label, target: k.target, assessed: rows.length, met, metPct: pct(met, rows.length),
+             avgChangePct: changes.length ? Math.round(changes.reduce((s, v) => s + v, 0) / changes.length) : null };
+  });
+
+  // ── Per collaborator cards
+  const cards = active.map(c => {
+    const mine = assessments.filter(a => a.CollaboratorID === c.ID);
+    return { id: c.ID, businessName: c.BusinessName, owner: c.Owner, location: c.Location, businessStage: c.BusinessStage, ...summariseCollaborator(mine) };
+  });
+
+  return json({
+    totals: { collaborators: active.length, assessments: assessments.length, reviewed: reviewed.length, pendingReview: assessments.filter(a => a.Status === 'Submitted').length },
+    qc: { collaboratorsAssessed: collabsWithAnyPqr.size, collaboratorsMet: collabsWithQc.size, collaboratorsMetPct: pct(collabsWithQc.size, active.length),
+          productsAssessed: products.length, productsMet: productsMet.length, productsMetPct: pct(productsMet.length, products.length),
+          avgScore: products.length ? Math.round(products.reduce((s, a) => s + (num(a.FinalScore) || 0), 0) / products.length) : null },
+    brand: { assessed: brandLatest.length, assessedPct: pct(brandLatest.length, active.length), bands: brandBands, brandingStages,
+             branded: brandLatest.filter(a => (parseJson(a.Breakdown, {}).brandingStage || 1) >= 2).length,
+             avgScore: brandLatest.length ? Math.round(brandLatest.reduce((s, a) => s + (num(a.FinalScore) || 0), 0) / brandLatest.length) : null, avgAreas: brandAvgAreas },
+    lean: { baselines: leanBase, endlines: leanEnd.length, perKpi,
+            avgTargetsMet: leanEnd.length ? Math.round(leanEnd.reduce((s, a) => s + (parseJson(a.Breakdown, {}).metCount || 0), 0) / leanEnd.length * 10) / 10 : null },
+    cards,
+  });
+}
+
+// ══════════════════════════════════════════════════════════
 // GOOGLE SHEETS HELPERS
 // ══════════════════════════════════════════════════════════
 const SHEET_HEADERS = {
@@ -3006,6 +3652,8 @@ const SHEET_HEADERS = {
   RecurringTasks:['ID','Title','Description','Frequency','Team','AssigneeID','Active','LastGenerated','SendDay'],
   DocSubmissions:['ID','Title','ProjectID','RequestedFromID','RequestedByID','DocumentType','ActivityDate','DueDate','Status','Notes','CreatedAt','Files','SubmitLink'],
   KpiSnapshots:  ['ID','StaffID','WeekOf','KpiScore','Completion','Timeliness','Evidence','Reliability','TaskCount','CreatedAt'],
+  Collaborators: ['ID','StaffID','BusinessName','Owner','Location','BusinessStage','CoreProduct','TargetCustomer','SalesChannels','MentorID','Active','CreatedAt'],
+  Assessments:   ['ID','CollaboratorID','Type','Period','ProductName','ProductCategory','Status','Answers','Breakdown','SelfScore','MentorAnswers','FinalScore','Rating','MentorNotes','Evidence','ReviewerID','SubmittedAt','ReviewedAt','CreatedAt'],
 };
 
 function getColIndex(sheet, colName) {
