@@ -478,6 +478,7 @@ function renderForm() {
       <span style="font-size:13px;color:var(--navy);font-weight:600;">${esc(cur.businessName || cur.collaborator?.BusinessName || '')}</span>
       <span style="font-size:12px;color:var(--muted);">${esc(cur.ProductName ? cur.ProductName + (cur.ProductCategory ? ' (' + cur.ProductCategory + ')' : '') : '')} ${esc(cur.Period||'')}</span>
       ${cur.Status === 'Reviewed' ? `<span style="font-size:11px;color:var(--muted);margin-left:auto;">Finalised ${fmtDate(cur.ReviewedAt)}</span>` : cur.SubmittedAt ? `<span style="font-size:11px;color:var(--muted);margin-left:auto;">Submitted ${fmtDate(cur.SubmittedAt)}</span>` : ''}
+      ${isMgmt ? `<button class="btn btn-outline btn-sm" onclick="openCollabFolder('${cur.CollaboratorID}')"><i class="ti ti-folder"></i> Drive</button>` : ''}
     </div>`;
   const body = cur.Type === 'pqr' ? renderPqr() : cur.Type === 'brand' ? renderBrand() : renderLean();
   const scorePanel = renderScorePanel();
@@ -607,7 +608,7 @@ function renderLean() {
         ${qs.map(q => renderQ(q, q.type === 'number')).join('')}
         ${renderKpiEvidence(k)}
       </div></div>`;
-  }).join('');
+  }).join('') + renderEvidenceSection('');
 }
 function renderKpiEvidence(k) {
   const items = (cur.evidence||[]).filter(e => e.kpi === k.key);
@@ -621,12 +622,13 @@ function renderKpiEvidence(k) {
     ${items.length ? `<div class="ev-list">${items.map(e => `<div class="ev-item"><i class="ti ${e.kind==='doc'?'ti-file':'ti-photo'}"></i><a href="${e.url}" target="_blank" style="color:var(--teal);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.name)}</a><span style="color:var(--muted);font-size:10px;">${fmtDate(e.time)}</span></div>`).join('')}</div>` : ''}
   </div>`;
 }
+const evIcon = e => e.kind === 'report' ? 'ti-file-type-pdf' : e.kind === 'doc' ? 'ti-file' : 'ti-photo';
 function renderEvidenceSection(kpi) {
   const items = (cur.evidence||[]).filter(e => (e.kpi||'') === kpi);
   const canUp = (editable() || isMentorUser) && cur.Status !== 'Reviewed';
-  return `<div class="fsection"><div class="fsection-hd"><span class="t"><i class="ti ti-paperclip"></i> Evidence <span style="font-weight:400;color:var(--muted);font-size:12px;">optional — product photos, labels, packaging</span></span>
+  return `<div class="fsection"><div class="fsection-hd"><span class="t"><i class="ti ti-paperclip"></i> Evidence <span style="font-weight:400;color:var(--muted);font-size:12px;">${cur.Type==='lean' ? 'other files &amp; generated reports' : 'optional — product photos, labels, packaging'}</span></span>
     ${canUp ? `<div style="display:flex;gap:6px;"><button class="btn btn-outline btn-sm" onclick="pickEvidence('','photo')"><i class="ti ti-photo"></i> Photo</button><button class="btn btn-outline btn-sm" onclick="pickEvidence('','doc')"><i class="ti ti-file"></i> Document</button></div>` : ''}</div>
-    <div class="fsection-body">${items.length ? `<div class="ev-list">${items.map(e => `<div class="ev-item"><i class="ti ${e.kind==='doc'?'ti-file':'ti-photo'}"></i><a href="${e.url}" target="_blank" style="color:var(--teal);flex:1;">${esc(e.name)}</a><span style="color:var(--muted);font-size:10px;">${fmtDate(e.time)}${e.by?' · '+esc(e.by):''}</span></div>`).join('')}</div>` : '<div style="font-size:12px;color:var(--muted);">No files attached.</div>'}</div></div>`;
+    <div class="fsection-body">${items.length ? `<div class="ev-list">${items.map(e => `<div class="ev-item"><i class="ti ${evIcon(e)}" style="${e.kind==='report'?'color:var(--red)':''}"></i><a href="${e.url}" target="_blank" style="color:var(--teal);flex:1;">${esc(e.name)}</a><span style="color:var(--muted);font-size:10px;">${fmtDate(e.time)}${e.by?' · '+esc(e.by):''}</span></div>`).join('')}</div>` : '<div style="font-size:12px;color:var(--muted);">No files attached.</div>'}</div></div>`;
 }
 function pickEvidence(kpi, kind) {
   const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true;
@@ -707,6 +709,7 @@ async function loadCollaborators() {
           <div class="user-avatar" style="background:var(--teal-lt);">${esc((c.BusinessName||'?').slice(0,2).toUpperCase())}</div>
           <div style="flex:1;min-width:0;"><div style="font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.BusinessName)}</div><div style="font-size:11px;color:var(--muted);">${esc(c.Owner||c.staffName)}${c.Location?' · '+esc(c.Location):''}</div></div>
           ${c.summary.pendingReview ? `<span class="nav-badge">${c.summary.pendingReview}</span>` : ''}
+          <button class="btn btn-outline btn-sm" title="Open Drive folder" onclick="event.stopPropagation();openCollabFolder('${c.ID}')"><i class="ti ti-folder"></i></button>
         </div>
         <div style="display:flex;gap:6px;padding-top:10px;border-top:1px solid var(--border2);">${mini('Quality', c.summary.pqr)}${mini('Brand', c.summary.brand)}${mini('Lean', c.summary.lean)}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:8px;">${c.summary.pqrProducts} product${c.summary.pqrProducts!==1?'s':''} · ${c.BusinessStage||'stage —'} · Lean ${c.summary.hasBaseline?'baseline':''}${c.summary.hasEndline?' + endline':''}${!c.summary.hasBaseline&&!c.summary.hasEndline?'not started':''}</div>
@@ -761,6 +764,11 @@ async function loadDashboard() {
   const c2 = document.getElementById('ch-brand-areas');
   if (c2) charts.push(new Chart(c2, { type:'bar', data:{ labels: d.brand.avgAreas.map(a => a.label.replace('Customer Value Proposition','CVP').replace('Business Growth Potential','Growth')), datasets:[{ data: d.brand.avgAreas.map(a => a.max ? Math.round((a.avg||0)/a.max*100) : 0), backgroundColor:'#534AB7', borderRadius:6 }] },
     options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ctx.raw + '% of max' } } }, scales:{ y:{ beginAtZero:true, max:100, ticks:{ callback:v => v+'%', font:{ size:10 } } }, x:{ ticks:{ font:{ size:10 } } } } } }));
+}
+async function openCollabFolder(collabId) {
+  showToast('Opening Drive folder…');
+  const r = await api(`/incu/collaborators/${collabId}/folder`);
+  if (r?.url) window.open(r.url, '_blank'); else showToast(r?.error || 'Could not open folder', 'error');
 }
 async function openCollaboratorById(id, name) {
   if (!cache.collaborators) { const c = await api('/incu/collaborators'); cache.collaborators = c?.collaborators || []; }
