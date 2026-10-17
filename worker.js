@@ -3151,41 +3151,61 @@ const INCU_FORMS = {
             [0,'Foundation Stage','Business is primarily product-focused and requires support to establish a clear brand identity and market positioning.']],
   },
 
-  // ── Costing & Profit — 100 pts, derived from costing practice, margins and record keeping ──
+  // ── Financial Assessment — client's "SMEs Financial Assessment" template ──
+  // 17 inputs → 11 calculated values → 9 KPIs scored 1–5 by rubric → weighted average × 20 = /100.
   finance: {
-    label: 'Costing & Profit',
+    label: 'Financial Assessment',
     currency: 'MMK',
     sections: [
-      { key:'records', label:'Financial records & pricing practice', questions:[
-        { id:'records_kept', label:'Which records do you keep regularly?', type:'multi', options:['Sales record','Expense record','Cash book','Product costing sheet','Monthly profit & loss summary'] },
-        { id:'pricing_method', label:'How do you set your selling price?', type:'rating4', options:['Cost + markup, checked against market prices','Cost + markup','Follow other sellers / market price','Guess or customer negotiation'] } ]},
-      { key:'costing', label:'Product costing (main product, per unit)', questions:[
-        { id:'cost_product',   label:'Main product costed', type:'text' },
-        { id:'units_month',    label:'Units produced per month', type:'number', unit:'units' },
-        { id:'material_cost',  label:'Material cost per unit', type:'number', unit:'MMK' },
-        { id:'labour_cost',    label:'Labour cost per unit', type:'number', unit:'MMK', hint:'Include your own time at a fair rate' },
-        { id:'overhead_cost',  label:'Other cost per unit (packaging, transport, electricity, rent share)', type:'number', unit:'MMK' },
-        { id:'selling_price',  label:'Selling price per unit', type:'number', unit:'MMK' } ]},
-      { key:'business', label:'Monthly business result', questions:[
-        { id:'revenue',       label:'Total sales this month', type:'number', unit:'MMK' },
-        { id:'expenses',      label:'Total expenses this month', type:'number', unit:'MMK', hint:'Materials, labour, transport, fees — everything paid out' },
-        { id:'revenue_prev',  label:'Total sales in the previous period (if known)', type:'number', unit:'MMK' },
-        { id:'profit_use',    label:'What do you do with profit?', type:'multi', options:['Reinvest in materials / equipment','Savings','Household expenses','Pay back loans','Not sure / no profit yet'] } ]},
-      { key:'reflection', label:'Reflection', questions:[
-        { id:'fin_challenges',   label:'Main financial challenges', type:'textarea' },
+      { key:'sales', label:'Sales & growth', questions:[
+        { id:'revenue_prev',  label:'Previous period total sales', type:'number', unit:'MMK', hint:'Total sales for the previous comparable period' },
+        { id:'revenue',       label:'Current period total sales', type:'number', unit:'MMK', hint:'Total sales in the period being assessed' },
+        { id:'credit_sales',  label:'Credit sales in period', type:'number', unit:'MMK', hint:'Sales made on credit terms — enter total sales if all sales are on credit, 0 if none' },
+        { id:'mix_trend',     label:'Product / service mix trend', type:'rating5', options:['Severe drop in main items','Falling sales in key products','Flat sales across items','Moderate growth across items','Strong growth across all lines'], hint:'Check whether falling sales come from demand, pricing or stock availability' } ]},
+      { key:'profit', label:'Costs & profitability', questions:[
+        { id:'cogs',          label:'Cost of goods sold (COGS)', type:'number', unit:'MMK', hint:'Direct materials, direct labour, production costs' },
+        { id:'opex',          label:'Operating expenses', type:'number', unit:'MMK', hint:'Rent, utilities, wages, marketing, admin, transport' },
+        { id:'interest_tax',  label:'Interest & tax expense', type:'number', unit:'MMK', hint:'Interest payments and business tax for the period' } ]},
+      { key:'cash', label:'Cash & liquidity (at period end)', questions:[
+        { id:'cash',          label:'Cash & bank balances', type:'number', unit:'MMK' },
+        { id:'receivables',   label:'Accounts receivable', type:'number', unit:'MMK', hint:'Amounts owed by customers' },
+        { id:'inventory',     label:'Inventory at cost', type:'number', unit:'MMK', hint:'Value of stock at cost price' },
+        { id:'other_ca',      label:'Other current assets', type:'number', unit:'MMK', hint:'Prepaid rent, short-term advances, etc.' },
+        { id:'payables',      label:'Accounts payable', type:'number', unit:'MMK', hint:'Unpaid bills owed to suppliers' },
+        { id:'st_debt',       label:'Short-term debt / loans due', type:'number', unit:'MMK', hint:'Loan instalments due within 12 months' },
+        { id:'other_cl',      label:'Other current liabilities', type:'number', unit:'MMK', hint:'Accrued payroll, taxes payable, short obligations' } ]},
+      { key:'debt', label:'Debt control', questions:[
+        { id:'total_debt',    label:'Total debt outstanding', type:'number', unit:'MMK', hint:'Total outstanding principal for all business loans (0 if none)' },
+        { id:'cash_for_debt', label:'Cash available for debt service', type:'number', unit:'MMK', hint:'Net operating cash generated, available to pay debt' },
+        { id:'debt_service',  label:'Scheduled debt principal & interest', type:'number', unit:'MMK', hint:'Principal + interest due during the period (0 if none)' },
+        { id:'debt_level',    label:'Debt level & repayments', type:'rating5', options:['Missed payments / high risk','Severe cash strain from debt','Tight but punctual','Manageable repayment load','Zero debt / easily covered'], hint:'Consider loan interest rates, maturities and collateral risk' } ]},
+      { key:'reflection', label:'Owner\u2019s notes', questions:[
+        { id:'fin_challenges',   label:'Main financial challenges this period', type:'textarea' },
         { id:'fin_improvements', label:'Changes made since the last assessment', type:'textarea' } ]},
     ],
+    // Pillars (weights sum to 100)
     areas: [
-      { key:'records',   label:'Record keeping',        weight:25 },
-      { key:'costing',   label:'Costing & pricing',      weight:20 },
-      { key:'margin',    label:'Gross margin',           weight:25 },
-      { key:'profit',    label:'Net profitability',      weight:20 },
-      { key:'growth',    label:'Income growth',          weight:10 },
+      { key:'growth',  label:'Sales & Growth',   weight:20 },
+      { key:'profit',  label:'Profitability',    weight:30 },
+      { key:'cash',    label:'Cash & Liquidity', weight:35 },
+      { key:'debt',    label:'Debt Control',     weight:15 },
     ],
-    bands: [[85,'Profit-Ready','Costs are known, prices cover them with a healthy margin, and records support decisions.'],
-            [70,'Financially Sound','Good costing and positive profit; strengthen records or margins to grow further.'],
-            [50,'Developing','Some costing in place but margins or record keeping need attention.'],
-            [0,'Needs Support','Costs or profit are not yet tracked clearly — costing coaching recommended.']],
+    // KPIs: weight (template), rubric thresholds → score 1–5
+    kpis: [
+      { key:'growth', pillar:'growth', label:'Total sales growth rate', weight:0.10, fmt:'pct', benchmark:'Growth above inflation', guidance:'Compare sales vs previous period. Negative growth requires price/volume review.', rubric:['< -10%','-10% to 0%','0% to 5%','5% to 15%','> 15%'] },
+      { key:'mix',    pillar:'growth', label:'Product / service mix trend', weight:0.10, fmt:'text', benchmark:'Diversified demand', guidance:'Check if falling sales are caused by demand, pricing, or stock availability.' },
+      { key:'gpm',    pillar:'profit', label:'Gross profit margin', weight:0.15, fmt:'pct', benchmark:'Target 30% – 50%', guidance:'Measures pricing & production efficiency. Low margin indicates rising input costs.', rubric:['< 15%','15% – 25%','25% – 35%','35% – 50%','> 50%'] },
+      { key:'npm',    pillar:'profit', label:'Net profit margin', weight:0.15, fmt:'pct', benchmark:'Target > 10%', guidance:'True take-home profit. Low margin means overhead expenses are consuming revenues.', rubric:['Loss','0% – 5%','5% – 10%','10% – 20%','> 20%'] },
+      { key:'cr',     pillar:'cash',   label:'Current ratio', weight:0.15, fmt:'x', benchmark:'Target 1.5 – 2.0', guidance:'Can short-term assets cover short-term debts? Below 1.0 indicates a cash crunch.', rubric:['< 0.8x','0.8x – 1.0x','1.0x – 1.5x','1.5x – 2.5x','> 2.5x'] },
+      { key:'dso',    pillar:'cash',   label:'Days sales outstanding (DSO)', weight:0.10, fmt:'days', benchmark:'Target < 30 days', guidance:'Average days to collect customer cash. High DSO traps cash in overdue receivables.', rubric:['> 90 days','60 – 90','45 – 60','30 – 45','< 30 days'] },
+      { key:'dio',    pillar:'cash',   label:'Days inventory outstanding (DIO)', weight:0.10, fmt:'days', benchmark:'Target < 45 days', guidance:'Days inventory sits before selling. High DIO ties up capital in slow stock.', rubric:['> 90 days','60 – 90','45 – 60','30 – 45','< 30 days'] },
+      { key:'debt',   pillar:'debt',   label:'Total debt & repayment schedule', weight:0.05, fmt:'text', benchmark:'Manageable loans', guidance:'Check loan interest rates, maturities, and collateral risk.' },
+      { key:'dscr',   pillar:'debt',   label:'Debt service coverage ratio (DSCR)', weight:0.10, fmt:'x', benchmark:'Target > 1.25x', guidance:'Operating cash vs loan payments. Below 1.0 means cash flow cannot cover debt.', rubric:['< 0.8x','0.8x – 1.0x','1.0x – 1.25x','1.25x – 1.75x','> 1.75x'] },
+    ],
+    bands: [[80,'Strong & Stable','Business is highly resilient, profitable, and cash flow is healthy.','Reinvest profits into expansion, inventory, or rainy-day reserves.'],
+            [60,'Moderate / Stable','Generally healthy, but one or two specific areas need monitoring.','Address isolated weak spots before they impact overall liquidity.'],
+            [40,'Vulnerable / Warning','Profit margins or cash flow are under pressure. The business is burning capital.','Cut non-essential overhead costs and negotiate better terms with suppliers.'],
+            [0,'High Risk / Critical','Severe financial distress. Cash depleted and risk of loan default.','Urgent emergency cash preservation, debt restructuring, or capital injection.']],
   },
 
   // ── Lean KPI Baseline / Endline — 7 KPIs; endline is scored against the latest reviewed baseline ──
@@ -3351,35 +3371,51 @@ function scoreLean(answers, period, baselineAnswers) {
   return { score, rating, kpis, metCount, hasBaseline: !!baselineAnswers };
 }
 
-// Costing & Profit:
-//   Record keeping 25  ← 5 per record type kept
-//   Costing 20         ← 10 if all three cost components entered, 10/7/3/0 by pricing method
-//   Gross margin 25    ← (price − unit cost) / price, banded
-//   Net profit 20      ← (sales − expenses) / sales, banded
-//   Income growth 10   ← sales vs previous period, banded; neutral 5 if no previous figure
+// Financial Assessment: template formulas + 1–5 rubric per KPI, weighted average × 20.
+const fin5 = (v, cuts) => { if (v === null || v === undefined || !Number.isFinite(v)) return null; let sc = 1; for (const c of cuts) if (v >= c) sc++; return sc; };        // ascending thresholds
+const fin5desc = (v, cuts) => { if (v === null || v === undefined || !Number.isFinite(v)) return null; let sc = 5; for (const c of cuts) if (v > c) sc--; return sc; };  // lower is better
 function scoreFinance(answers) {
   const f = INCU_FORMS.finance;
-  const records = Array.isArray(answers.records_kept) ? answers.records_kept.length : 0;
-  const mat = num(answers.material_cost), lab = num(answers.labour_cost), ovh = num(answers.overhead_cost), price = num(answers.selling_price);
-  const unitCost = [mat, lab, ovh].some(v => v === null) ? null : mat + lab + ovh;
-  const grossMarginPct = (unitCost !== null && price) ? Math.round((price - unitCost) / price * 1000) / 10 : null;
-  const pm = num(answers.pricing_method); const pmPts = pm === 0 ? 10 : pm === 1 ? 7 : pm === 2 ? 3 : 0;
-  const revenue = num(answers.revenue), expenses = num(answers.expenses), prev = num(answers.revenue_prev);
-  const netProfit = (revenue !== null && expenses !== null) ? revenue - expenses : null;
-  const netMarginPct = (netProfit !== null && revenue) ? Math.round(netProfit / revenue * 1000) / 10 : null;
-  const incomeChangePct = (revenue !== null && prev) ? Math.round((revenue - prev) / prev * 1000) / 10 : null;
-  const band = (v, steps, none) => { if (v === null) return none; for (const [min, pts] of steps) if (v >= min) return pts; return 0; };
+  const n = id => num(answers[id]);
+  const prev = n('revenue_prev'), sales = n('revenue'), credit = n('credit_sales'), cogs = n('cogs'), opex = n('opex'), itax = n('interest_tax') ?? 0;
+  const cash = n('cash') ?? 0, ar = n('receivables') ?? 0, inv = n('inventory') ?? 0, oca = n('other_ca') ?? 0, ap = n('payables') ?? 0, std = n('st_debt') ?? 0, ocl = n('other_cl') ?? 0;
+  const tdebt = n('total_debt'), cfd = n('cash_for_debt'), dsvc = n('debt_service');
+  const pct = (a, b) => (a !== null && b) ? Math.round(a / b * 1000) / 10 : null;
+  const growthPct = (sales !== null && prev) ? Math.round((sales - prev) / prev * 1000) / 10 : null;
+  const grossProfit = (sales !== null && cogs !== null) ? sales - cogs : null;
+  const grossMarginPct = pct(grossProfit, sales);
+  const netProfit = (grossProfit !== null && opex !== null) ? grossProfit - opex - itax : null;
+  const netMarginPct = pct(netProfit, sales);
+  const totalCA = cash + ar + inv + oca, totalCL = ap + std + ocl;
+  const currentRatio = totalCL > 0 ? Math.round(totalCA / totalCL * 100) / 100 : (totalCA > 0 ? 9.99 : null);
+  const dso = credit === null ? null : credit > 0 ? Math.round(ar / credit * 30 * 10) / 10 : (ar > 0 ? null : 0);
+  const dio = cogs ? Math.round(inv / cogs * 30 * 10) / 10 : null;
+  const noDebt = (tdebt === 0 || tdebt === null) && !(dsvc > 0);
+  const dscr = noDebt ? null : (dsvc > 0 && cfd !== null) ? Math.round(cfd / dsvc * 100) / 100 : null;
+  const mixScore = num(answers.mix_trend) !== null ? clamp(num(answers.mix_trend) + 1, 1, 5) : null;
+  const debtScore = num(answers.debt_level) !== null ? clamp(num(answers.debt_level) + 1, 1, 5) : null;
+  const values = { growth: growthPct, mix: mixScore, gpm: grossMarginPct, npm: netMarginPct, cr: currentRatio, dso, dio, debt: debtScore, dscr };
   const scores = {
-    records: Math.min(records, 5) * 5,
-    costing: (unitCost !== null ? 10 : 0) + pmPts,
-    margin:  band(grossMarginPct, [[40,25],[30,20],[20,14],[10,8],[0.01,4]], 0),
-    profit:  band(netMarginPct, [[20,20],[10,15],[0.01,10],[0,4]], 0),
-    growth:  band(incomeChangePct, [[20,10],[0.01,6],[0,3]], 5),
+    growth: fin5(growthPct, [-10, 0, 5, 15]),
+    mix: mixScore,
+    gpm: fin5(grossMarginPct, [15, 25, 35, 50]),
+    npm: fin5(netMarginPct, [0, 5, 10, 20]),
+    cr: fin5(currentRatio, [0.8, 1.0, 1.5, 2.5]),
+    dso: fin5desc(dso, [30, 45, 60, 90]),
+    dio: fin5desc(dio, [30, 45, 60, 90]),
+    debt: debtScore,
+    dscr: noDebt ? 5 : fin5(dscr, [0.8, 1.0, 1.25, 1.75]),
   };
-  const areas = f.areas.map(a => ({ key:a.key, label:a.label, max:a.weight, score: scores[a.key] }));
-  const total = Math.round(areas.reduce((s, a) => s + a.score, 0));
-  const b = bandFor(f.bands, total);
-  return { score: total, rating: b.label, ratingDesc: b.desc, areas, unitCost, grossMarginPct, netProfit, netMarginPct, incomeChangePct, profitable: netProfit !== null ? netProfit > 0 : null };
+  const fmtVal = (k, v) => v === null || v === undefined ? '—' : k.fmt === 'pct' ? v + '%' : k.fmt === 'x' ? (v >= 9.99 ? '> 10x' : v + 'x') : k.fmt === 'days' ? v + ' days' : (k.key === 'mix' ? (f.sections[0].questions[3].options[v - 1] || v) : (f.sections[3].questions[3].options[v - 1] || v));
+  const kpis = f.kpis.map(k => { const sc = scores[k.key]; const used = sc === null ? 3 : sc;   // missing data → Adequate (3), flagged
+    return { key:k.key, pillar:k.pillar, label:k.label, weight:k.weight, value: values[k.key], display: fmtVal(k, values[k.key]), score: sc, scoreUsed: used, weighted: Math.round(k.weight * used * 1000) / 1000, benchmark:k.benchmark, guidance:k.guidance, missing: sc === null }; });
+  const weightedAvg = Math.round(kpis.reduce((s, k) => s + k.weighted, 0) * 100) / 100;
+  const total = Math.round(weightedAvg * 20);
+  const areas = f.areas.map(a => { const ks = kpis.filter(k => k.pillar === a.key); const w = ks.reduce((s, k) => s + k.weight, 0); const got = ks.reduce((s, k) => s + k.weighted, 0); return { key:a.key, label:a.label, max:a.weight, score: Math.round(got / (w * 5) * a.weight * 10) / 10 }; });
+  const band = f.bands.find(b => total >= b[0]) || f.bands[f.bands.length - 1];
+  return { score: total, weightedAvg, rating: band[1], ratingDesc: band[2], action: band[3], areas, kpis,
+           growthPct, grossProfit, grossMarginPct, netProfit, netMarginPct, totalCA, totalCL, currentRatio, dso, dio, dscr, noDebt,
+           incomeChangePct: growthPct, profitable: netProfit !== null ? netProfit > 0 : null, missingCount: kpis.filter(k => k.missing).length };
 }
 
 function scoreAssessment(type, answers, period, baselineAnswers) {
@@ -3962,7 +3998,7 @@ async function incuDashboard(env, role) {
                profitable: finBd.filter(b => b.profitable === true).length, profitablePct: pct(finBd.filter(b => b.profitable === true).length, finLatest.length),
                avgScore: finLatest.length ? Math.round(finLatest.reduce((s, a) => s + (num(a.FinalScore) || 0), 0) / finLatest.length) : null,
                avgGrossMargin: avgOf(finBd.map(b => b.grossMarginPct)), avgNetMargin: avgOf(finBd.map(b => b.netMarginPct)), avgIncomeChange: avgOf(finBd.map(b => b.incomeChangePct)),
-               keepingRecords: finLatest.filter(a => (parseJson(a.Answers, {}).records_kept || []).length >= 3).length },
+               healthyLiquidity: finBd.filter(b => b.currentRatio !== null && b.currentRatio >= 1.5).length, bands: finLatest.reduce((o, a) => { o[a.Rating] = (o[a.Rating] || 0) + 1; return o; }, {}) },
     lean: { baselines: leanBase, endlines: leanEnd.length, perKpi,
             avgTargetsMet: leanEnd.length ? Math.round(leanEnd.reduce((s, a) => s + (parseJson(a.Breakdown, {}).metCount || 0), 0) / leanEnd.length * 10) / 10 : null },
     cards,

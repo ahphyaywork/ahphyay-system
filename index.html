@@ -808,7 +808,7 @@ tbody tr:hover td{background:#FFFFFF;}
           </div>
         </div>
         <div style="background:var(--teal-lt);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#111827;">
-          <i class="ti ti-info-circle"></i> Recurring task templates auto-generate real tasks based on their frequency. Daily tasks generate once per day, weekly every 7 days, monthly once per month. Generation runs automatically when management opens the system, or manually via the button above.
+          <i class="ti ti-info-circle"></i> Recurring task templates auto-generate real tasks based on their frequency. Daily tasks generate once per day, weekly every 7 days, monthly once per month. Generation runs automatically every morning (scheduled job), also when management opens the system, or manually via the button above.
         </div>
         <div id="seed-prompt" style="display:none;background:var(--off);border:1px dashed var(--border2);border-radius:12px;padding:20px;text-align:center;margin-bottom:16px;">
           <div style="font-size:14px;color:var(--navy);margin-bottom:10px;">No recurring templates yet. Load the 11 standard workflow templates from the support team workflow?</div>
@@ -1922,9 +1922,48 @@ async function api(path, opts = {}) {
 // ════════════════════════════════════════════════════════
 // DASHBOARD
 // ════════════════════════════════════════════════════════
+// ── Weekly planning widgets ──
+const fmtDay = d => d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day:'numeric', month:'short', timeZone:'UTC' }) : '';
+function planBanner(pl) {
+  if (!pl || !pl.mustPlan) return '';
+  const n = pl.mine.next, c = pl.mine.current;
+  const done = n.planned;
+  const bg = done ? '#DCFCE7' : n.status === 'missed' ? '#FEE2E2' : '#FEF3C7';
+  const fg = done ? '#166534' : n.status === 'missed' ? '#991B1B' : '#92400E';
+  const pct = Math.min(100, Math.round(n.count / n.needed * 100));
+  return `<div style="background:${bg};border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;color:${fg};">
+    <i class="ti ${done ? 'ti-calendar-check' : 'ti-calendar-event'}" style="font-size:24px;"></i>
+    <div style="flex:1;min-width:220px;">
+      <div style="font-weight:700;font-size:14px;">Next week (w/c ${fmtDay(pl.nextMonday)}): ${n.count} of ${n.needed} tasks planned${done ? ' ✓' : ''}</div>
+      <div style="font-size:12px;opacity:.85;">${done ? 'Your plan is in. You can keep adding tasks.' : `Add at least ${n.needed} tasks due that week before <strong>Monday ${fmtDay(pl.nextMonday)}, 11:30</strong>. Missed weeks count against your KPI (Planning 10%).`}${c.status === 'missed' ? ' <span style="font-weight:600;">This week was marked as not planned.</span>' : ''}</div>
+      <div style="height:6px;background:rgba(0,0,0,.08);border-radius:99px;margin-top:8px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${fg};"></div></div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-outline btn-sm" onclick="copyLastWeek()" title="Copy this week's tasks into next week"><i class="ti ti-copy"></i> Copy this week</button>
+      <button class="btn btn-primary btn-sm" onclick="navigateTo('tasks','Tasks');setTimeout(openAddTask,300)"><i class="ti ti-plus"></i> Add task</button>
+    </div>
+  </div>`;
+}
+function planTeamTable(pl) {
+  if (!pl || !pl.team) return '';
+  const pill = st => st.status === 'planned' ? `<span class="badge badge-done">✓ ${st.count}</span>` : st.status === 'missed' ? `<span class="badge badge-late">✗ ${st.count}/${st.needed}</span>` : `<span class="badge badge-prog">${st.count}/${st.needed}</span>`;
+  const rows = pl.team.slice().sort((a,b) => (a.next.planned === b.next.planned) ? a.name.localeCompare(b.name) : (a.next.planned ? 1 : -1));
+  const notPlanned = rows.filter(r => !r.next.planned).length;
+  return `<div class="section-hd" style="margin-top:4px;"><div class="section-title">Weekly planning</div><span style="font-size:12px;color:var(--muted);">${notPlanned ? `<strong style="color:var(--red)">${notPlanned}</strong> not yet planned for w/c ${fmtDay(pl.nextMonday)} · deadline Mon 11:30` : `Everyone has planned w/c ${fmtDay(pl.nextMonday)} ✓`}</span></div>
+    <div class="table-wrap" style="margin-bottom:20px;"><table><thead><tr><th>Staff</th><th>This week (${fmtDay(pl.thisMonday)})</th><th>Next week (${fmtDay(pl.nextMonday)})</th><th>Planning rate</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td><strong>${r.name}</strong><div style="font-size:11px;color:var(--muted);">${roleLabel(r.role)}</div></td><td>${pill(r.current)}</td><td>${pill(r.next)}</td><td style="font-weight:600;color:${r.planningPct===null?'var(--muted)':r.planningPct>=80?'#166534':r.planningPct>=50?'#92400E':'#991B1B'}">${r.planningPct===null?'— (from 27 Oct)':r.planningPct+'%'}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+async function copyLastWeek() {
+  if (!(await confirmDialog({ title:'Copy this week\'s tasks?', message:'Your tasks due this week will be copied into next week as new Pending tasks (same names, dates shifted by 7 days). Tasks that already exist next week are skipped.', confirmText:'Copy' }))) return;
+  const r = await api('/planning/copy-last-week', { method:'POST', body: JSON.stringify({}) });
+  if (r?.success) { showToast(`${r.copied} task${r.copied!==1?'s':''} copied${r.skipped ? ` · ${r.skipped} skipped` : ''} ✓`, 'success'); cache.tasks = null; loadDashboard(); }
+  else showToast(r?.error || 'Failed', 'error');
+}
+
 async function loadDashboard() {
   if (!user) { doLogout(); return; }
-  const data = await api('/dashboard');
+  const [data, pl] = await Promise.all([api('/dashboard'), api('/planning')]);
   if (!data) return;
   const el = document.getElementById('dashboard-content');
 
@@ -1936,7 +1975,7 @@ async function loadDashboard() {
     const total  = data.myKpis.length;
     const pct    = total ? Math.round((done/total)*100) : 0;
 
-    el.innerHTML = `
+    el.innerHTML = planBanner(pl) + `
       <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
         <div class="stat-card">
           <div class="stat-label">My tasks</div>
@@ -1986,7 +2025,7 @@ async function loadDashboard() {
   const atRisk  = data.staffSummary.filter(s=>s.status==='at-risk').length;
   const behind  = data.staffSummary.filter(s=>s.status==='behind').length;
 
-  el.innerHTML = `
+  el.innerHTML = planBanner(pl) + planTeamTable(pl) + `
     <div class="stats-grid" style="margin-bottom:20px;">
       <div class="stat-card">
         <div class="stat-label">Active staff</div>
@@ -3463,13 +3502,14 @@ async function loadKPI() {
         </div>
         <div id="kpi-breakdown-me" style="display:none;background:var(--off);border-radius:10px;padding:14px 16px;margin-top:16px;font-size:12px;">
           <div style="font-weight:600;color:var(--navy);margin-bottom:8px;">How your score is calculated</div>
-          ${[['Completion','% of your tasks done',my.kpiBreakdown.completion],['Timeliness','% finished by due date',my.kpiBreakdown.timeliness],['Evidence','% of done tasks with evidence',my.kpiBreakdown.evidence],['Reliability','fewer overdue is better',my.kpiBreakdown.reliability]].map(([label,desc,b]) => `
+          ${[['Completion','% of your tasks done',my.kpiBreakdown.completion],['Timeliness','% finished by due date',my.kpiBreakdown.timeliness],['Evidence','% of done tasks with evidence',my.kpiBreakdown.evidence],['Reliability','fewer overdue is better',my.kpiBreakdown.reliability],...(my.kpiBreakdown.planning ? [['Planning','% of weeks planned by Mon 11:30',my.kpiBreakdown.planning]] : [])].map(([label,desc,b]) => `
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">
               <div style="width:96px;"><div style="color:var(--navy);font-weight:600;">${label}</div><div style="font-size:9px;color:var(--muted);">${desc}</div></div>
               <div style="flex:1;height:6px;background:#E5E7EB;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${b.pct}%;background:var(--teal);"></div></div>
               <span style="width:36px;text-align:right;color:var(--navy);font-weight:600;">${b.pct}%</span>
               <span style="width:80px;text-align:right;color:var(--muted);">× ${b.weight}% = ${b.points} pts</span>
             </div>`).join('')}
+          ${my.planningWeeks && my.planningWeeks.length ? `<div style="margin:6px 0 4px;font-size:10px;color:var(--muted);">Planning weeks: ${my.planningWeeks.map(w => `<span style="display:inline-block;margin:1px 2px;padding:1px 6px;border-radius:99px;background:${w.planned?'#DCFCE7':'#FEE2E2'};color:${w.planned?'#166534':'#991B1B'};">${new Date(w.monday+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'})} ${w.planned?'✓':'✗'}</span>`).join('')}</div>` : `<div style="margin:6px 0 4px;font-size:10px;color:var(--muted);">Planning (10%) starts counting from the week of 27 Oct 2026.</div>`}
           <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-weight:600;color:var(--navy);">
             <span>Base KPI Score</span><span>${my.baseKpiScore ?? my.kpiScore} / 100</span>
           </div>
@@ -3606,7 +3646,7 @@ async function loadKPI() {
           <div style="margin-bottom:10px;">${jdChip(s.jdAlignment, {showCount:true})}</div>
           <div id="kpi-breakdown-${s.staffId}" style="display:none;background:var(--off);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;">
             <div style="font-weight:600;color:var(--navy);margin-bottom:6px;">Score breakdown</div>
-            ${[['Completion',s.kpiBreakdown.completion],['Timeliness',s.kpiBreakdown.timeliness],['Evidence',s.kpiBreakdown.evidence],['Reliability',s.kpiBreakdown.reliability]].map(([label,b]) => `
+            ${[['Completion',s.kpiBreakdown.completion],['Timeliness',s.kpiBreakdown.timeliness],['Evidence',s.kpiBreakdown.evidence],['Reliability',s.kpiBreakdown.reliability],...(s.kpiBreakdown.planning ? [['Planning',s.kpiBreakdown.planning]] : [])].map(([label,b]) => `
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
                 <span style="width:78px;color:var(--muted);">${label}</span>
                 <div style="flex:1;height:5px;background:#E5E7EB;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${b.pct}%;background:var(--teal);"></div></div>
@@ -5413,6 +5453,7 @@ const NOTIF_ICONS = {
   assigned:  '<i class="ti ti-clipboard-check" style="font-size:18px;color:#6D28D9;"></i>',
   completed: '<i class="ti ti-circle-check" style="font-size:18px;color:#6B7280;"></i>',
   overdue:   '<i class="ti ti-clock-exclamation" style="font-size:18px;color:#E24B4A;"></i>',
+  reminder:  '<i class="ti ti-bell-ringing" style="font-size:18px;color:#D97706;"></i>',
 };
 
 function timeAgo(isoString) {
