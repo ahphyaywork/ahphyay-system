@@ -7,6 +7,7 @@
  *   GOOGLE_SA_EMAIL       — service account email
  *   GOOGLE_PRIVATE_KEY    — service account private key (full PEM)
  *   JWT_SECRET            — any long random string
+ *   INCU_FOLDER_ID        — Drive folder ID for the SN@IL Incubation root (collaborator sub-folders are created inside it)
  */
 
 const CORS = {
@@ -29,7 +30,13 @@ const ROLES = {
   ADMIN_ASSISTANT:   'admin-assistant',
   PRODUCTION_INTERN: 'production-intern',
   COLLABORATOR:      'collaborator',   // SN@IL incubation collaborator (external business owner)
+  RP_FINANCE:        'rp-finance',     // SN@IL external resource persons — review + comment on one topic
+  RP_QUALITY:        'rp-quality',
+  RP_BRAND:          'rp-brand',
+  RP_LEAN:           'rp-lean',
 };
+const RP_TOPIC = { 'rp-finance':'finance', 'rp-quality':'pqr', 'rp-brand':'brand', 'rp-lean':'lean' };
+const INCU_EXTERNAL_ROLES = ['collaborator','rp-finance','rp-quality','rp-brand','rp-lean'];
 
 // Permission group helpers
 const isAdmin      = r => r === 'bod' || r === 'developer';
@@ -38,6 +45,8 @@ const isDeveloper  = r => r === 'developer';
 const isStaffLevel = r => ['production-lead','senior-admin','project-officer','network-catalyst','page-admin','admin-assistant','production-intern'].includes(r);
 const hasAccess    = r => Object.values(ROLES).includes(r);
 const isCollaborator = r => r === 'collaborator';
+const isResourcePerson = r => !!RP_TOPIC[r];
+const rpTopic = r => RP_TOPIC[r] || null;
 const isMentor     = r => isAdmin(r);   // mentors are BOD/Developer for now
 
 // Role display labels
@@ -55,6 +64,10 @@ const ROLE_LABELS = {
   'admin-assistant':      'Admin & Finance Assistant',
   'production-intern':    'Production Intern',
   'collaborator':         'Collaborator',
+  'rp-finance':           'Resource Person — Finance',
+  'rp-quality':           'Resource Person — Product Quality',
+  'rp-brand':             'Resource Person — Branding',
+  'rp-lean':              'Resource Person — Lean',
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -294,7 +307,7 @@ const PERMISSION_KEYS = {
 function defaultPermissions() {
   const mgmt = ['bod','developer','senior-impact','senior-biz','project-coordinator'];
   const admin = ['bod','developer'];
-  const all = Object.values(ROLES).filter(r => r !== 'collaborator');
+  const all = Object.values(ROLES).filter(r => !INCU_EXTERNAL_ROLES.includes(r));
   const staffLevel = ['production-lead','senior-admin','project-officer','network-catalyst','page-admin','admin-assistant','production-intern'];
 
   const perms = {};
@@ -441,8 +454,8 @@ export default {
 
       const { role, staffId } = auth;
 
-      // Collaborators are confined to the incubation extension + their own account
-      if (isCollaborator(role) && !path.startsWith('/incu') &&
+      // Collaborators and resource persons are confined to the incubation extension + their own account
+      if (INCU_EXTERNAL_ROLES.includes(role) && !path.startsWith('/incu') &&
           !['/auth/me','/auth/change-password'].includes(path)) {
         return json({ error: 'Access denied' }, 403);
       }
@@ -699,7 +712,7 @@ async function getStaff(env, role, staffId, url) {
 async function getStaffNames(env) {
   const staff = await sheetsRead(env, 'Staff');
   const names = staff
-    .filter(s => s.Active?.toLowerCase() === 'true' && normalizeRole(s.Role) !== 'collaborator')
+    .filter(s => s.Active?.toLowerCase() === 'true' && !INCU_EXTERNAL_ROLES.includes(normalizeRole(s.Role)))
     .map(s => ({ ID: s.ID, Name: s.Name, Role: normalizeRole(s.Role) }));
   return json(names);
 }
@@ -710,6 +723,7 @@ async function addStaff(request, env, role) {
   const { name, username, password, staffRole, type, email, projects, team, collaborator } = body;
   if (!name || !username || !password) return json({ error: 'Missing required fields' }, 400);
   const isCollab = staffRole === 'collaborator';
+  const isExternal = INCU_EXTERNAL_ROLES.includes(staffRole);
   if (isCollab && !collaborator?.businessName?.trim()) return json({ error: 'Business name is required for a collaborator' }, 400);
 
   const staff = await sheetsRead(env, 'Staff');
@@ -721,14 +735,14 @@ async function addStaff(request, env, role) {
 
   // Create personal Drive folder structure for this staff member
   let folderId = '';
-  if (!isCollab) try {
+  if (!isExternal) try {
     folderId = await createStaffFolderStructure(env, id, name);
   } catch (e) {
     console.error('Failed to create staff folder:', e.message);
     // Don't block account creation if folder creation fails
   }
 
-  const row = [id, name, username, hashed, staffRole || 'project-officer', type || 'Full-time', email || '', isCollab ? '' : (projects || ''), 'true', new Date().toISOString(), '', folderId, isCollab ? 'Collaborator' : (team || 'Program Team')];
+  const row = [id, name, username, hashed, staffRole || 'project-officer', type || 'Full-time', email || '', isExternal ? '' : (projects || ''), 'true', new Date().toISOString(), '', folderId, isCollab ? 'Collaborator' : isExternal ? 'Resource Person' : (team || 'Program Team')];
   await sheetsAppend(env, 'Staff', row);
 
   let collaboratorId = '';
@@ -1229,7 +1243,7 @@ async function getKPI(url, env, role, staffId) {
 
   let staffSummary = [];
   if (isManagement(role) && !rankingOnly) {
-    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && !['developer','collaborator'].includes(normalizeRole(s.Role)));
+    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && !['developer', ...INCU_EXTERNAL_ROLES].includes(normalizeRole(s.Role)));
     staffSummary = activeStaff.map(s => {
       const staffTasks = relevantTasks.filter(t => isAssigned(t.AssigneeID, s.ID));
       const kBase = computeStaffKpi(staffTasks, todayStr);
@@ -1329,7 +1343,7 @@ async function getKPI(url, env, role, staffId) {
   const monthParam = url.searchParams.get('month');
   if (isManagement(role)) {
     const month = monthParam || todayStr.slice(0, 7); // YYYY-MM
-    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && !['developer','collaborator'].includes(normalizeRole(s.Role)));
+    const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && !['developer', ...INCU_EXTERNAL_ROLES].includes(normalizeRole(s.Role)));
 
     // The 6 months we display (selected month + 5 prior)
     const months = [];
@@ -1395,7 +1409,7 @@ async function getDashboard(env, role, staffId) {
   ]);
   const logs = [];
 
-  const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && !['developer','collaborator'].includes(normalizeRole(s.Role)));
+  const activeStaff = staff.filter(s => s.Active?.toLowerCase() === 'true' && !['developer', ...INCU_EXTERNAL_ROLES].includes(normalizeRole(s.Role)));
   const activeProjects = projects.filter(p => p.Status?.toLowerCase() === 'active');
 
   const now = new Date();
@@ -3023,35 +3037,61 @@ const INCU_BUSINESS_STAGES = ['Idea Stage','Start-up','Early Growth','Growing En
 const INCU_PRODUCT_CATEGORIES = ['Garment','Bag','Home Textile','Accessories'];
 
 const INCU_FORMS = {
-  // ── Product Quality Report — 100 pts, QC standard met at ≥ 80 ──
+  // ── Product Inspection Report — 100 pts, QC standard met at ≥ 80 ──
+  // Client template (Sep 2026): five sections with fixed weights; checkpoints may be Not Applicable,
+  // and each section's weight is split equally across its applicable checkpoints.
   pqr: {
-    label: 'Product Quality Report',
+    label: 'Product Inspection Report',
     perProduct: true,
     qcThreshold: 80,
-    areas: [
-      { key:'quality',   label:'Product Quality',       max:30, questions:[
-        { id:'fabric',      label:'Fabric / Material Quality',  max:10, hint:'Is the fabric free from stains, holes, or defects?' },
-        { id:'stitching',   label:'Stitching & Workmanship',    max:10, hint:'Are the stitches straight, even, and secure?' },
-        { id:'durability',  label:'Durability & Construction',  max:10, hint:'Can the product withstand normal use?' } ]},
-      { key:'design',    label:'Design & Functionality',  max:20, questions:[
-        { id:'design',      label:'Product Design',             max:10, hint:'Is the product attractive and suitable for the target market?' },
-        { id:'function',    label:'Functionality',              max:10, hint:'Does it function properly (bag closes well, garment fits correctly)?' } ]},
-      { key:'finishing', label:'Finishing',               max:20, questions:[
-        { id:'finish',      label:'Finishing Quality',          max:10, hint:'Are loose threads removed? Is it clean and properly ironed?' },
-        { id:'measure',     label:'Measurement & Consistency',  max:10, hint:'Are measurements consistent with the product specification?' } ]},
-      { key:'branding',  label:'Branding & Packaging',    max:15, questions:[
-        { id:'brandid',     label:'Brand Identity',             max:5,  hint:'Does the product have a logo or brand label?' },
-        { id:'label',       label:'Product Label / Information',max:5,  hint:'Is there a care label or product information?' },
-        { id:'packaging',   label:'Packaging',                  max:5,  hint:'Is the packaging attractive and protective?' } ]},
-      { key:'market',    label:'Market Readiness',        max:15, questions:[
-        { id:'price',       label:'Price Competitiveness',      max:5,  hint:'Is the product appropriately priced for its quality?' },
-        { id:'appeal',      label:'Customer Appeal',            max:5,  hint:'Would customers be interested in buying it?' },
-        { id:'presentation',label:'Overall Presentation',       max:5,  hint:'Is the overall presentation suitable for exhibitions or retail?' } ]},
+    header: [
+      { id:'inspector',   label:'Inspector / QC name', type:'text' },
+      { id:'report_date', label:'Report date', type:'date' },
+      { id:'version',     label:'Version no.', type:'number', unit:'' },
     ],
-    // 10-pt scale: Excellent 9–10 · Good 7–8 · Fair 5–6 · Poor 0–4.  5-pt: 5 · 4 · 3 · 0–2
-    bands: [[90,'Excellent','Premium quality product, ready for exhibitions and wider markets.'],
-            [80,'Very Good','Good quality with only minor improvements needed.'],
-            [70,'Good','Meets basic market standards but requires improvement in consistency or presentation.'],
+    areas: [
+      { key:'conformity',  label:'Product Conformity', max:20, questions:[
+        { id:'c_design',     label:'Design / Style / Sewing construction', na:true },
+        { id:'c_material',   label:'Material', hint:'Same material used for all construction components', na:true },
+        { id:'c_color',      label:'Color shading', hint:'For mass production only — not mandatory for a small workshop', na:true, defaultNa:true },
+        { id:'c_label',      label:'Labeling', hint:'Brand label, size label, hangtag, price tag', na:true },
+        { id:'c_accessory',  label:'Accessories', hint:'Zipper, button, snap — must be consistent across mass-produced items', na:true } ]},
+      { key:'testing',     label:'Product Testing (function check & measurement)', max:20, questions:[
+        { id:'t_sewability', label:'Sewability / label resistance', na:true },
+        { id:'t_accessory',  label:'Accessories check', hint:'Zipper, button, snap and other accessories', na:true },
+        { id:'t_printing',   label:'Printing resistance / embroidery / color', na:true, defaultNa:true },
+        { id:'t_loading',    label:'Loading test for bag', hint:'If applicable', na:true },
+        { id:'t_laptop',     label:'Laptop fitness test for backpack / computer bag', hint:'If applicable', na:true, defaultNa:true },
+        { id:'t_measure',    label:'Measurement checking', na:true } ]},
+      { key:'workmanship', label:'Workmanship (product quality)', max:30, questions:[
+        { id:'w_overall',    label:'Seam & stitching, asymmetry, finishing (uncut threads, raw edges), cleaning (dirty marks, stains), material, accessories, printing', hint:'Record the number of major and minor defects and attach defect photos', na:false, defects:true } ]},
+      { key:'packing',     label:'Packing & Branding', max:10, questions:[
+        { id:'p_attractive', label:'Attractive & protective', na:true },
+        { id:'p_brandinfo',  label:'Brand information', na:true } ]},
+      { key:'market',      label:'Market Readiness', max:20, questions:[
+        { id:'m_price',      label:'Price competitiveness', na:false },
+        { id:'m_appeal',     label:'Customer appeal', na:false },
+        { id:'m_present',    label:'Overall presentation', na:false } ]},
+    ],
+    photoSlots: [
+      { key:'front',      label:'Product view (front)' },
+      { key:'back',       label:'Product view (back)' },
+      { key:'side',       label:'Product side view' },
+      { key:'top',        label:'Product top view' },
+      { key:'colorshade', label:'Color shade checking', hint:'Mass production, bulk to bulk over 50 pcs' },
+      { key:'label',      label:'Brand label' },
+      { key:'hangtag',    label:'Hangtag' },
+      { key:'accessory',  label:'Zipper / button / snap / accessories' },
+      { key:'function',   label:'Function check', hint:'Sewability test, label resistance' },
+      { key:'funcacc',    label:'Function check — zipper / button / snap' },
+      { key:'packaging',  label:'Packaging view' },
+      { key:'folding',    label:'Folding view' },
+      { key:'defect_major', label:'Defect — Major', caption:true },
+      { key:'defect_minor', label:'Defect — Minor', caption:true },
+    ],
+    bands: [[90,'Very Good Quality','Premium quality product, ready for exhibitions and wider markets.'],
+            [80,'Good Quality','Good quality with only minor improvements needed. Meets the QC standard.'],
+            [70,'Acceptable','Meets basic market standards but requires improvement in consistency or presentation.'],
             [60,'Fair','Saleable but needs significant improvement before expanding markets.'],
             [0,'Needs Improvement','Requires major improvements in quality, finishing, and market readiness before promotion.']],
   },
@@ -3109,6 +3149,43 @@ const INCU_FORMS = {
             [70,'Emerging Brand','Developing brand identity and positioning but requires stronger consistency and market differentiation.'],
             [60,'Developing Business','Basic branding exists, but significant improvement is needed in positioning, marketing, and customer engagement.'],
             [0,'Foundation Stage','Business is primarily product-focused and requires support to establish a clear brand identity and market positioning.']],
+  },
+
+  // ── Costing & Profit — 100 pts, derived from costing practice, margins and record keeping ──
+  finance: {
+    label: 'Costing & Profit',
+    currency: 'MMK',
+    sections: [
+      { key:'records', label:'Financial records & pricing practice', questions:[
+        { id:'records_kept', label:'Which records do you keep regularly?', type:'multi', options:['Sales record','Expense record','Cash book','Product costing sheet','Monthly profit & loss summary'] },
+        { id:'pricing_method', label:'How do you set your selling price?', type:'rating4', options:['Cost + markup, checked against market prices','Cost + markup','Follow other sellers / market price','Guess or customer negotiation'] } ]},
+      { key:'costing', label:'Product costing (main product, per unit)', questions:[
+        { id:'cost_product',   label:'Main product costed', type:'text' },
+        { id:'units_month',    label:'Units produced per month', type:'number', unit:'units' },
+        { id:'material_cost',  label:'Material cost per unit', type:'number', unit:'MMK' },
+        { id:'labour_cost',    label:'Labour cost per unit', type:'number', unit:'MMK', hint:'Include your own time at a fair rate' },
+        { id:'overhead_cost',  label:'Other cost per unit (packaging, transport, electricity, rent share)', type:'number', unit:'MMK' },
+        { id:'selling_price',  label:'Selling price per unit', type:'number', unit:'MMK' } ]},
+      { key:'business', label:'Monthly business result', questions:[
+        { id:'revenue',       label:'Total sales this month', type:'number', unit:'MMK' },
+        { id:'expenses',      label:'Total expenses this month', type:'number', unit:'MMK', hint:'Materials, labour, transport, fees — everything paid out' },
+        { id:'revenue_prev',  label:'Total sales in the previous period (if known)', type:'number', unit:'MMK' },
+        { id:'profit_use',    label:'What do you do with profit?', type:'multi', options:['Reinvest in materials / equipment','Savings','Household expenses','Pay back loans','Not sure / no profit yet'] } ]},
+      { key:'reflection', label:'Reflection', questions:[
+        { id:'fin_challenges',   label:'Main financial challenges', type:'textarea' },
+        { id:'fin_improvements', label:'Changes made since the last assessment', type:'textarea' } ]},
+    ],
+    areas: [
+      { key:'records',   label:'Record keeping',        weight:25 },
+      { key:'costing',   label:'Costing & pricing',      weight:20 },
+      { key:'margin',    label:'Gross margin',           weight:25 },
+      { key:'profit',    label:'Net profitability',      weight:20 },
+      { key:'growth',    label:'Income growth',          weight:10 },
+    ],
+    bands: [[85,'Profit-Ready','Costs are known, prices cover them with a healthy margin, and records support decisions.'],
+            [70,'Financially Sound','Good costing and positive profit; strengthen records or margins to grow further.'],
+            [50,'Developing','Some costing in place but margins or record keeping need attention.'],
+            [0,'Needs Support','Costs or profit are not yet tracked clearly — costing coaching recommended.']],
   },
 
   // ── Lean KPI Baseline / Endline — 7 KPIs; endline is scored against the latest reviewed baseline ──
@@ -3176,17 +3253,26 @@ function bandFor(bands, score) {
   return { label: bands[bands.length - 1][1], desc: bands[bands.length - 1][2] };
 }
 
-// Product Quality: straight sum of the 13 indicators, capped at each max.
+// Product Inspection: each section's weight is split equally across its applicable checkpoints
+// (answers[id + '__na'] === true marks a checkpoint Not Applicable). Marks are capped at the item max.
 function scorePqr(answers) {
   const f = INCU_FORMS.pqr;
   const areas = f.areas.map(a => {
-    const items = a.questions.map(q => ({ id:q.id, label:q.label, max:q.max, score: clamp(num(answers[q.id]) ?? 0, 0, q.max) }));
-    const score = items.reduce((s, i) => s + i.score, 0);
-    return { key:a.key, label:a.label, max:a.max, score, items };
+    const applicable = a.questions.filter(q => !(q.na && answers[q.id + '__na'] === true));
+    const itemMax = applicable.length ? Math.round(a.max / applicable.length * 100) / 100 : 0;
+    const items = a.questions.map(q => {
+      const isNa = q.na && answers[q.id + '__na'] === true;
+      const raw = isNa ? null : num(answers[q.id]);
+      return { id:q.id, label:q.label, na:isNa, max: isNa ? 0 : itemMax, score: isNa ? 0 : (raw === null ? 0 : clamp(raw, 0, itemMax)), remark: answers[q.id + '__remark'] || '',
+               ...(q.defects ? { major: num(answers.wm_major) ?? 0, minor: num(answers.wm_minor) ?? 0 } : {}) };
+    });
+    const score = Math.round(items.reduce((s, i) => s + i.score, 0) * 10) / 10;
+    return { key:a.key, label:a.label, max:a.max, applicable: applicable.length, itemMax, score, items };
   });
   const total = Math.round(areas.reduce((s, a) => s + a.score, 0));
   const band = bandFor(f.bands, total);
-  return { score: total, rating: band.label, ratingDesc: band.desc, qcMet: total >= f.qcThreshold, areas };
+  return { score: total, rating: band.label, ratingDesc: band.desc, qcMet: total >= f.qcThreshold, areas,
+           majorDefects: num(answers.wm_major) ?? 0, minorDefects: num(answers.wm_minor) ?? 0 };
 }
 
 // Branding: derive the six weighted areas from the checklist answers.
@@ -3265,7 +3351,39 @@ function scoreLean(answers, period, baselineAnswers) {
   return { score, rating, kpis, metCount, hasBaseline: !!baselineAnswers };
 }
 
+// Costing & Profit:
+//   Record keeping 25  ← 5 per record type kept
+//   Costing 20         ← 10 if all three cost components entered, 10/7/3/0 by pricing method
+//   Gross margin 25    ← (price − unit cost) / price, banded
+//   Net profit 20      ← (sales − expenses) / sales, banded
+//   Income growth 10   ← sales vs previous period, banded; neutral 5 if no previous figure
+function scoreFinance(answers) {
+  const f = INCU_FORMS.finance;
+  const records = Array.isArray(answers.records_kept) ? answers.records_kept.length : 0;
+  const mat = num(answers.material_cost), lab = num(answers.labour_cost), ovh = num(answers.overhead_cost), price = num(answers.selling_price);
+  const unitCost = [mat, lab, ovh].some(v => v === null) ? null : mat + lab + ovh;
+  const grossMarginPct = (unitCost !== null && price) ? Math.round((price - unitCost) / price * 1000) / 10 : null;
+  const pm = num(answers.pricing_method); const pmPts = pm === 0 ? 10 : pm === 1 ? 7 : pm === 2 ? 3 : 0;
+  const revenue = num(answers.revenue), expenses = num(answers.expenses), prev = num(answers.revenue_prev);
+  const netProfit = (revenue !== null && expenses !== null) ? revenue - expenses : null;
+  const netMarginPct = (netProfit !== null && revenue) ? Math.round(netProfit / revenue * 1000) / 10 : null;
+  const incomeChangePct = (revenue !== null && prev) ? Math.round((revenue - prev) / prev * 1000) / 10 : null;
+  const band = (v, steps, none) => { if (v === null) return none; for (const [min, pts] of steps) if (v >= min) return pts; return 0; };
+  const scores = {
+    records: Math.min(records, 5) * 5,
+    costing: (unitCost !== null ? 10 : 0) + pmPts,
+    margin:  band(grossMarginPct, [[40,25],[30,20],[20,14],[10,8],[0.01,4]], 0),
+    profit:  band(netMarginPct, [[20,20],[10,15],[0.01,10],[0,4]], 0),
+    growth:  band(incomeChangePct, [[20,10],[0.01,6],[0,3]], 5),
+  };
+  const areas = f.areas.map(a => ({ key:a.key, label:a.label, max:a.weight, score: scores[a.key] }));
+  const total = Math.round(areas.reduce((s, a) => s + a.score, 0));
+  const b = bandFor(f.bands, total);
+  return { score: total, rating: b.label, ratingDesc: b.desc, areas, unitCost, grossMarginPct, netProfit, netMarginPct, incomeChangePct, profitable: netProfit !== null ? netProfit > 0 : null };
+}
+
 function scoreAssessment(type, answers, period, baselineAnswers) {
+  if (type === 'finance') return scoreFinance(answers);
   if (type === 'pqr')   return scorePqr(answers);
   if (type === 'brand') return scoreBrand(answers);
   if (type === 'lean')  return scoreLean(answers, period, baselineAnswers);
@@ -3297,21 +3415,132 @@ async function upsertCollaboratorProfile(env, staffId, c) {
     c.mentorId !== undefined ? c.mentorId : (e.MentorID || ''),
     e.Active || 'true',
     e.CreatedAt || new Date().toISOString(),
+    e.FolderID || '',
   ];
   if (idx === -1) await sheetsAppend(env, 'Collaborators', row);
   else await sheetsUpdateRow(env, 'Collaborators', idx + 2, row);
+  // Create the collaborator's Drive folder up front (best-effort; also created lazily on first upload)
+  try { const token = await getDriveToken(env); await getIncuCollabFolder(token, env, { ...e, ID: id, StaffID: staffId, BusinessName: row[2], FolderID: e.FolderID || '' }); } catch (_) {}
   return id;
+}
+
+// ── Drive layout ─────────────────────────────────────────
+//   <INCU_FOLDER_ID>  "SN@IL Incubation"
+//     └── <BusinessName> (<COL-ID>)              ← Collaborators.FolderID
+//           └── <ASM-ID> — <form> — <product|period>   evidence files, responses-*.json, report.pdf
+function incuRootFolder(env) { return env.INCU_FOLDER_ID || env.Evidence_Folder_ID || 'root'; }
+
+async function driveFindOrCreateFolder(token, name, parentId) {
+  const safe = name.replace(/[/\\]/g, '-');
+  const q = `name='${safe.replace(/'/g, "\\'")}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const res = await fetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({ q, fields: 'files(id)', pageSize: '1' }), { headers: { Authorization: 'Bearer ' + token } });
+  const data = await res.json();
+  if (data.files?.length) return data.files[0].id;
+  return (await driveCreateFolder(token, safe, parentId)).id;
+}
+
+// Collaborator folder — cached in Collaborators.FolderID, created on demand
+async function getIncuCollabFolder(token, env, collab) {
+  if (collab.FolderID) return collab.FolderID;
+  const folderId = await driveFindOrCreateFolder(token, (collab.BusinessName || 'Collaborator') + ' (' + collab.ID + ')', incuRootFolder(env));
+  const rows = await sheetsRead(env, 'Collaborators');
+  const idx = rows.findIndex(r => r.ID === collab.ID);
+  if (idx !== -1) await sheetsUpdate(env, 'Collaborators', idx + 2, getColIndex('Collaborators', 'FolderID'), folderId);
+  collab.FolderID = folderId;
+  return folderId;
+}
+
+// Per-assessment folder inside the collaborator folder
+function incuAssessmentFolderName(a) {
+  return a.ID + ' — ' + INCU_FORMS[a.Type].label + ' — ' + (a.ProductName || a.Period || '');
+}
+async function getIncuAssessmentFolder(token, env, a) {
+  const collabs = await sheetsRead(env, 'Collaborators');
+  const c = collabs.find(x => x.ID === a.CollaboratorID);
+  if (!c) throw new Error('Collaborator not found for this assessment');
+  const collabFolder = await getIncuCollabFolder(token, env, c);
+  return await driveFindOrCreateFolder(token, incuAssessmentFolderName(a), collabFolder);
+}
+
+// Snapshot the full answer set + computed breakdown to Drive (on submit and on finalise). Best-effort.
+async function incuSnapshotResponses(env, a, stage, extra) {
+  try {
+    const token = await getDriveToken(env);
+    const folderId = await getIncuAssessmentFolder(token, env, a);
+    const payload = {
+      assessmentId: a.ID, collaboratorId: a.CollaboratorID, type: a.Type, form: INCU_FORMS[a.Type].label,
+      period: a.Period || '', productName: a.ProductName || '', productCategory: a.ProductCategory || '',
+      stage, snapshotAt: new Date().toISOString(),
+      answers: parseJson(a.Answers, {}), breakdown: parseJson(a.Breakdown, null),
+      selfScore: a.SelfScore || null, finalScore: a.FinalScore || null, rating: a.Rating || '',
+      mentorAnswers: parseJson(a.MentorAnswers, {}), mentorNotes: a.MentorNotes || '',
+      evidence: parseJson(a.Evidence, []), ...(extra || {}),
+    };
+    const buf = new TextEncoder().encode(JSON.stringify(payload, null, 2)).buffer;
+    // Replace an existing snapshot of the same stage rather than piling up copies
+    const name = 'responses-' + stage + '.json';
+    const q = `name='${name}' and '${folderId}' in parents and trashed=false`;
+    const ex = await (await fetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({ q, fields: 'files(id)' }), { headers: { Authorization: 'Bearer ' + token } })).json();
+    for (const f of (ex.files || [])) await fetch('https://www.googleapis.com/drive/v3/files/' + f.id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
+    await driveUploadFile(token, buf, name, 'application/json', folderId);
+  } catch (e) { console.error('Snapshot failed:', e.message); }
+}
+
+// Collaborator folder link for mentors
+async function incuCollabFolderLink(env, auth, collabId) {
+  if (!isManagement(auth.role)) return json({ error: 'Access denied' }, 403);
+  const collabs = await sheetsRead(env, 'Collaborators');
+  const c = collabs.find(x => x.ID === collabId);
+  if (!c) return json({ error: 'Not found' }, 404);
+  const token = await getDriveToken(env);
+  const folderId = await getIncuCollabFolder(token, env, c);
+  return json({ success: true, folderId, url: 'https://drive.google.com/drive/folders/' + folderId });
+}
+
+// Store a generated PDF report in the assessment folder; recorded in Evidence as kind:'report'
+async function incuUploadReport(request, env, auth, id) {
+  const all = await sheetsRead(env, 'Assessments');
+  const idx = all.findIndex(x => x.ID === id);
+  if (idx === -1) return json({ error: 'Not found' }, 404);
+  const e = all[idx];
+  if (isCollaborator(auth.role)) {
+    const c = await myCollaborator(env, auth.staffId);
+    if (!c || c.ID !== e.CollaboratorID) return json({ error: 'Access denied' }, 403);
+  } else if (!isManagement(auth.role) && !(isResourcePerson(auth.role) && rpTopic(auth.role) === e.Type)) return json({ error: 'Access denied' }, 403);
+  if (e.Status === 'Draft') return json({ error: 'Submit the assessment before generating a report' }, 400);
+  const formData = await request.formData();
+  const file = formData.get('file');
+  if (!file) return json({ error: 'No file provided' }, 400);
+  const buf = await file.arrayBuffer();
+  const token = await getDriveToken(env);
+  const folderId = await getIncuAssessmentFolder(token, env, e);
+  const fileName = (file.name || (id + '-report.pdf')).replace(/[^\w.\-_ ]/g, '_');
+  // Replace a previous copy with the same name so the folder holds one current report per stage
+  try {
+    const q = `name='${fileName}' and '${folderId}' in parents and trashed=false`;
+    const ex = await (await fetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({ q, fields: 'files(id)' }), { headers: { Authorization: 'Bearer ' + token } })).json();
+    for (const f of (ex.files || [])) await fetch('https://www.googleapis.com/drive/v3/files/' + f.id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
+  } catch (_) {}
+  const uploaded = await driveUploadFile(token, buf, fileName, 'application/pdf', folderId);
+  const url = 'https://drive.google.com/file/d/' + uploaded.id + '/view?usp=sharing';
+  const evidence = parseJson(e.Evidence, []).filter(x => !(x.kind === 'report' && x.name === fileName));
+  evidence.push({ url, name: fileName, kpi: '', kind: 'report', time: new Date().toISOString(), by: auth.name || '' });
+  await sheetsUpdate(env, 'Assessments', idx + 2, getColIndex('Assessments', 'Evidence'), JSON.stringify(evidence));
+  return json({ success: true, url, evidence });
 }
 
 // ── Router ──
 async function handleIncu(path, request, url, env, auth) {
   const { role, staffId } = auth;
   const m = request.method;
-  const canView = isCollaborator(role) || isManagement(role);
+  const canView = isCollaborator(role) || isManagement(role) || isResourcePerson(role);
   if (!canView) return json({ error: 'Access denied' }, 403);
 
   if (path === '/incu/forms' && m === 'GET')
-    return json({ forms: INCU_FORMS, businessStages: INCU_BUSINESS_STAGES, productCategories: INCU_PRODUCT_CATEGORIES, isMentor: isMentor(role) });
+    return json({ forms: INCU_FORMS, businessStages: INCU_BUSINESS_STAGES, productCategories: INCU_PRODUCT_CATEGORIES, isMentor: isMentor(role), rpTopic: rpTopic(role) });
+  const cm = path.match(/^\/incu\/assessments\/([\w-]+)\/comments$/);
+  if (cm && m === 'GET')                                return await incuGetComments(env, auth, cm[1]);
+  if (cm && m === 'POST')                               return await incuAddComment(request, env, auth, cm[1]);
   if (path === '/incu/me' && m === 'GET')               return await incuMe(env, auth);
   if (path === '/incu/collaborators' && m === 'GET')    return await incuCollaborators(env, role);
   if (path === '/incu/assessments' && m === 'GET')      return await incuListAssessments(url, env, auth);
@@ -3324,8 +3553,61 @@ async function handleIncu(path, request, url, env, auth) {
   if (rev && m === 'POST')                              return await incuReviewAssessment(request, env, auth, rev[1]);
   const ev = path.match(/^\/incu\/assessments\/([\w-]+)\/evidence$/);
   if (ev && m === 'POST')                               return await incuUploadEvidence(request, env, auth, ev[1]);
+  const evd = path.match(/^\/incu\/assessments\/([\w-]+)\/evidence\/([\w-]+)$/);
+  if (evd && m === 'DELETE')                            return await incuDeleteEvidence(env, auth, evd[1], evd[2]);
+  const img = path.match(/^\/incu\/file\/([\w-]+)$/);
+  if (img && m === 'GET')                               return await incuFileProxy(env, auth, img[1], url);
+  const rep = path.match(/^\/incu\/assessments\/([\w-]+)\/report$/);
+  if (rep && m === 'POST')                              return await incuUploadReport(request, env, auth, rep[1]);
+  const fol = path.match(/^\/incu\/collaborators\/([\w-]+)\/folder$/);
+  if (fol && m === 'GET')                               return await incuCollabFolderLink(env, auth, fol[1]);
   if (path === '/incu/dashboard' && m === 'GET')        return await incuDashboard(env, role);
   return json({ error: 'Not found' }, 404);
+}
+
+// Can this user read a given assessment? Collaborator: own. RP: own topic, not drafts. Management: all.
+async function canReadAssessment(env, auth, a) {
+  if (isManagement(auth.role)) return true;
+  if (isResourcePerson(auth.role)) return a.Type === rpTopic(auth.role) && a.Status !== 'Draft';
+  if (isCollaborator(auth.role)) { const c = await myCollaborator(env, auth.staffId); return !!c && c.ID === a.CollaboratorID; }
+  return false;
+}
+
+// ── Comments (resource persons, mentors, collaborator) — stored in the Comments sheet keyed by assessment ID ──
+async function incuGetComments(env, auth, id) {
+  const all = await sheetsRead(env, 'Assessments');
+  const a = all.find(x => x.ID === id);
+  if (!a) return json({ error: 'Not found' }, 404);
+  if (!(await canReadAssessment(env, auth, a))) return json({ error: 'Access denied' }, 403);
+  const [comments, staff] = await Promise.all([sheetsRead(env, 'Comments'), sheetsRead(env, 'Staff')]);
+  const list = comments.filter(c => c.TaskID === id).sort((x, y) => (x.CreatedAt || '').localeCompare(y.CreatedAt || ''))
+    .map(c => { const s = staff.find(st => st.ID === c.StaffID); const r = normalizeRole(s?.Role); return { ...c, role: r, roleLabel: ROLE_LABELS[r] || r, isRp: isResourcePerson(r), isMentor: isMentor(r) }; });
+  return json({ comments: list, rpCommentCount: list.filter(c => c.isRp).length });
+}
+async function incuAddComment(request, env, auth, id) {
+  const all = await sheetsRead(env, 'Assessments');
+  const a = all.find(x => x.ID === id);
+  if (!a) return json({ error: 'Not found' }, 404);
+  if (!(await canReadAssessment(env, auth, a))) return json({ error: 'Access denied' }, 403);
+  if (a.Status === 'Draft') return json({ error: 'Comments open once the assessment is submitted' }, 400);
+  const { comment } = await request.json();
+  if (!comment?.trim()) return json({ error: 'Comment cannot be empty' }, 400);
+  const cid = 'CMT-' + Date.now();
+  await sheetsAppend(env, 'Comments', [cid, id, auth.staffId, auth.name || '', comment.trim(), new Date().toISOString()]);
+  // Notify everyone else involved: collaborator, mentors (or assigned mentor), resource person for this topic
+  try {
+    const [staff, collabs] = await Promise.all([sheetsRead(env, 'Staff'), sheetsRead(env, 'Collaborators')]);
+    const c = collabs.find(x => x.ID === a.CollaboratorID);
+    const active = staff.filter(s => s.Active?.toLowerCase() === 'true');
+    const targets = new Set();
+    if (c?.StaffID) targets.add(c.StaffID);
+    (c?.MentorID ? active.filter(s => s.ID === c.MentorID) : active.filter(s => isMentor(normalizeRole(s.Role)))).forEach(s => targets.add(s.ID));
+    active.filter(s => rpTopic(normalizeRole(s.Role)) === a.Type).forEach(s => targets.add(s.ID));
+    targets.delete(auth.staffId);
+    const label = INCU_FORMS[a.Type].label + (a.ProductName ? ' — ' + a.ProductName : a.Period ? ' — ' + a.Period : '');
+    for (const t of targets) await createNotification(env, t, 'comment', `${auth.name} commented on ${c?.BusinessName || 'an assessment'}`, `${label}: ${comment.trim().slice(0, 80)}${comment.trim().length > 80 ? '…' : ''}`, '');
+  } catch (_) {}
+  return json({ success: true, id: cid });
 }
 
 // Resolve the collaborator record for the logged-in user (collaborators only)
@@ -3335,7 +3617,7 @@ async function myCollaborator(env, staffId) {
 }
 
 async function incuMe(env, auth) {
-  if (!isCollaborator(auth.role)) return json({ collaborator: null, isMentor: isMentor(auth.role) });
+  if (!isCollaborator(auth.role)) return json({ collaborator: null, isMentor: isMentor(auth.role), rpTopic: rpTopic(auth.role) });
   const c = await myCollaborator(env, auth.staffId);
   if (!c) return json({ error: 'No collaborator profile found — ask your mentor to complete your business profile' }, 404);
   return json({ collaborator: c, isMentor: false });
@@ -3343,7 +3625,7 @@ async function incuMe(env, auth) {
 
 // Mentor view: every collaborator with their latest scores
 async function incuCollaborators(env, role) {
-  if (!isManagement(role)) return json({ error: 'Access denied' }, 403);
+  if (!isManagement(role) && !isResourcePerson(role)) return json({ error: 'Access denied' }, 403);
   const [rows, staff, assessments] = await Promise.all([
     sheetsRead(env, 'Collaborators'), sheetsRead(env, 'Staff'), sheetsRead(env, 'Assessments'),
   ]);
@@ -3351,6 +3633,7 @@ async function incuCollaborators(env, role) {
     const s = staff.find(x => x.ID === c.StaffID);
     const mine = assessments.filter(a => a.CollaboratorID === c.ID);
     return { ...c, staffName: s?.Name || '', username: s?.Username || '', staffActive: s?.Active, mentorName: staff.find(x => x.ID === c.MentorID)?.Name || '',
+             folderUrl: c.FolderID ? 'https://drive.google.com/drive/folders/' + c.FolderID : '',
              summary: summariseCollaborator(mine) };
   });
   return json({ collaborators: list });
@@ -3367,7 +3650,7 @@ function summariseCollaborator(assessments) {
   };
   const leanDone = assessments.filter(a => a.Type === 'lean' && a.Status === 'Reviewed');
   return {
-    pqr: latest('pqr'), brand: latest('brand'), lean: latest('lean'),
+    pqr: latest('pqr'), brand: latest('brand'), lean: latest('lean'), finance: latest('finance'),
     pqrProducts: assessments.filter(a => a.Type === 'pqr' && a.Status === 'Reviewed').length,
     pendingReview: assessments.filter(a => a.Status === 'Submitted').length,
     hasBaseline: leanDone.some(a => a.Period === 'Baseline'),
@@ -3393,6 +3676,7 @@ async function incuListAssessments(url, env, auth) {
     collabId = c.ID;
   }
   let list = collabId ? all.filter(a => a.CollaboratorID === collabId) : all;
+  if (isResourcePerson(auth.role)) list = list.filter(a => a.Type === rpTopic(auth.role) && a.Status !== 'Draft');
   const type = url.searchParams.get('type'); if (type) list = list.filter(a => a.Type === type);
   const status = url.searchParams.get('status'); if (status) list = list.filter(a => a.Status === status);
   list = list.map(enrichAssessment).sort((a, b) => (b.CreatedAt || '').localeCompare(a.CreatedAt || ''));
@@ -3408,13 +3692,11 @@ async function incuGetAssessment(env, auth, id) {
   const all = await sheetsRead(env, 'Assessments');
   const a = all.find(x => x.ID === id);
   if (!a) return json({ error: 'Not found' }, 404);
-  if (isCollaborator(auth.role)) {
-    const c = await myCollaborator(env, auth.staffId);
-    if (!c || c.ID !== a.CollaboratorID) return json({ error: 'Access denied' }, 403);
-  }
-  const collabs = await sheetsRead(env, 'Collaborators');
+  if (!(await canReadAssessment(env, auth, a))) return json({ error: 'Access denied' }, 403);
+  const [collabs, comments] = await Promise.all([sheetsRead(env, 'Collaborators'), sheetsRead(env, 'Comments')]);
   const c = collabs.find(x => x.ID === a.CollaboratorID);
-  return json({ assessment: { ...enrichAssessment(a), businessName: c?.BusinessName || '' }, collaborator: c || null });
+  const commentCount = comments.filter(x => x.TaskID === id).length;
+  return json({ assessment: { ...enrichAssessment(a), businessName: c?.BusinessName || '' }, collaborator: c || null, commentCount });
 }
 
 // Find the most recent reviewed Baseline for a collaborator (for endline scoring)
@@ -3451,7 +3733,10 @@ async function incuCreateAssessment(request, env, auth) {
     JSON.stringify(ans), JSON.stringify(result), result.score ?? '', '', '', result.rating || '',
     '', '[]', '', submit ? now : '', '', now,
   ]);
-  if (submit) await notifyMentors(env, collabId, type, id);
+  if (submit) {
+    await notifyMentors(env, collabId, type, id);
+    await incuSnapshotResponses(env, { ID: id, CollaboratorID: collabId, Type: type, Period: period || '', ProductName: productName || '', ProductCategory: productCategory || '', Answers: JSON.stringify(ans), Breakdown: JSON.stringify(result), SelfScore: result.score ?? '', Rating: result.rating || '', Evidence: '[]' }, 'submitted');
+  }
   return json({ success: true, id, status, score: result.score, rating: result.rating, breakdown: result });
 }
 
@@ -3480,7 +3765,10 @@ async function incuUpdateAssessment(request, env, auth, id) {
     JSON.stringify(ans), JSON.stringify(result), result.score ?? '', e.MentorAnswers || '', e.FinalScore || '', result.rating || '',
     e.MentorNotes || '', e.Evidence || '[]', e.ReviewerID || '', submitting ? now : (e.SubmittedAt || ''), e.ReviewedAt || '', e.CreatedAt,
   ]);
-  if (submitting) await notifyMentors(env, e.CollaboratorID, e.Type, id);
+  if (submitting) {
+    await notifyMentors(env, e.CollaboratorID, e.Type, id);
+    await incuSnapshotResponses(env, { ...e, Period: period, Answers: JSON.stringify(ans), Breakdown: JSON.stringify(result), SelfScore: result.score ?? '', Rating: result.rating || '' }, 'submitted');
+  }
   return json({ success: true, status, score: result.score, rating: result.rating, breakdown: result });
 }
 
@@ -3509,6 +3797,7 @@ async function incuReviewAssessment(request, env, auth, id) {
     e.Answers, JSON.stringify(result), e.SelfScore, JSON.stringify(overrides), result.score ?? '', result.rating || '',
     mentorNotes || '', e.Evidence || '[]', auth.staffId, e.SubmittedAt || now, now, e.CreatedAt,
   ]);
+  await incuSnapshotResponses(env, { ...e, Breakdown: JSON.stringify(result), FinalScore: result.score ?? '', Rating: result.rating || '', MentorAnswers: JSON.stringify(overrides), MentorNotes: mentorNotes || '' }, 'final', { reviewerId: auth.staffId, reviewerName: auth.name || '' });
   // Notify the collaborator
   try {
     const collabs = await sheetsRead(env, 'Collaborators');
@@ -3545,30 +3834,63 @@ async function incuUploadEvidence(request, env, auth, id) {
 
   const formData = await request.formData();
   const file = formData.get('file');
-  const kpi = formData.get('kpi') || '';
+  const kpi = formData.get('kpi') || '';          // lean KPI key, or pqr photo-slot key
   const kind = formData.get('kind') || 'photo';   // photo | doc
+  const caption = (formData.get('caption') || '').toString().slice(0, 200);
   if (!file) return json({ error: 'No file provided' }, 400);
   const buf = await file.arrayBuffer();
   if (buf.byteLength > 100 * 1024 * 1024) return json({ error: 'File must be under 100MB' }, 400);
 
   const token = await getDriveToken(env);
-  const folderId = await getOrCreateTaskFolder(token, env, 'INCU ' + id, INCU_FORMS[e.Type].label + (e.ProductName ? ' — ' + e.ProductName : ''));
-  const fileName = (file.name || 'evidence').replace(/[^\w.\-_ ]/g, '_');
+  const folderId = await getIncuAssessmentFolder(token, env, e);
+  const slotLabel = kpi ? (INCU_FORMS.lean.kpis.find(k => k.key === kpi)?.label || INCU_FORMS.pqr.photoSlots.find(p => p.key === kpi)?.label || kpi) : '';
+  const prefix = slotLabel ? slotLabel.replace(/[^\w]+/g, '') + ' - ' : '';
+  const fileName = (prefix + (file.name || 'evidence')).replace(/[^\w.\-_ ]/g, '_');
   const uploaded = await driveUploadFile(token, buf, fileName, file.type || 'application/octet-stream', folderId);
   const url = 'https://drive.google.com/file/d/' + uploaded.id + '/view?usp=sharing';
 
   const evidence = parseJson(e.Evidence, []);
-  evidence.push({ url, name: fileName, kpi, kind, time: new Date().toISOString(), by: auth.name || '' });
+  evidence.push({ url, fileId: uploaded.id, name: fileName, kpi, kind, caption, time: new Date().toISOString(), by: auth.name || '' });
   await sheetsUpdate(env, 'Assessments', idx + 2, getColIndex('Assessments', 'Evidence'), JSON.stringify(evidence));
   return json({ success: true, url, evidence });
+}
+
+// Remove an evidence entry (and the Drive file) — owner while not reviewed, or mentor
+async function incuDeleteEvidence(env, auth, id, fileId) {
+  const all = await sheetsRead(env, 'Assessments');
+  const idx = all.findIndex(x => x.ID === id);
+  if (idx === -1) return json({ error: 'Not found' }, 404);
+  const e = all[idx];
+  if (isCollaborator(auth.role)) {
+    const c = await myCollaborator(env, auth.staffId);
+    if (!c || c.ID !== e.CollaboratorID || e.Status === 'Reviewed') return json({ error: 'Access denied' }, 403);
+  } else if (!isMentor(auth.role)) return json({ error: 'Access denied' }, 403);
+  const evidence = parseJson(e.Evidence, []);
+  const entry = evidence.find(x => (x.fileId || (x.url.match(/\/d\/([\w-]+)/) || [])[1]) === fileId);
+  if (!entry) return json({ error: 'File not found on this assessment' }, 404);
+  try { const token = await getDriveToken(env); await fetch('https://www.googleapis.com/drive/v3/files/' + fileId, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } }); } catch (_) {}
+  const rest = evidence.filter(x => x !== entry);
+  await sheetsUpdate(env, 'Assessments', idx + 2, getColIndex('Assessments', 'Evidence'), JSON.stringify(rest));
+  return json({ success: true, evidence: rest });
+}
+
+// Stream a Drive file through the worker so the browser can show thumbnails and embed photos in PDFs
+// without hitting Drive's cross-origin limits. Any incubation user may read; the ID must come from an assessment.
+async function incuFileProxy(env, auth, fileId, url) {
+  const token = await getDriveToken(env);
+  const res = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) return json({ error: 'File not available' }, 404);
+  const ct = res.headers.get('Content-Type') || 'application/octet-stream';
+  return new Response(res.body, { headers: { ...CORS, 'Content-Type': ct, 'Cache-Control': 'private, max-age=3600' } });
 }
 
 async function notifyMentors(env, collabId, type, assessmentId) {
   try {
     const [staff, collabs] = await Promise.all([sheetsRead(env, 'Staff'), sheetsRead(env, 'Collaborators')]);
     const c = collabs.find(x => x.ID === collabId);
-    const targets = c?.MentorID ? staff.filter(s => s.ID === c.MentorID)
-                                : staff.filter(s => isMentor(normalizeRole(s.Role)) && s.Active?.toLowerCase() === 'true');
+    const active = staff.filter(s => s.Active?.toLowerCase() === 'true');
+    const targets = c?.MentorID ? active.filter(s => s.ID === c.MentorID) : active.filter(s => isMentor(normalizeRole(s.Role)));
+    active.filter(s => rpTopic(normalizeRole(s.Role)) === type).forEach(s => { if (!targets.includes(s)) targets.push(s); });
     for (const t of targets) await createNotification(env, t.ID, 'assigned', 'Assessment to review',
       `${c?.BusinessName || collabId} submitted a ${INCU_FORMS[type].label}`, '');
   } catch (_) {}
@@ -3576,7 +3898,7 @@ async function notifyMentors(env, collabId, type, assessmentId) {
 
 // MEALA dashboard — percentages the client reports against
 async function incuDashboard(env, role) {
-  if (!isManagement(role)) return json({ error: 'Access denied' }, 403);
+  if (!isManagement(role) && !isResourcePerson(role)) return json({ error: 'Access denied' }, 403);
   const [collabs, assessments] = await Promise.all([sheetsRead(env, 'Collaborators'), sheetsRead(env, 'Assessments')]);
   const active = collabs.filter(c => c.Active?.toLowerCase() !== 'false');
   const reviewed = assessments.filter(a => a.Status === 'Reviewed');
@@ -3617,6 +3939,11 @@ async function incuDashboard(env, role) {
              avgChangePct: changes.length ? Math.round(changes.reduce((s, v) => s + v, 0) / changes.length) : null };
   });
 
+  // ── Finance: latest reviewed per collaborator
+  const finLatest = active.map(c => latestFor(c.ID, 'finance')).filter(Boolean);
+  const finBd = finLatest.map(a => parseJson(a.Breakdown, {}));
+  const avgOf = arr => { const v = arr.filter(x => x !== null && x !== undefined); return v.length ? Math.round(v.reduce((s, x) => s + x, 0) / v.length * 10) / 10 : null; };
+
   // ── Per collaborator cards
   const cards = active.map(c => {
     const mine = assessments.filter(a => a.CollaboratorID === c.ID);
@@ -3631,6 +3958,11 @@ async function incuDashboard(env, role) {
     brand: { assessed: brandLatest.length, assessedPct: pct(brandLatest.length, active.length), bands: brandBands, brandingStages,
              branded: brandLatest.filter(a => (parseJson(a.Breakdown, {}).brandingStage || 1) >= 2).length,
              avgScore: brandLatest.length ? Math.round(brandLatest.reduce((s, a) => s + (num(a.FinalScore) || 0), 0) / brandLatest.length) : null, avgAreas: brandAvgAreas },
+    finance: { assessed: finLatest.length, assessedPct: pct(finLatest.length, active.length),
+               profitable: finBd.filter(b => b.profitable === true).length, profitablePct: pct(finBd.filter(b => b.profitable === true).length, finLatest.length),
+               avgScore: finLatest.length ? Math.round(finLatest.reduce((s, a) => s + (num(a.FinalScore) || 0), 0) / finLatest.length) : null,
+               avgGrossMargin: avgOf(finBd.map(b => b.grossMarginPct)), avgNetMargin: avgOf(finBd.map(b => b.netMarginPct)), avgIncomeChange: avgOf(finBd.map(b => b.incomeChangePct)),
+               keepingRecords: finLatest.filter(a => (parseJson(a.Answers, {}).records_kept || []).length >= 3).length },
     lean: { baselines: leanBase, endlines: leanEnd.length, perKpi,
             avgTargetsMet: leanEnd.length ? Math.round(leanEnd.reduce((s, a) => s + (parseJson(a.Breakdown, {}).metCount || 0), 0) / leanEnd.length * 10) / 10 : null },
     cards,
@@ -3652,7 +3984,7 @@ const SHEET_HEADERS = {
   RecurringTasks:['ID','Title','Description','Frequency','Team','AssigneeID','Active','LastGenerated','SendDay'],
   DocSubmissions:['ID','Title','ProjectID','RequestedFromID','RequestedByID','DocumentType','ActivityDate','DueDate','Status','Notes','CreatedAt','Files','SubmitLink'],
   KpiSnapshots:  ['ID','StaffID','WeekOf','KpiScore','Completion','Timeliness','Evidence','Reliability','TaskCount','CreatedAt'],
-  Collaborators: ['ID','StaffID','BusinessName','Owner','Location','BusinessStage','CoreProduct','TargetCustomer','SalesChannels','MentorID','Active','CreatedAt'],
+  Collaborators: ['ID','StaffID','BusinessName','Owner','Location','BusinessStage','CoreProduct','TargetCustomer','SalesChannels','MentorID','Active','CreatedAt','FolderID'],
   Assessments:   ['ID','CollaboratorID','Type','Period','ProductName','ProductCategory','Status','Answers','Breakdown','SelfScore','MentorAnswers','FinalScore','Rating','MentorNotes','Evidence','ReviewerID','SubmittedAt','ReviewedAt','CreatedAt'],
 };
 

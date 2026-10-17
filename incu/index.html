@@ -173,7 +173,7 @@ tbody td{padding:11px 14px;border-bottom:1px solid var(--border2);vertical-align
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <div class="sidebar-logo-row"><div class="sidebar-logo"><img src="../ahphyaylogo.png" alt="" onerror="this.style.display='none'"></div><span class="sidebar-name">SN@IL</span></div>
-      <div class="sidebar-tagline">Incubation hub</div>
+      <div class="sidebar-tagline">Incubation hub · v3.1</div>
     </div>
     <nav class="sidebar-nav" id="sidebar-nav"></nav>
     <div class="sidebar-user"><div class="user-card">
@@ -253,7 +253,7 @@ const TYPE_META = {
   pqr:   { label:'Product Inspection Report', icon:'ti-shirt', cls:'pqr',   desc:'Inspect one product: conformity, testing, workmanship, packing and market readiness. QC standard is met at 80 and above.' },
   brand: { label:'Branding & Positioning', icon:'ti-tag',   cls:'brand', desc:'Checklist of brand maturity, market positioning and digital presence. The six weighted areas are scored automatically.' },
   lean:  { label:'Lean KPI',               icon:'ti-chart-arrows', cls:'lean', desc:'Seven workplace KPIs. Record a Baseline first, then an Endline after Lean practice to measure the change.' },
-  finance: { label:'Costing & Profit',     icon:'ti-coins', cls:'finance', desc:'Cost your main product, record this month’s sales and expenses. Margins, profit and income growth are calculated for you.' },
+  finance: { label:'Financial Assessment', icon:'ti-coins', cls:'finance', desc:'Enter the period’s sales, costs, cash position and debt. Nine financial KPIs are calculated and scored against SME benchmarks for an overall financial health score.' },
 };
 const ALL_TYPES = ['pqr','brand','lean','finance'];
 const STATUS_CLS = { Draft:'b-draft', Submitted:'b-submitted', Reviewed:'b-reviewed' };
@@ -459,9 +459,9 @@ async function loadAssessments(opts = {}) {
     <div class="section-hd">
       <div class="section-title">${opts.title ? esc(opts.title) : (isMgmt ? 'All assessments' : 'My assessments')} <span style="font-size:12px;color:var(--muted);font-weight:400;">${list.length}</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <select class="form-input" id="asm-type-filter" style="width:auto;padding:6px 10px;font-size:12px;" onchange="renderAsmTable()"><option value="">All types</option><option value="pqr">Product Quality</option><option value="brand">Branding</option><option value="lean">Lean KPI</option><option value="finance">Costing &amp; Profit</option></select>
+        <select class="form-input" id="asm-type-filter" style="width:auto;padding:6px 10px;font-size:12px;" onchange="renderAsmTable()"><option value="">All types</option><option value="pqr">Product Quality</option><option value="brand">Branding</option><option value="lean">Lean KPI</option><option value="finance">Financial Assessment</option></select>
         <select class="form-input" id="asm-status-filter" style="width:auto;padding:6px 10px;font-size:12px;" onchange="renderAsmTable()"><option value="">All statuses</option><option>Draft</option><option>Submitted</option><option>Reviewed</option></select>
-        ${(!isMgmt && !isRP) || (isMgmt && opts.collaboratorId) ? `<div style="display:flex;gap:4px;flex-wrap:wrap;">${ALL_TYPES.map(t => `<button class="btn btn-primary btn-sm" onclick="openNew('${t}','${opts.collaboratorId||''}')"><i class="ti ti-plus"></i> ${t==='pqr'?'Product':t==='brand'?'Branding':t==='lean'?'Lean':'Costing'}</button>`).join('')}</div>` : ''}
+        ${(!isMgmt && !isRP) || (isMgmt && opts.collaboratorId) ? `<div style="display:flex;gap:4px;flex-wrap:wrap;">${ALL_TYPES.map(t => `<button class="btn btn-primary btn-sm" onclick="openNew('${t}','${opts.collaboratorId||''}')"><i class="ti ti-plus"></i> ${t==='pqr'?'Product':t==='brand'?'Branding':t==='lean'?'Lean':'Financial'}</button>`).join('')}</div>` : ''}
       </div>
     </div>
     <div class="table-wrap"><table><thead><tr>${isMgmt ? '<th>Collaborator</th>' : ''}<th>Type</th><th>Product / Period</th><th>Status</th><th>Self</th><th>Final</th><th>Rating</th><th>Date</th><th></th></tr></thead><tbody id="asm-tbody"></tbody></table></div>`;
@@ -603,7 +603,7 @@ function qWrap(q, inner, extra='') { return `<div class="q" id="q-${q.id}"><div 
 function roValue(q, v) {
   if (v === undefined || v === null || v === '') return '<span class="ans-ro" style="color:var(--muted)">—</span>';
   if (q.type === 'multi') return `<span class="ans-ro">${esc((v||[]).join(', ') || '—')}</span>`;
-  if (['level','rating4','stage','select'].includes(q.type) && q.options) { const i = q.type==='stage' ? parseInt(v,10)-1 : (q.type==='select' ? q.options.indexOf(v) : parseInt(v,10)); return `<span class="ans-ro">${esc(q.options[i] ?? v)}</span>`; }
+  if (['level','rating4','rating5','stage','select'].includes(q.type) && q.options) { const i = q.type==='stage' ? parseInt(v,10)-1 : (q.type==='select' ? q.options.indexOf(v) : parseInt(v,10)); return `<span class="ans-ro">${esc(q.options[i] ?? v)}</span>`; }
   if (q.type === 'stars') return `<span class="ans-ro" style="color:var(--amber)">${'★'.repeat(parseInt(v,10))}${'☆'.repeat(5-parseInt(v,10))}</span>`;
   if (q.type === 'yesno') return `<span class="ans-ro">${v==='yes'?'Yes':'No'}</span>`;
   return `<span class="ans-ro">${esc(v)}${q.unit ? ' ' + esc(q.unit) : ''}</span>`;
@@ -625,7 +625,7 @@ function renderQ(q, scoredNumeric) {
     case 'textarea': return qWrap(q, `<textarea class="form-input" rows="2" oninput="setAns('${q.id}', this.value)">${esc(v||'')}</textarea>`);
     case 'select': return qWrap(q, `<select class="form-input" onchange="setAns('${q.id}', this.value)"><option value="">Select…</option>${q.options.map(o => `<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`);
     case 'yesno': return qWrap(q, `<div class="opts">${['yes','no'].map(o => `<button class="opt ${v===o?'on':''}" onclick="pick('${q.id}','${o}',this)">${o==='yes'?'Yes':'No'}</button>`).join('')}</div>`);
-    case 'level': case 'rating4': return qWrap(q, `<div class="opts">${q.options.map((o,i) => `<button class="opt ${String(v)===String(i)?'on':''}" onclick="pick('${q.id}','${i}',this)">${esc(o)}</button>`).join('')}</div>`);
+    case 'level': case 'rating4': case 'rating5': return qWrap(q, `<div class="opts">${q.options.map((o,i) => `<button class="opt ${String(v)===String(i)?'on':''}" onclick="pick('${q.id}','${i}',this)">${esc(o)}</button>`).join('')}</div>`);
     case 'stage': return qWrap(q, `<div class="opts" style="flex-direction:column;">${q.options.map((o,i) => `<button class="opt stage ${String(v)===String(i+1)?'on':''}" onclick="pick('${q.id}','${i+1}',this)">${esc(o)}</button>`).join('')}</div>`);
     case 'stars': return qWrap(q, `<div class="stars" id="stars-${q.id}">${[1,2,3,4,5].map(n => `<button class="${(v||0)>=n?'on':''}" onclick="pickStar('${q.id}',${n})">★</button>`).join('')}</div>`);
     case 'multi': { const arr = Array.isArray(v) ? v : []; return qWrap(q, `<div class="opts">${q.options.map(o => `<button class="opt ${arr.includes(o)?'on':''}" onclick="toggleMulti('${q.id}','${esc(o)}',this)">${esc(o)}</button>`).join('')}</div>`); }
@@ -765,19 +765,25 @@ function renderBrand() {
     <div style="margin-top:8px;">Brand Identity comes from the seven maturity components; Product Positioning from the branding and positioning stages; Customer Value Proposition from the value-proposition rating; Digital Presence from platforms used and digital readiness; Market Readiness from the six star ratings; Growth Potential from business stage and positioning stage.</div></div></div>` + renderEvidenceSection('');
 }
 
-// ── Costing & Profit ──
+// ── Financial Assessment (client template) ──
 function renderFinance() {
   const f = FORMS.finance; const b = cur.breakdown || {};
   const fmt = v => v === null || v === undefined ? '—' : Number(v).toLocaleString('en-US');
-  const calc = b.unitCost !== undefined ? `<div class="card" style="margin-bottom:14px;background:#DCFCE7;border:none;">
-      <div style="font-size:12px;font-weight:600;color:#111827;margin-bottom:8px;"><i class="ti ti-calculator"></i> Calculated from your answers</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;font-size:12px;">
-        <div><div style="color:var(--muted);">Unit cost</div><div style="font-weight:700;color:var(--navy);">${fmt(b.unitCost)} ${f.currency}</div></div>
-        <div><div style="color:var(--muted);">Gross margin</div><div style="font-weight:700;color:${scoreColor(b.grossMarginPct===null?null:b.grossMarginPct*2)}">${b.grossMarginPct ?? '—'}${b.grossMarginPct!==null&&b.grossMarginPct!==undefined?'%':''}</div></div>
-        <div><div style="color:var(--muted);">Net profit (month)</div><div style="font-weight:700;color:${b.netProfit>0?'#6B7280':b.netProfit<0?'#E24B4A':'var(--navy)'}">${fmt(b.netProfit)} ${f.currency}</div></div>
-        <div><div style="color:var(--muted);">Net margin</div><div style="font-weight:700;color:var(--navy);">${b.netMarginPct ?? '—'}${b.netMarginPct!==null&&b.netMarginPct!==undefined?'%':''}</div></div>
-        <div><div style="color:var(--muted);">Income change</div><div style="font-weight:700;color:${b.incomeChangePct>0?'#6B7280':b.incomeChangePct<0?'#E24B4A':'var(--navy)'}">${b.incomeChangePct===null||b.incomeChangePct===undefined?'—':(b.incomeChangePct>0?'+':'')+b.incomeChangePct+'%'}</div></div>
-      </div></div>` : '';
+  const sc5 = sc => sc === null || sc === undefined ? '#94A3B8' : sc >= 4 ? '#1D9E75' : sc === 3 ? '#D97706' : '#E24B4A';
+  const calc = b.kpis ? `<div class="card" style="margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;"><i class="ti ti-calculator"></i> Calculated indicators &amp; scores</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Each KPI is scored 1 (Critical) to 5 (Excellent) against the benchmark; the weighted average × 20 gives the health score.${b.missingCount ? ` <span style="color:var(--red)">${b.missingCount} KPI${b.missingCount>1?'s':''} could not be calculated from the inputs and counted as Adequate (3).</span>` : ''}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;font-size:12px;margin-bottom:12px;">
+        <div><div style="color:var(--muted);">Gross profit</div><div style="font-weight:700;">${fmt(b.grossProfit)} ${f.currency}</div></div>
+        <div><div style="color:var(--muted);">Net profit</div><div style="font-weight:700;color:${b.netProfit>0?'#1D9E75':b.netProfit<0?'#E24B4A':'var(--navy)'}">${fmt(b.netProfit)} ${f.currency}</div></div>
+        <div><div style="color:var(--muted);">Total current assets</div><div style="font-weight:700;">${fmt(b.totalCA)} ${f.currency}</div></div>
+        <div><div style="color:var(--muted);">Total current liabilities</div><div style="font-weight:700;">${fmt(b.totalCL)} ${f.currency}</div></div>
+      </div>
+      <div class="table-wrap"><table style="font-size:12px;"><thead><tr><th>Pillar</th><th>KPI</th><th>Value</th><th>Benchmark</th><th style="text-align:center;">Score</th><th>Weight</th></tr></thead><tbody>
+        ${b.kpis.map(k => `<tr><td style="color:var(--muted);">${esc((f.areas.find(a=>a.key===k.pillar)||{}).label||'')}</td><td><div style="font-weight:500;">${esc(k.label)}</div><div style="font-size:10px;color:var(--muted);">${esc(k.guidance)}</div></td><td style="font-weight:600;white-space:nowrap;">${esc(k.display)}${k.missing?' <span title="Not calculable" style="color:var(--red)">?</span>':''}</td><td style="font-size:11px;color:var(--muted);">${esc(k.benchmark)}</td><td style="text-align:center;"><span style="display:inline-block;min-width:26px;padding:2px 6px;border-radius:99px;background:${sc5(k.score)};color:#fff;font-weight:700;">${k.score ?? '3?'}</span></td><td style="color:var(--muted);">${Math.round(k.weight*100)}%</td></tr>`).join('')}
+      </tbody></table></div>
+      ${b.action ? `<div style="margin-top:10px;font-size:12px;"><strong>Recommended action:</strong> ${esc(b.action)}</div>` : ''}
+    </div>` : '';
   return calc + f.sections.map(s => `<div class="fsection">
     <div class="fsection-hd"><span class="t">${esc(s.label)}</span></div>
     <div class="fsection-body">${s.questions.map(q => renderQ(q, q.type === 'number')).join('')}</div>
@@ -819,7 +825,7 @@ function renderEvidenceSection(kpi) {
   const items = (cur.evidence||[]).filter(e => (e.kpi||'') === kpi);
   const pqrPhotoBtn = cur.Type === 'pqr';   // photos go through the slot grid for inspections
   const canUp = (editable() || isMentorUser) && cur.Status !== 'Reviewed' && !isRP;
-  return `<div class="fsection"><div class="fsection-hd"><span class="t"><i class="ti ti-paperclip"></i> Evidence <span style="font-weight:400;color:var(--muted);font-size:12px;">${cur.Type==='lean' || cur.Type==='pqr' ? 'other files &amp; generated reports' : cur.Type==='finance' ? 'optional — costing sheet, sales record, receipts' : 'optional — product photos, labels, packaging'}</span></span>
+  return `<div class="fsection"><div class="fsection-hd"><span class="t"><i class="ti ti-paperclip"></i> Evidence <span style="font-weight:400;color:var(--muted);font-size:12px;">${cur.Type==='lean' || cur.Type==='pqr' ? 'other files &amp; generated reports' : cur.Type==='finance' ? 'optional — sales record, expense record, cash book, loan schedule' : 'optional — product photos, labels, packaging'}</span></span>
     ${canUp ? `<div style="display:flex;gap:6px;">${pqrPhotoBtn ? '' : `<button class="btn btn-outline btn-sm" onclick="pickEvidence('','photo')"><i class="ti ti-photo"></i> Photo</button>`}<button class="btn btn-outline btn-sm" onclick="pickEvidence('','doc')"><i class="ti ti-file"></i> Document</button></div>` : ''}</div>
     <div class="fsection-body">${items.length ? `<div class="ev-list">${items.map(e => `<div class="ev-item"><i class="ti ${evIcon(e)}" style="${e.kind==='report'?'color:var(--red)':''}"></i><a href="${e.url}" target="_blank" style="color:var(--teal);flex:1;">${esc(e.name)}</a><span style="color:var(--muted);font-size:10px;">${fmtDate(e.time)}${e.by?' · '+esc(e.by):''}</span></div>`).join('')}</div>` : '<div style="font-size:12px;color:var(--muted);">No files attached.</div>'}</div></div>`;
 }
@@ -846,7 +852,7 @@ function pickEvidence(kpi, kind, askCaption) {
 function validateForSubmit() {
   if (cur.Type === 'pqr') { const missing = FORMS.pqr.areas.flatMap(a => a.questions).filter(q => curAnswers[q.id + '__na'] !== true && (curAnswers[q.id] === undefined || curAnswers[q.id] === '')); if (missing.length) return `Please mark every applicable checkpoint, or tick NA (${missing.length} missing).`; if (!curAnswers.inspector) return 'Please enter the inspector / QC name.'; }
   if (cur.Type === 'brand') { const req = ['m_name','m_logo','m_story','m_identity','m_packaging','m_photo','m_social','branding_stage','value_prop','positioning_stage','digital_readiness','star_quality','star_consistency','star_demand','star_pricing','star_cx','star_recognition']; const miss = req.filter(id => curAnswers[id] === undefined || curAnswers[id] === ''); if (miss.length) return `Please answer all rating questions (${miss.length} missing).`; }
-  if (cur.Type === 'finance') { const req = ['material_cost','labour_cost','overhead_cost','selling_price','revenue','expenses','pricing_method']; const miss = req.filter(id => curAnswers[id] === undefined || curAnswers[id] === ''); if (miss.length) return `Please fill the costing and monthly figures (${miss.length} missing).`; }
+  if (cur.Type === 'finance') { const req = ['revenue_prev','revenue','credit_sales','cogs','opex','cash','receivables','inventory','payables','total_debt','mix_trend','debt_level']; const miss = req.filter(id => curAnswers[id] === undefined || curAnswers[id] === ''); if (miss.length) return `Please fill the key financial figures and both rating questions (${miss.length} missing). Enter 0 where an item does not apply.`; }
   if (cur.Type === 'lean') { const qs = FORMS.lean.kpis.flatMap(k => cur.Period === 'Endline' ? k.endline : k.baseline).filter(q => q.metric || ['b_members','b_participants','e_members','e_participants'].includes(q.id)); const miss = qs.filter(q => curAnswers[q.id] === undefined || curAnswers[q.id] === ''); if (miss.length) return `Please fill the key number for every KPI (${miss.length} missing).`; }
   return null;
 }
@@ -908,7 +914,7 @@ async function loadCollaborators() {
           ${c.summary.pendingReview ? `<span class="nav-badge">${c.summary.pendingReview}</span>` : ''}
           ${isMgmt ? `<button class="btn btn-outline btn-sm" title="Open Drive folder" onclick="event.stopPropagation();openCollabFolder('${c.ID}')"><i class="ti ti-folder"></i></button>` : ''}
         </div>
-        <div style="display:flex;gap:6px;padding-top:10px;border-top:1px solid var(--border2);">${mini('Quality', c.summary.pqr)}${mini('Brand', c.summary.brand)}${mini('Lean', c.summary.lean)}${mini('Costing', c.summary.finance)}</div>
+        <div style="display:flex;gap:6px;padding-top:10px;border-top:1px solid var(--border2);">${mini('Quality', c.summary.pqr)}${mini('Brand', c.summary.brand)}${mini('Lean', c.summary.lean)}${mini('Financial', c.summary.finance)}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:8px;">${c.summary.pqrProducts} product${c.summary.pqrProducts!==1?'s':''} · ${c.BusinessStage||'stage —'} · Lean ${c.summary.hasBaseline?'baseline':''}${c.summary.hasEndline?' + endline':''}${!c.summary.hasBaseline&&!c.summary.hasEndline?'not started':''}</div>
       </div>`).join('')}</div>` : '<div class="empty"><i class="ti ti-building-store"></i>No collaborators yet — add them in Staff Management with the Collaborator role.</div>'}`;
 }
@@ -924,7 +930,7 @@ async function loadRpOverview() {
   const [d, c] = await Promise.all([api('/incu/assessments'), api('/incu/dashboard')]);
   if (!d) return;
   const list = d.assessments; const pending = list.filter(a => a.Status === 'Submitted');
-  const stat = c && !c.error ? (rpTopic === 'pqr' ? `${c.qc.productsMetPct}% of products meet the QC standard` : rpTopic === 'brand' ? `${c.brand.branded} of ${c.brand.assessed} at Stage 2+ · avg ${c.brand.avgScore ?? '—'}` : rpTopic === 'lean' ? `${c.lean.endlines} endlines · avg ${c.lean.avgTargetsMet ?? '—'} / 7 targets met` : `${c.finance.profitablePct}% profitable · avg gross margin ${c.finance.avgGrossMargin ?? '—'}%`) : '';
+  const stat = c && !c.error ? (rpTopic === 'pqr' ? `${c.qc.productsMetPct}% of products meet the QC standard` : rpTopic === 'brand' ? `${c.brand.branded} of ${c.brand.assessed} at Stage 2+ · avg ${c.brand.avgScore ?? '—'}` : rpTopic === 'lean' ? `${c.lean.endlines} endlines · avg ${c.lean.avgTargetsMet ?? '—'} / 7 targets met` : `${c.finance.profitablePct}% profitable · ${c.finance.bands?.['Strong & Stable']||0} strong & stable`) : '';
   el.innerHTML = `
     <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
       <div class="card"><div class="stat-label">${TYPE_META[rpTopic].label} assessments</div><div class="stat-val">${list.length}</div><div class="stat-sub">${stat}</div></div>
@@ -952,13 +958,14 @@ async function loadDashboard() {
       <div class="card"><div class="stat-label">Lean targets met</div><div class="stat-val" style="color:#111827">${d.lean.avgTargetsMet ?? '—'}<span style="font-size:14px;color:var(--muted)">${d.lean.avgTargetsMet!==null?' / 7':''}</span></div><div class="stat-sub">${d.lean.baselines} baselines · ${d.lean.endlines} endlines</div></div>
     </div>
     <div class="card" style="margin-bottom:16px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;">
-      <div style="font-size:13px;font-weight:700;color:#111827;"><i class="ti ti-coins"></i> Costing &amp; Profit</div>
+      <div style="font-size:13px;font-weight:700;color:#111827;"><i class="ti ti-coins"></i> Financial health</div>
       <div style="font-size:12px;color:var(--muted);">${d.finance.assessed} of ${d.totals.collaborators} assessed</div>
       <div style="font-size:12px;"><strong style="color:${scoreColor(d.finance.profitablePct)}">${d.finance.profitablePct}%</strong> <span style="color:var(--muted)">profitable</span></div>
       <div style="font-size:12px;"><strong>${d.finance.avgGrossMargin ?? '—'}${d.finance.avgGrossMargin!==null?'%':''}</strong> <span style="color:var(--muted)">avg gross margin</span></div>
       <div style="font-size:12px;"><strong>${d.finance.avgNetMargin ?? '—'}${d.finance.avgNetMargin!==null?'%':''}</strong> <span style="color:var(--muted)">avg net margin</span></div>
       <div style="font-size:12px;"><strong>${d.finance.avgIncomeChange===null?'—':(d.finance.avgIncomeChange>0?'+':'')+d.finance.avgIncomeChange+'%'}</strong> <span style="color:var(--muted)">avg income change</span></div>
-      <div style="font-size:12px;"><strong>${d.finance.keepingRecords}</strong> <span style="color:var(--muted)">keeping 3+ record types</span></div>
+      <div style="font-size:12px;"><strong>${d.finance.healthyLiquidity}</strong> <span style="color:var(--muted)">with current ratio ≥ 1.5</span></div>
+      <div style="font-size:12px;"><strong>${d.finance.bands?.['Strong & Stable']||0}</strong> <span style="color:var(--muted)">strong &amp; stable · </span><strong style="color:var(--red)">${(d.finance.bands?.['Vulnerable / Warning']||0)+(d.finance.bands?.['High Risk / Critical']||0)}</strong> <span style="color:var(--muted)">at risk</span></div>
     </div>
     ${d.totals.pendingReview ? `<div class="card" style="margin-bottom:16px;background:var(--blue-lt);border:none;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--blue);"><i class="ti ti-inbox"></i> ${d.totals.pendingReview} assessment${d.totals.pendingReview>1?'s':''} waiting for review <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="navigateTo('queue')">Open queue</button></div>` : ''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;" class="dash-grid">
@@ -971,7 +978,7 @@ async function loadDashboard() {
         <div style="display:flex;align-items:center;gap:8px;"><div class="prog-bar"><div class="prog-fill" style="width:${k.metPct}%;background:${scoreColor(k.metPct)}"></div></div><span style="font-size:12px;font-weight:700;color:${scoreColor(k.metPct)}">${k.assessed?k.metPct+'%':'—'}</span></div>
         <div style="font-size:10px;color:var(--muted);margin-top:4px;">${k.met}/${k.assessed} met${k.avgChangePct!==null?` · avg change ${k.avgChangePct>0?'+':''}${k.avgChangePct}%`:''}</div></div>`).join('')}</div></div>
     <div class="section-title" style="margin-bottom:10px;">Collaborator progress</div>
-    <div class="table-wrap"><table><thead><tr><th>Business</th><th>Stage</th><th>Quality</th><th>Brand</th><th>Lean</th><th>Costing</th><th>Products</th><th>Pending</th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>Business</th><th>Stage</th><th>Quality</th><th>Brand</th><th>Lean</th><th>Financial</th><th>Products</th><th>Pending</th></tr></thead><tbody>
       ${d.cards.length ? d.cards.map(c => `<tr style="cursor:pointer;" onclick="cache.collaborators=null;openCollaboratorById('${c.id}','${esc(c.businessName)}')">
         <td><strong>${esc(c.businessName)}</strong><div style="font-size:11px;color:var(--muted);">${esc(c.owner||'')}${c.location?' · '+esc(c.location):''}</div></td>
         <td style="font-size:12px;">${esc(c.businessStage||'—')}</td>
@@ -1071,7 +1078,7 @@ async function downloadAssessmentPdf(id) {
       if (q.type==='multi') return (v||[]).join(', ') || '—';
       if (q.type==='stars') return '★'.repeat(parseInt(v,10)) + '☆'.repeat(5-parseInt(v,10));
       if (q.type==='yesno') return v==='yes'?'Yes':'No';
-      if (['level','rating4'].includes(q.type)) return q.options[parseInt(v,10)] ?? v;
+      if (['level','rating4','rating5'].includes(q.type)) return q.options[parseInt(v,10)] ?? v;
       if (q.type==='stage') return (q.options[parseInt(v,10)-1] ?? v).split(':')[0];
       return String(v) + (q.unit ? ' ' + q.unit : '');
     };
@@ -1141,18 +1148,23 @@ async function downloadAssessmentPdf(id) {
         y = doc.lastAutoTable.finalY + 8;
       });
     } else if (a.Type === 'finance') {
-      section('Calculated results');
       const fm = v => v===null||v===undefined ? '—' : Number(v).toLocaleString('en-US');
-      doc.autoTable({ startY: y+2, head:[['Unit cost','Gross margin','Net profit (month)','Net margin','Income change']], body:[[fm(b.unitCost)+' MMK', b.grossMarginPct===null||b.grossMarginPct===undefined?'—':b.grossMarginPct+'%', fm(b.netProfit)+' MMK', b.netMarginPct===null||b.netMarginPct===undefined?'—':b.netMarginPct+'%', b.incomeChangePct===null||b.incomeChangePct===undefined?'—':(b.incomeChangePct>0?'+':'')+b.incomeChangePct+'%']], styles:{ fontSize:8.5, cellPadding:2.5, halign:'center' }, headStyles: head });
+      section('Financial health scorecard');
+      doc.autoTable({ startY: y+2, head:[['Pillar','KPI','Value','Weight','Score','Benchmark & guidance']], body:(b.kpis||[]).map(k => [(FORMS.finance.areas.find(ar=>ar.key===k.pillar)||{}).label||'', k.label, clean(k.display)+(k.missing?' (n/a → 3)':''), Math.round(k.weight*100)+'%', String(k.score ?? '3'), clean(k.benchmark)+'. '+clean(k.guidance)]),
+        styles:{ fontSize:7.5, cellPadding:2 }, headStyles: head, columnStyles:{ 0:{cellWidth:24}, 1:{cellWidth:38}, 2:{cellWidth:24}, 3:{cellWidth:14,halign:'center'}, 4:{cellWidth:13,halign:'center',fontStyle:'bold'} },
+        didParseCell: dd => { if (dd.section==='body' && dd.column.index===4) { const v = parseInt(dd.cell.raw); dd.cell.styles.textColor = v>=4 ? teal : v===3 ? amber : red; } } });
+      y = doc.lastAutoTable.finalY + 4;
+      doc.autoTable({ startY: y, body:[['Weighted average score', String(b.weightedAvg ?? '—') + ' / 5', 'Overall financial health', String(score ?? '—') + ' / 100 — ' + clean(b.rating || a.Rating || '')]], theme:'grid', styles:{ fontSize:9, cellPadding:2.5, fontStyle:'bold' }, columnStyles:{ 0:{ fillColor: light }, 2:{ fillColor: light } } });
+      y = doc.lastAutoTable.finalY + 4;
+      if (b.action) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...navy); const ln = doc.splitTextToSize('Recommended action: ' + clean(b.action), W-2*M); doc.text(ln, M, y+3); y += ln.length*4.5 + 6; }
+      section('Pillar scores');
+      doc.autoTable({ startY: y+2, head:[['Pillar','Score','Weight','%']], body:(b.areas||[]).map(x => [x.label, x.score, x.max, Math.round(x.score/x.max*100)+'%']), styles:{ fontSize:8.5, cellPadding:2 }, headStyles: head, columnStyles:{1:{halign:'center'},2:{halign:'center'},3:{halign:'center'}} });
       y = doc.lastAutoTable.finalY + 8;
-      section('Area scores');
-      doc.autoTable({ startY: y+2, head:[['Area','Score','Weight','%']], body:(b.areas||[]).map(x => [x.label, x.score, x.max, Math.round(x.score/x.max*100)+'%']), styles:{ fontSize:8.5, cellPadding:2 }, headStyles: head, columnStyles:{1:{halign:'center'},2:{halign:'center'},3:{halign:'center'}} });
+      section('Financial inputs');
+      const calcRows = [['Sales growth rate', b.growthPct===null?'—':b.growthPct+'%'], ['Gross profit', fm(b.grossProfit)+' MMK'], ['Gross profit margin', b.grossMarginPct===null?'—':b.grossMarginPct+'%'], ['Net profit', fm(b.netProfit)+' MMK'], ['Net profit margin', b.netMarginPct===null?'—':b.netMarginPct+'%'], ['Total current assets', fm(b.totalCA)+' MMK'], ['Total current liabilities', fm(b.totalCL)+' MMK'], ['Current ratio', b.currentRatio===null?'—':b.currentRatio+'x'], ['DSO', b.dso===null?'—':b.dso+' days'], ['DIO', b.dio===null?'—':b.dio+' days'], ['DSCR', b.noDebt?'No debt':(b.dscr===null?'—':b.dscr+'x')]];
+      const inputRows = []; FORMS.finance.sections.forEach(sec => sec.questions.forEach(q => { const v = a.answers[q.id]; if (v!==undefined && v!=='' && v!==null) inputRows.push([clean(q.label), q.type==='number' ? fm(v)+' '+(q.unit||'') : clean(ansLabel(q, v))]); }));
+      doc.autoTable({ startY: y+2, head:[['Input','Value','Calculated','Value']], body: Array.from({length: Math.max(inputRows.length, calcRows.length)}, (_, i) => [...(inputRows[i]||['','']), ...(calcRows[i]||['',''])]), styles:{ fontSize:7.5, cellPadding:1.8 }, headStyles: head, columnStyles:{ 0:{cellWidth:58}, 1:{cellWidth:36}, 2:{cellWidth:48}, 3:{cellWidth:40} } });
       y = doc.lastAutoTable.finalY + 8;
-      FORMS.finance.sections.forEach(sec => {
-        section(sec.label);
-        doc.autoTable({ startY: y+2, head:[['Question','Answer']], body: sec.questions.map(q => [clean(q.label).slice(0,90), clean(ansLabel(q, a.answers[q.id]))]), styles:{ fontSize:8, cellPadding:2 }, headStyles: head, columnStyles:{0:{cellWidth:95}} });
-        y = doc.lastAutoTable.finalY + 8;
-      });
     } else if (a.Type === 'lean') {
       const isEnd = a.Period === 'Endline';
       section(isEnd ? 'KPI results against targets' : 'Baseline values');
